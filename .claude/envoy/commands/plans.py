@@ -4,7 +4,7 @@ Direct Mode Branches
 --------------------
 Certain branches skip planning functionality entirely ("direct mode"):
 
-- **Protected branches**: main, master, staging, production
+- **Protected branches**: main, master, develop, staging, production
   These are deployment/integration branches where work should already
   be planned and reviewed before merging.
 
@@ -35,7 +35,7 @@ from typing import Optional
 from .base import BaseCommand
 
 # Direct mode configuration - branches that skip planning
-DIRECT_MODE_BRANCHES = {"main", "master", "staging", "production"}
+DIRECT_MODE_BRANCHES = {"main", "master", "develop", "staging", "production"}
 DIRECT_MODE_PREFIXES = ("quick/",)
 
 
@@ -56,7 +56,7 @@ def is_direct_mode_branch(branch: str) -> bool:
     """Check if branch should use direct mode (no planning).
     
     Direct mode branches include:
-    - Protected branches: main, master, staging, production
+    - Protected branches: main, master, develop, staging, production
     - Quick branches: quick/* prefix
     
     Returns:
@@ -184,6 +184,21 @@ class PlansCleanupCommand(BaseCommand):
         })
 
 
+def parse_frontmatter(content: str) -> dict:
+    """Parse YAML frontmatter from plan.md content."""
+    if not content.startswith("---"):
+        return {}
+    parts = content.split("---", 2)
+    if len(parts) < 3:
+        return {}
+    result = {}
+    for line in parts[1].strip().split("\n"):
+        if ":" in line:
+            key, _, value = line.partition(":")
+            result[key.strip()] = value.strip()
+    return result
+
+
 class PlansStatusCommand(BaseCommand):
     """Show status of current branch's plan."""
 
@@ -195,8 +210,7 @@ class PlansStatusCommand(BaseCommand):
 
     def execute(self, **kwargs) -> dict:
         branch = get_branch()
-        
-        # Check for direct mode branches first
+
         if is_direct_mode_branch(branch):
             return self.success({
                 "branch": branch,
@@ -204,7 +218,7 @@ class PlansStatusCommand(BaseCommand):
                 "has_plan": False,
                 "message": "Direct mode - planning disabled",
             })
-        
+
         plan_dir = get_plan_dir()
 
         if not plan_dir.exists():
@@ -225,15 +239,146 @@ class PlansStatusCommand(BaseCommand):
             with open(files_file) as f:
                 files_count = sum(1 for _ in f)
 
-        has_plan_md = (plan_dir / "plan.md").exists()
+        plan_file = plan_dir / "plan.md"
+        has_plan_md = plan_file.exists()
+        frontmatter = {}
+        if has_plan_md:
+            frontmatter = parse_frontmatter(plan_file.read_text())
 
         return self.success({
-            "branch": get_branch(),
+            "branch": branch,
             "has_plan": True,
             "plan_dir": str(plan_dir),
             "queries_count": queries_count,
             "files_referenced": files_count,
             "has_plan_md": has_plan_md,
+            "status": frontmatter.get("status"),
+        })
+
+
+class PlansCreateCommand(BaseCommand):
+    """Create plan.md with frontmatter template."""
+
+    name = "create"
+    description = "Create plan.md with draft frontmatter"
+
+    def add_arguments(self, parser) -> None:
+        pass
+
+    def execute(self, **kwargs) -> dict:
+        branch = get_branch()
+        if is_direct_mode_branch(branch):
+            return self.error("direct_mode", f"Planning disabled on {branch}")
+
+        plan_dir = get_plan_dir()
+        plan_file = plan_dir / "plan.md"
+
+        if plan_file.exists():
+            frontmatter = parse_frontmatter(plan_file.read_text())
+            return self.success({
+                "created": False,
+                "exists": True,
+                "path": str(plan_file),
+                "status": frontmatter.get("status"),
+            })
+
+        plan_dir.mkdir(parents=True, exist_ok=True)
+        template = f"""---
+status: draft
+branch: {branch}
+---
+
+# Plan: [Feature Name]
+
+[Summary and notes]
+
+---
+
+## Step 1: [Title]
+Step details (may include: pseudocode, context, research, `/plan-review --last-commit` for complex steps)
+
+---
+
+## Steps
+
+- [ ] `/plan-validate`
+- [ ] Step 1: [Title]
+- [ ] `/plan-review` (reviews all commits against base branch)
+
+## Unresolved Questions
+
+"""
+        plan_file.write_text(template)
+
+        return self.success({
+            "created": True,
+            "path": str(plan_file),
+            "status": "draft",
+        })
+
+
+class PlansSetStatusCommand(BaseCommand):
+    """Update plan frontmatter status."""
+
+    name = "set-status"
+    description = "Set plan status (draft|active)"
+
+    def add_arguments(self, parser) -> None:
+        parser.add_argument("status", choices=["draft", "active"])
+
+    def execute(self, *, status: str, **kwargs) -> dict:
+        branch = get_branch()
+        if is_direct_mode_branch(branch):
+            return self.error("direct_mode", f"Planning disabled on {branch}")
+
+        plan_file = get_plan_dir() / "plan.md"
+        if not plan_file.exists():
+            return self.error("not_found", "No plan file exists")
+
+        content = plan_file.read_text()
+        new_content = re.sub(
+            r"^(status:\s*)\w+",
+            f"\\g<1>{status}",
+            content,
+            flags=re.MULTILINE,
+        )
+        plan_file.write_text(new_content)
+
+        return self.success({
+            "status": status,
+            "path": str(plan_file),
+        })
+
+
+class PlansFrontmatterCommand(BaseCommand):
+    """Get plan frontmatter as JSON."""
+
+    name = "frontmatter"
+    description = "Get plan frontmatter"
+
+    def add_arguments(self, parser) -> None:
+        pass
+
+    def execute(self, **kwargs) -> dict:
+        branch = get_branch()
+        if is_direct_mode_branch(branch):
+            return self.success({
+                "mode": "direct",
+                "exists": False,
+            })
+
+        plan_file = get_plan_dir() / "plan.md"
+        if not plan_file.exists():
+            return self.success({
+                "exists": False,
+                "branch": branch,
+            })
+
+        frontmatter = parse_frontmatter(plan_file.read_text())
+        return self.success({
+            "exists": True,
+            "path": str(plan_file),
+            "frontmatter": frontmatter,
         })
 
 
@@ -241,4 +386,7 @@ COMMANDS = {
     "capture": PlansCaptureCommand,
     "cleanup": PlansCleanupCommand,
     "status": PlansStatusCommand,
+    "create": PlansCreateCommand,
+    "set-status": PlansSetStatusCommand,
+    "frontmatter": PlansFrontmatterCommand,
 }

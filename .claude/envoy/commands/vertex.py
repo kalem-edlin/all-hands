@@ -1,4 +1,5 @@
 """Vertex AI (Gemini) commands."""
+# pyright: reportAttributeAccessIssue=false
 
 from __future__ import annotations
 
@@ -10,6 +11,21 @@ from pathlib import Path
 from typing import Optional
 
 from .base import BaseCommand
+from .plans import get_plan_dir, get_branch, is_direct_mode_branch
+
+
+def get_base_branch() -> str:
+    """Auto-detect base branch using merge-base."""
+    # Try common base branches in order
+    for base in ["main", "master", "develop", "staging", "production"]:
+        result = subprocess.run(
+            ["git", "merge-base", base, "HEAD"],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode == 0:
+            return base
+    return "main"
 
 
 class VertexAskCommand(BaseCommand):
@@ -77,32 +93,33 @@ Given user requirements and a proposed plan, evaluate:
 - Does plan exceed what user actually asked for?
 - Are there unnecessary abstractions/features?
 - Is complexity justified by requirements?
+- Are there gaps, risks, or architectural concerns?
+
+Be thorough and direct.
 
 Output JSON:
 {
   "verdict": "approved" | "needs_simplification" | "needs_clarification",
-  "issues": [{"section": "string", "problem": "string", "suggestion": "string"}],
-  "questions_for_user": ["string"],
-  "recommended_edits": [{"section": "string", "current": "string", "proposed": "string"}]
+  "verdict_context": "Explanation of verdict with specific reasoning",
+  "recommended_edits": ["Detailed edit descriptions (may depend on user answers)"],
+  "user_questions": ["Questions for ambiguous requirements"]
 }"""
 
     def add_arguments(self, parser) -> None:
-        parser.add_argument("--plan", required=True, help="Plan file or directory path")
         parser.add_argument("--queries", help="Queries file path (optional)")
         parser.add_argument("--context", help="Additional context")
 
-    def execute(self, *, plan: str, queries: Optional[str] = None, context: Optional[str] = None, **kwargs) -> dict:
+    def execute(self, *, queries: Optional[str] = None, context: Optional[str] = None, **kwargs) -> dict:
         api_key = os.environ.get("VERTEX_API_KEY")
         if not api_key:
             return self.error("auth_error", "VERTEX_API_KEY not set")
 
-        plan_path = Path(plan)
-        if plan_path.is_dir():
-            plan_file = plan_path / "plan.md"
-            queries_file = queries or plan_path / "queries.jsonl"
-        else:
-            plan_file = plan_path
-            queries_file = queries
+        if is_direct_mode_branch(get_branch()):
+            return self.error("direct_mode", "No plan in direct mode")
+
+        plan_path = get_plan_dir()
+        plan_file = plan_path / "plan.md"
+        queries_file = queries or plan_path / "queries.jsonl"
 
         plan_content = self.read_file(str(plan_file))
         if not plan_content:
@@ -153,40 +170,47 @@ class VertexReviewCommand(BaseCommand):
     name = "review"
     description = "Review implementation against plan (uses git diff)"
 
-    SYSTEM_PROMPT = """You are an implementation reviewer.
+    SYSTEM_PROMPT = """You are an implementation reviewer for a lean development team.
+
+Core philosophy: Keep it simple. Favor pragmatic shortcuts over elaborate abstractions. This is likely an early-stage or small-team product where shipping fast matters more than architectural perfection.
 
 Given a plan and git diff of changes, evaluate:
 - Does implementation match plan intent?
-- Are there deviations that need addressing?
-- Code quality issues?
+- Is there over-engineering? (unnecessary abstractions, premature optimization, excessive indirection)
+- Are there simpler alternatives that would achieve the same goal?
+- Code quality issues that actually matter?
+
+Flag anything that adds complexity without clear immediate value.
 
 Output JSON:
 {
-  "step_reviewed": int | null,
   "verdict": "approved" | "needs_work" | "off_track",
-  "plan_adherence": {"on_track": true/false, "deviations": ["string"]},
-  "issues": [{"file": "string", "line": int, "severity": "string", "issue": "string", "suggestion": "string"}],
-  "approved_steps": [int],
-  "questions_for_user": ["string"]
+  "verdict_context": "Explanation with specific reasoning",
+  "over_engineering": ["Any unnecessary complexity spotted"],
+  "simplification_opportunities": ["Ways to reduce complexity"],
+  "issues": ["Actionable issues to address"],
+  "user_questions": ["Questions if clarification needed"]
 }"""
 
     def add_arguments(self, parser) -> None:
-        parser.add_argument("--plan", required=True, help="Plan file or directory path")
-        parser.add_argument("--last-commit", action="store_true", help="Diff against last commit instead of main")
+        parser.add_argument("--last-commit", action="store_true", help="Diff against last commit (for step reviews)")
         parser.add_argument("--context", help="Additional context")
 
-    def execute(self, *, plan: str, last_commit: bool = False, context: Optional[str] = None, **kwargs) -> dict:
+    def execute(self, *, last_commit: bool = False, context: Optional[str] = None, **kwargs) -> dict:
         api_key = os.environ.get("VERTEX_API_KEY")
         if not api_key:
             return self.error("auth_error", "VERTEX_API_KEY not set")
 
-        plan_path = Path(plan)
-        plan_file = plan_path / "plan.md" if plan_path.is_dir() else plan_path
+        if is_direct_mode_branch(get_branch()):
+            return self.error("direct_mode", "No plan in direct mode")
+
+        plan_path = get_plan_dir()
+        plan_file = plan_path / "plan.md"
         plan_content = self.read_file(str(plan_file))
         if not plan_content:
             return self.error("file_not_found", f"Plan file not found: {plan_file}")
 
-        diff_ref = "HEAD~1" if last_commit else "main"
+        diff_ref = "HEAD~1" if last_commit else get_base_branch()
         diff_result = subprocess.run(["git", "diff", diff_ref], capture_output=True, text=True)
 
         # Fallback to empty tree if ref doesn't exist (fresh repo)

@@ -13,19 +13,22 @@ class TavilySearchCommand(BaseCommand):
 
     def add_arguments(self, parser) -> None:
         parser.add_argument("query", help="Search query")
+        parser.add_argument("--max-results", type=int, help="Max results (API default: 5, max: 20)")
 
-    def execute(self, query: str, **kwargs) -> dict:
+    def execute(self, query: str, max_results: int = None, **kwargs) -> dict:
         api_key = os.environ.get("TAVILY_API_KEY")
         if not api_key:
             return self.error("auth_error", "TAVILY_API_KEY not set")
 
-        # Opinionated defaults: basic depth, 5 results, no raw content
+        # include_answer=True by default, let API handle max_results default
         payload = {
             "query": query,
             "search_depth": "basic",
-            "max_results": 5,
             "topic": "general",
+            "include_answer": True,
         }
+        if max_results is not None:
+            payload["max_results"] = max_results
 
         try:
             response, duration_ms = self.timed_execute(self._call_api, api_key, payload)

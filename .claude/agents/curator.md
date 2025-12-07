@@ -1,8 +1,8 @@
 ---
 name: curator
-description: Claude Code expert. Returns implementation plans for skills, agents, hooks, MCP configs. Can self-research to stay current. Use for ANY Claude Code configuration task or when updating curator's own skills.
-skills: claude-code-patterns, advanced-tool-use, idol-patterns, skill-builder, deep-research
-allowed-tools: Read, Glob, Grep, WebFetch, WebSearch, Perplexity
+description: Claude Code expert. ALWAYS DELEGATE to this agent for .claude/, CLAUDE.md, hooks, skills, agents, claude-envoy tasks. Implements AI development workflow capabilities with latest best practice expertise.
+skills: claude-code-patterns, skill-builder, research-tools
+allowed-tools: Read, Glob, Grep, Bash
 model: inherit
 ---
 

@@ -2,9 +2,9 @@
 # Shared utilities for claude-related git hooks
 
 # Direct mode branches - no planning for these branches
-# - main, master, staging, production: protected/deployment branches
+# - main, master, develop, staging, production: protected/deployment branches
 # - quick/*: rapid iteration branches that skip planning overhead
-DIRECT_MODE_BRANCHES="main master staging production"
+DIRECT_MODE_BRANCHES="main master develop staging production"
 DIRECT_MODE_PREFIXES="quick/"
 
 # Check if a branch should use direct mode (no planning)
