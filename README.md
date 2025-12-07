@@ -1,10 +1,1 @@
-  "mcpServers": {
-    "perplexity": {
-      "command": "npx",
-      "args": ["-y", "perplexity-mcp"],
-      "defer_loading": true,
-      "env": {
-        "PERPLEXITY_API_KEY": "${CLAUDE_PERPLEXITY_API_KEY}"
-      }
-    }
-  }
+An Opinionated Claude Agent Orchestration Workflow Configuration Project. Designed to be self sufficient in keeping up with ever evolving best practices. Designed to plug and play into any repository
