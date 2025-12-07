@@ -24,7 +24,7 @@ claude-envoy is self-documenting. Always discover available commands dynamically
 
 ## Integration
 
-1. Run `envoy info` to see available command groups
+1. Run `.claude/envoy/envoy info` to see available command groups
 2. Run `--help` on relevant commands to learn arguments
 3. Include specific invocations in skill workflow sections
 4. Parse JSON response - all commands return `{"status": "success|error", "data": {...}}`

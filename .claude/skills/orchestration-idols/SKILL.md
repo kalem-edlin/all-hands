@@ -1,5 +1,5 @@
 ---
-name: idol-patterns
+name: orchestration-idols
 description: Use when designing agent orchestration, memory systems, or multi-agent coordination. Contains patterns from wshobson/agents and claude-flow repositories with doc URLs for deeper research.
 ---
 

@@ -2,11 +2,19 @@
 
 ## Core Rule
 
-Main agent: SOLE code modifier. Subagents: READ-ONLY, return needed information/implementation.
+**MANDATORY DELEGATION**: Main agent MUST delegate ANY AND ALL planning work to the planner agent via `planner(task)`, regardless of task the size of the task. The same goes for any non-planning tasks, but to relevant specialist agents.
+
+Main agent: SOLE code modifier MUST FILE READING AND DISCOVERY TASKS TO SUBAGENTS. Subagents: READ-ONLY, return needed information/implementation to main agent.
 
 ## Planning
 
-When hook STDOUT requests planning mode, run `/plan` immediately.
+- When either:
+  - hook STDOUT requests planning mode
+  - the user explicity requests planning mode,
+  - hook STDOUT Created plan directory: [plan-dir]
+- you MUST run `/plan` immediately - but only if not in Direct Mode (non planning).
+
+- If in planning active mode (non direct mode), you MUST read the `.claude/plans/<branch>/plan.md` file into context.
 
 ## Main Agent: Delegation First
 
@@ -32,7 +40,7 @@ use AskUserQuestion before: creating agents/skills, external API calls, architec
 ## Research Policy
 
 - **Web search**: Only curator/researcher agents (others blocked by hook)
-- **URL extraction**: All agents can use `envoy tavily extract "<url>"` for known doc URLs
+- **URL extraction**: All agents can use `.claude/envoy/envoy tavily extract "<url>"` for known doc URLs
 - **GitHub content**: Use `gh` CLI instead of extract (e.g., `gh api repos/owner/repo/contents/path`)
 
 ## claude-envoy Errors

@@ -95,14 +95,14 @@ Given user requirements and a proposed plan, evaluate:
 - Is complexity justified by requirements?
 - Are there gaps, risks, or architectural concerns?
 
-Be thorough and direct.
+Be thorough and direct. Only ask questions for user discretion you can't answer yourself.
 
 Output JSON:
 {
   "verdict": "approved" | "needs_simplification" | "needs_clarification",
   "verdict_context": "Explanation of verdict with specific reasoning",
-  "recommended_edits": ["Detailed edit descriptions (may depend on user answers)"],
-  "user_questions": ["Questions for ambiguous requirements"]
+  "recommended_edits": ["Suggested improvements (allowed even if approved)"],
+  "user_questions": ["Questions blocking approval - empty if approved"]
 }"""
 
     def add_arguments(self, parser) -> None:

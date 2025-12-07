@@ -4,7 +4,7 @@ description: Begin planning workflow for current feature branch
 
 # Planning Workflow
 
-Run `envoy plans frontmatter` to get current status.
+Run `.claude/envoy/envoy plans frontmatter` to get current status.
 
 ## If direct mode
 Inform user: planning disabled on protected branches (main, master, develop, staging, production) and quick/* branches.
@@ -13,7 +13,7 @@ Inform user: planning disabled on protected branches (main, master, develop, sta
 Use the **AskUserQuestion** tool to ask: "Would you like to enter planning mode?"
 
 **If user declines:**
-- Run `envoy plans set-status deactivated`
+- Run `.claude/envoy/envoy plans set-status deactivated`
 - Planning skipped for remainder of session
 - Proceed with user's original request without planning
 
@@ -21,21 +21,16 @@ Use the **AskUserQuestion** tool to ask: "Would you like to enter planning mode?
 
 ## Planning Flow
 
-### Step 1: Gather Specialist Context
-Check available agent descriptions for relevant specialists (exclude researcher agent).
+### Step 1: Assess Existing Plan
+Read `.claude/plans/<branch>/plan.md`. If plan is complete and user's prompt requires no significant changes → skip to Step 3 (finalize only).
 
-**If relevant specialists found:**
-- Dispatch to ALL relevant specialists in parallel
-- Query each: "What repo context, patterns, or best practices are relevant to: {user's original prompt}?"
-- Collect findings
+### Step 2: Gather Specialist Context (only if plan needs work)
+Check agent descriptions for relevant specialists (exclude researcher).
 
-**If NO relevant specialists found:**
-- WARN user: "No specialist agents available for this domain."
-- Use **AskUserQuestion**: "Would you like to architect a specialist agent for this area?"
-  - If yes → delegate to curator agent with specialist-builder skill
-  - If no → proceed without specialist context
+- **Specialists found**: Dispatch in parallel, query: "What repo context/patterns relevant to: {prompt}?"
+- **None found**: Warn user, offer to create specialist via curator + specialist-builder skill
 
-### Step 2: Call Planner Agent
+### Step 3: Call Planner Agent
 Package and send to planner agent:
 - User's original prompt
 - Specialist findings (if any)
@@ -46,16 +41,18 @@ The planner agent will:
 2. Incorporate specialist context
 3. Research unknown technologies
 4. Write plan to plan file
-5. Run validation (`envoy vertex validate`)
+5. Run validation (`.claude/envoy/envoy vertex validate`)
 6. Handle validation feedback loop
 7. Ask user to approve and activate plan
-8. When approved: run `envoy plans set-status active` AND `envoy plans clear-queries` to reset tracking
+8. When approved: run `.claude/envoy/envoy plans set-status active` AND `.claude/envoy/envoy plans clear-queries` to reset tracking
 
 ### Step 3: Implementation Handoff
-Once planner returns with status=active:
-- Read the plan file
-- Begin delegating implementation tasks
-- Mark tasks complete as you finish them
+Once planner returns:
+1. Run `.claude/envoy/envoy plans frontmatter` to verify status
+2. If status != active, run `.claude/envoy/envoy plans set-status active` yourself
+3. Read the plan file
+4. Begin delegating implementation tasks
+5. Mark tasks complete as you finish them
 
 ## Status Values
 - `draft` → planning required, query tracking enabled
