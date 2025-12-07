@@ -402,14 +402,21 @@ class PlansClearQueriesCommand(BaseCommand):
         files_file = plan_dir / "files.jsonl"
 
         cleared = []
+        last_query = None
+
+        # Keep last query before clearing
         if queries_file.exists():
+            lines = queries_file.read_text().strip().split("\n")
+            if lines and lines[-1]:
+                last_query = lines[-1]
             queries_file.unlink()
             cleared.append("queries.jsonl")
+
         if files_file.exists():
             files_file.unlink()
             cleared.append("files.jsonl")
 
-        return self.success({"cleared": cleared})
+        return self.success({"cleared": cleared, "last_query": last_query})
 
 
 COMMANDS = {

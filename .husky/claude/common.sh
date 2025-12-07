@@ -39,5 +39,12 @@ get_branch() {
 
 # Get plan directory for current branch
 get_plan_dir() {
-    echo ".claude/plans/$(sanitize_branch "$(get_branch)")"
+    sanitized=$(sanitize_branch "$(get_branch)")
+    PLAN_DIR=".claude/plans/$sanitized"
+}
+
+# Get plan directory for a specific branch (sets PLAN_DIR variable)
+get_plan_dir_for_branch() {
+    sanitized=$(sanitize_branch "$1")
+    PLAN_DIR=".claude/plans/$sanitized"
 }

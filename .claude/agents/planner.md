@@ -90,3 +90,6 @@ Use **AskUserQuestion**: "Plan is validated. Activate and begin implementation?"
 - You may ONLY edit `.claude/plans/<branch>/plan.md` - NO other files
 - You MUST ask user approval before activating
 - You MUST run validation before asking for approval
+
+## Design Decision: Validation Loop Ownership
+Planner agent owns the validation loop (not Main Agent). Rationale: planner needs immediate feedback to iterate on plan structure. It MUST complete ALL steps before handing off its result
