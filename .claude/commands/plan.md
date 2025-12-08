@@ -1,5 +1,6 @@
 ---
 description: Begin planning workflow for current feature branch
+args: [user-prompt]
 ---
 
 # Planning Workflow
@@ -10,14 +11,12 @@ Run `.claude/envoy/envoy plans frontmatter` to get current status.
 Inform user: planning disabled on protected branches (main, master, develop, staging, production) and quick/* branches.
 
 ## If status is draft or active
-Use the **AskUserQuestion** tool to ask: "Would you like to enter planning mode?"
+Use the **AskUserQuestion** tool to ask: "How would you like to proceed?"
 
-**If user declines:**
-- Run `.claude/envoy/envoy plans set-status deactivated`
-- Planning skipped for remainder of session
-- Proceed with user's original request without planning
-
-**If user accepts:** Continue to Planning Flow below.
+**Options:**
+1. **Enter plan mode** → Continue to Planning Flow below
+2. **Start a new branch** → Run `/new-branch` command, then continue to Planning Flow
+3. **Decline** → Run `.claude/envoy/envoy plans set-status deactivated`, planning skipped for remainder of session, proceed with user's original request without planning
 
 ## Planning Flow
 

@@ -97,12 +97,19 @@ Given user requirements and a proposed plan, evaluate:
 
 Be thorough and direct. Only ask questions for user discretion you can't answer yourself.
 
+Verdict logic:
+- "approved": Plan is acceptable. You may still have recommended_edits, but NO user_questions.
+- "needs_simplification": Plan is over-engineered. Provide specific simplification guidance.
+- "needs_clarification": You have questions that MUST be answered before you can evaluate. Use sparingly - only when you genuinely cannot make a judgment without user input.
+
+CRITICAL: If user_questions is non-empty, verdict MUST be "needs_clarification". An "approved" verdict with pending questions is invalid. However, don't manufacture questions to avoid approving - if the plan fulfills requirements appropriately, approve it.
+
 Output JSON:
 {
   "verdict": "approved" | "needs_simplification" | "needs_clarification",
   "verdict_context": "Explanation of verdict with specific reasoning",
   "recommended_edits": ["Suggested improvements (allowed even if approved)"],
-  "user_questions": ["Questions blocking approval - empty if approved"]
+  "user_questions": ["Questions requiring user input before approval [- MUST be empty if verdict is approved"]
 }"""
 
     def add_arguments(self, parser) -> None:

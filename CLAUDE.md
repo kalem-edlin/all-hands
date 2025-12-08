@@ -2,9 +2,10 @@
 
 ## Core Rule
 
-**MANDATORY DELEGATION**: Main agent MUST delegate ANY AND ALL planning work to the planner agent via `planner(task)`, regardless of task the size of the task. The same goes for any non-planning tasks, but to relevant specialist agents.
+**MANDATORY DELEGATION**: If you are the Main agent, you MUST NEVER READ OR FIND FILES (or use skills) - delegate ANY AND ALL CONTEXT CONSUMING WORK TO SUBAGENTS. IE: Planning work -> Planner agent, Research work -> Researcher agent, etc. Be mindful of your options here.
 
-Main agent: SOLE code modifier MUST FILE READING AND DISCOVERY TASKS TO SUBAGENTS. Subagents: READ-ONLY, return needed information/implementation to main agent.
+If you are the Main agent: SOLE code modifier WRITE ONLY, get implementation from subagents.
+If you are a subagent: READ-ONLY, return needed information/implementation to main agent.
 
 ## Planning
 
@@ -22,7 +23,7 @@ Main agent: SOLE code modifier MUST FILE READING AND DISCOVERY TASKS TO SUBAGENT
 
 - Main agent MUST delegate to relevant subagents for information instead of WebSearches and WebFetches or directly reading files into context. 
 
-- The only exception is reading files required to write an edit (after subagent returns implementation plan). If no suitable subagent exists, you MUST use AskUserQuestion to confirm proceeding without following this rule.
+- Since you are required to delegate, if there is no suitable subagent, you MUST use AskUserQuestion to get explicit user approval to either: Proceed Against the Workflow Rules (dangerous), Suggest a new specialist sub agent, or respond to a new user prompt
 
 ## Project Rules
 

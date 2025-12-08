@@ -12,6 +12,11 @@ External research capability for curator and researcher agents only.
 ```bash
 # Deep research with citations (Perplexity) - synthesized findings
 envoy perplexity research "query"
+envoy perplexity research "query" --grok-challenge  # validate via X search
+
+# X/Twitter search (Grok) - real-time social signals, tech community insights
+envoy xai search "query"
+envoy xai search "query" --results-to-challenge "findings"  # challenger mode
 
 # Web search (Tavily) - find sources, get URLs (includes LLM answer by default)
 envoy tavily search "query"
@@ -26,6 +31,8 @@ envoy tavily extract "url1" "url2"
 | Need | Tool | Cost |
 |------|------|------|
 | Broad question, need synthesis | `perplexity research` | High |
+| Synthesis + real-time validation | `perplexity research --grok-challenge` | Higher |
+| X/Twitter community insights | `xai search` | Medium |
 | Find sources, discover URLs | `tavily search` | Medium |
 | Get full content from known URL | `tavily extract` | Low |
 | Agentic: search then deep-dive | search → extract | Medium |
@@ -36,7 +43,8 @@ envoy tavily extract "url1" "url2"
 Need information?
 ├─ Know the exact URL? → tavily extract (or delegate to specialist agent)
 ├─ Need to find sources? → tavily search → extract promising URLs
-└─ Need synthesized answer? → perplexity research
+├─ Tech research for planning? → perplexity research --grok-challenge (default)
+└─ Quick answer, no validation? → perplexity research
 ```
 
 ## GitHub Content
