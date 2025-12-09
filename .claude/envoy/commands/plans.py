@@ -296,15 +296,14 @@ branch: {branch}
 ---
 
 ## Step 1: [Title]
-Step details (may include: pseudocode, context, research, `/plan-review --last-commit` for complex steps)
+Step details (may include: pseudocode, context, research, `/plan-checkpoint --last-commit` for complex steps)
 
 ---
 
 ## Steps
 
-- [ ] `/plan-validate`
 - [ ] Step 1: [Title]
-- [ ] `/plan-review` (reviews all commits against base branch)
+- [ ] `/plan-checkpoint` (reviews all commits against base branch)
 
 ## Unresolved Questions
 

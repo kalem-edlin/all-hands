@@ -5,55 +5,57 @@ args: [user-prompt]
 
 # Planning Workflow
 
-Run `.claude/envoy/envoy plans frontmatter` to get current status.
+## Step 1: Status Check
 
-## If direct mode
-Inform user: planning disabled on protected branches (main, master, develop, staging, production) and quick/* branches.
+Run: `.claude/envoy/envoy plans frontmatter`
 
-## If status is draft or active
-Use the **AskUserQuestion** tool to ask: "How would you like to proceed?"
 
-**Options:**
-1. **Enter plan mode** → Continue to Planning Flow below
-2. **Start a new branch** → Run `/new-branch` command, then continue to Planning Flow
-3. **Decline** → Run `.claude/envoy/envoy plans set-status deactivated`, planning skipped for remainder of session, proceed with user's original request without planning
+- **{exists: false}**: Use AskUserQuestion:
+  - Question: "You're on a protected branch. How to proceed?"
+  - Options: ["Create a new branch", "Abandon planning mode"]
+  - On "Create a new branch" → Create new branch, re-run /plan
+  - On "Abandon planning mode" → Continue to address user prompt without planning
 
-## Planning Flow
+- **draft**: Use AskUserQuestion:
+  - Question: "Draft plan exists. How to proceed?"
+  - Options: ["Continue drafting", "Start fresh (new branch)", "Decline planning"]
+  - On "Continue drafting" → Delegate to planner: "continue draft, incorporate prompt"
+  - On "Start fresh" → Create new branch, re-run /plan
+  - On "Decline" → Run `envoy plans set-status deactivated`, proceed without planning
 
-### Step 1: Assess Existing Plan
-Read `.claude/plans/<branch>/plan.md`. If plan is complete and user's prompt requires no significant changes → skip to Step 3 (finalize only).
+- **active**: Check if user's prompt aligns with plan specs.
+  - If aligned → Read plan, continue implementation (skip planner)
+  - If misaligned → Use AskUserQuestion:
+    - Question: "Active plan exists but prompt seems unrelated. Options?"
+    - Options: ["Add to plan", "New branch for this work", "Proceed without planning"]
+    - Handle each appropriately
 
-### Step 2: Gather Specialist Context (only if plan needs work)
-Check agent descriptions for relevant specialists (exclude researcher).
+## Step 2: Gather Specialist Context
+
+Check agent descriptions for relevant specialists (exclude researcher/planner).
 
 - **Specialists found**: Dispatch in parallel, query: "What repo context/patterns relevant to: {prompt}?"
-- **None found**: Warn user, offer to create specialist via curator + specialist-builder skill
+- **None found**: Use **AskUserQuestion**:
+  - Question: "No specialist for this domain. How to proceed?"
+  - Options: ["Create specialist", "Proceed without", "Cancel"]
 
-### Step 3: Call Planner Agent
-Package and send to planner agent:
+## Step 3: Delegate to Planner
+
+Send to planner agent:
+- Directive: "create new plan" | "continue draft" | "add to plan"
 - User's original prompt
-- Specialist findings (if any)
-- Current plan file path: `.claude/plans/<branch>/plan.md`
+- Current branch name
+- Specialist findings
 
-The planner agent will:
-1. Convert prompt into specs (spec-driven development)
-2. Incorporate specialist context
-3. Research unknown technologies
-4. Write plan to plan file
-5. Run validation (`.claude/envoy/envoy vertex validate`)
-6. Handle validation feedback loop
-7. Ask user to approve and activate plan
-8. When approved: run `.claude/envoy/envoy plans set-status active` AND `.claude/envoy/envoy plans clear-queries` to reset tracking
+## Step 4: On Planner Return
 
-### Step 3: Implementation Handoff
-Once planner returns:
-1. Run `.claude/envoy/envoy plans frontmatter` to verify status
-2. If status != active, run `.claude/envoy/envoy plans set-status active` yourself
-3. Read the plan file
-4. Begin delegating implementation tasks
-5. Mark tasks complete as you finish them
+Planner returns with status:
 
-## Status Values
-- `draft` → planning required, query tracking enabled
-- `active` → plan approved, implementation allowed, query tracking disabled
-- `deactivated` → user opted out this session, query tracking disabled (resets on new session)
+- **plan_ready**: Use AskUserQuestion:
+  - Question: "Plan ready. Approve to begin implementation?"
+  - Options: ["Approve", "Needs changes"]
+  - On "Approve" → Read `.claude/plans/<branch>/plan.md`, begin implementation
+  - On "Needs changes" → User provides feedback via Other, re-delegate to planner with feedback
+
+- **Planning declined** → Proceed with user's original request without planning
+- **Cancelled** → No action needed
