@@ -47,13 +47,13 @@ Pattern: `worker/<feature>-<summary>`
 
 ```bash
 .claude/envoy/envoy parallel spawn \
-  --wait \
   --branch "worker/<name>" \
+  --task "<task_description>" \
   --plan "<mini-plan-markdown>" \
   --from "<base_branch>"
 ```
 
-This blocks until the subprocess completes. Output is shielded - you only see heartbeats and final summary.
+This blocks until the subprocess completes (always synchronous). Output shielded - only heartbeats and final summary visible.
 
 ### 4. Parse Result
 

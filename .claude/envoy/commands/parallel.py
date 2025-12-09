@@ -30,6 +30,18 @@ def get_project_root() -> Path:
     return Path(result.stdout.strip())
 
 
+def get_allowed_tools_from_settings(settings_path: Path) -> list[str]:
+    """Extract permissions.allow from settings.json."""
+    if not settings_path.exists():
+        return []
+    try:
+        with open(settings_path) as f:
+            settings = json.load(f)
+        return settings.get("permissions", {}).get("allow", [])
+    except (json.JSONDecodeError, KeyError):
+        return []
+
+
 def get_workers_dir() -> Path:
     """Get .trees/ directory for worktrees (inside project, gitignored)."""
     trees_dir = get_project_root() / ".trees"
@@ -70,8 +82,6 @@ class SpawnCommand(BaseCommand):
         parser.add_argument("--task", required=True, help="Task description for the worker")
         parser.add_argument("--from", dest="from_branch", default="HEAD", help="Base branch (default: HEAD)")
         parser.add_argument("--plan", help="Mini-plan markdown to inject into worktree")
-        parser.add_argument("--wait", action="store_true", default=True, help="Block until completion (default: true)")
-        parser.add_argument("--tools", help="Comma-separated allowed tools (default: all tools)")
 
     def execute(
         self,
@@ -79,8 +89,6 @@ class SpawnCommand(BaseCommand):
         task: str,
         from_branch: str = "HEAD",
         plan: Optional[str] = None,
-        wait: bool = True,
-        tools: Optional[str] = None,
         **kwargs,
     ) -> dict:
         # Check for nested worker prevention
@@ -135,10 +143,12 @@ class SpawnCommand(BaseCommand):
                 plan_content = f"---\nstatus: active\nbranch: {branch}\n---\n\n{plan}"
                 plan_file.write_text(plan_content)
 
-            # Build Claude command
+            # Build Claude command - extract allowed tools from worktree settings
             cmd = ["claude", "--print"]
-            if tools:
-                cmd.extend(["--allowedTools", tools])
+            settings_file = worker_path / ".claude" / "settings.json"
+            allowed_tools_list = get_allowed_tools_from_settings(settings_file)
+            if allowed_tools_list:
+                cmd.extend(["--allowedTools", ",".join(allowed_tools_list)])
 
             # Prepend anti-nesting directive to task
             worker_prompt = (

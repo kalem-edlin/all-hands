@@ -42,7 +42,7 @@ Main Agent
     │
     └─► Task(parallel-worker, run_in_background=true)
             │
-            └─► envoy parallel spawn --wait --plan "<mini-plan>" --branch X
+            └─► envoy parallel spawn --plan "<mini-plan>" --branch X
                     │
                     └─► (blocks until Claude subprocess completes)
             │
@@ -67,8 +67,8 @@ Main Agent
 | `--task` | Task description/prompt for Claude |
 | `--plan` | Mini-plan markdown to inject into worktree |
 | `--from` | Base branch (default: HEAD) |
-| `--wait` | Block until completion (default: true) |
-| `--tools` | Comma-separated allowed tools |
+
+**Note**: Allowed tools automatically extracted from `.claude/settings.json` permissions.allow in worktree.
 
 ### Environment Variables
 
@@ -137,7 +137,7 @@ envoy parallel spawn \
 
 ### Important Notes
 
-1. **Synchronous by default** - `spawn` blocks until subprocess completes
+1. **Always synchronous** - `spawn` blocks until subprocess completes
 2. **No orphaned processes** - Closing main Claude kills workers
 3. **`.env` copied automatically** - Workers get parent's API keys
 4. **STDOUT shielded** - Heartbeats only during execution, full log to `.claude-worker.log`
