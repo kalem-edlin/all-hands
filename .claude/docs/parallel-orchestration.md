@@ -68,8 +68,6 @@ Main Agent
 | `--plan` | Mini-plan markdown to inject into worktree |
 | `--from` | Base branch (default: HEAD) |
 
-**Note**: Allowed tools automatically extracted from `.claude/settings.json` permissions.allow in worktree.
-
 ### Environment Variables
 
 | Variable | Default | Description |

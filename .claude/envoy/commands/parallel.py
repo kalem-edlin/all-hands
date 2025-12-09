@@ -30,18 +30,6 @@ def get_project_root() -> Path:
     return Path(result.stdout.strip())
 
 
-def get_allowed_tools_from_settings(settings_path: Path) -> list[str]:
-    """Extract permissions.allow from settings.json."""
-    if not settings_path.exists():
-        return []
-    try:
-        with open(settings_path) as f:
-            settings = json.load(f)
-        return settings.get("permissions", {}).get("allow", [])
-    except (json.JSONDecodeError, KeyError):
-        return []
-
-
 def get_workers_dir() -> Path:
     """Get .trees/ directory for worktrees (inside project, gitignored)."""
     trees_dir = get_project_root() / ".trees"
@@ -143,12 +131,8 @@ class SpawnCommand(BaseCommand):
                 plan_content = f"---\nstatus: active\nbranch: {branch}\n---\n\n{plan}"
                 plan_file.write_text(plan_content)
 
-            # Build Claude command - extract allowed tools from worktree settings
+            # Build Claude command
             cmd = ["claude", "--print"]
-            settings_file = worker_path / ".claude" / "settings.json"
-            allowed_tools_list = get_allowed_tools_from_settings(settings_file)
-            if allowed_tools_list:
-                cmd.extend(["--allowedTools", ",".join(allowed_tools_list)])
 
             # Prepend anti-nesting directive to task
             worker_prompt = (
