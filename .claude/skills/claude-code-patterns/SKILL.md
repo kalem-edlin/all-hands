@@ -5,53 +5,43 @@ description: Use when building agents, skills, hooks, or tool configs. Contains 
 
 # Claude Code Best Practices
 
-Quick reference for curator agent. Use `envoy tavily extract "<url>"` for deeper research.
+Docs auto-sync on startup at `~/.claude-code-docs/docs/`. Read local docs for authoritative reference.
 
-## Quick Reference
+## Workflow: When to Read Which Docs
 
-| Topic | Primary Docs |
-|-------|-------------|
-| Skills | [Official Docs](https://code.claude.com/docs/en/skills), [Best Practices](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices) |
-| Agents | [Sub-agents](https://code.claude.com/docs/en/sub-agents), [Custom Agents](https://claudelog.com/mechanics/custom-agents/) |
-| Hooks | [Hooks Guide](https://code.claude.com/docs/en/hooks-guide), [Reference](https://code.claude.com/docs/en/hooks) |
-| MCP | [MCP Docs](https://code.claude.com/docs/en/mcp), [Advanced Tool Use](https://www.anthropic.com/engineering/advanced-tool-use) |
-| Memory | [Memory Tool](https://platform.claude.com/docs/en/agents-and-tools/tool-use/memory-tool), [AgentDB](https://agentdb.ruv.io/) |
+| Building | Read These (in ~/.claude-code-docs/docs/) |
+|----------|------------------------------------------|
+| Skills | skills.md, plugins.md |
+| Agents/Sub-agents | sub-agents.md |
+| Hooks | hooks-guide.md, hooks.md |
+| MCP/Tools | mcp.md, third-party-integrations.md |
+| Memory/Context | memory.md, settings.md |
+| CLI Commands | cli-reference.md, slash-commands.md |
+| Enterprise/Auth | amazon-bedrock.md, google-vertex-ai.md, iam.md, security.md |
+| IDE Integration | vs-code.md, jetbrains.md, devcontainer.md |
+| CI/CD | github-actions.md, gitlab-ci-cd.md, headless.md |
 
-## Skills
+## Doc Categories
 
-- [Official Docs](https://code.claude.com/docs/en/skills)
-- [Best Practices](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices)
-- [Real World Skills](https://www.anthropic.com/engineering/equipping-agents-for-the-real-world-with-agent-skills)
-- [Human-in-loop Example](https://github.com/alonw0/web-asset-generator/blob/main/skills/web-asset-generator/SKILL.md)
-- [Skill Args PR](https://github.com/anthropics/claude-code/issues/12633) - watch for arg passing support
+**Core (curator priority)**: skills.md, sub-agents.md, hooks-guide.md, hooks.md, mcp.md, memory.md, plugins.md
 
-## Agents
+**Config**: settings.md, model-config.md, network-config.md, terminal-config.md, output-styles.md
 
-- [Sub-agents](https://code.claude.com/docs/en/sub-agents)
-- [Sub-agent Patterns](https://claudelog.com/mechanics/sub-agents/)
-- [Split-role Agents](https://claudelog.com/mechanics/split-role-sub-agents/) - ultra think mode
-- [Custom Agents](https://claudelog.com/mechanics/custom-agents/) - community patterns
-- [Agent Engineering](https://claudelog.com/mechanics/agent-engineering/)
+**IDE**: vs-code.md, jetbrains.md, devcontainer.md, desktop.md
 
-## Hooks
+**Enterprise**: amazon-bedrock.md, google-vertex-ai.md, microsoft-foundry.md, iam.md, security.md, llm-gateway.md
 
-- [Hooks Guide](https://code.claude.com/docs/en/hooks-guide)
-- [Reference](https://code.claude.com/docs/en/hooks)
+**CI/CD**: github-actions.md, gitlab-ci-cd.md, headless.md
 
-## MCP
+**Reference**: cli-reference.md, common-workflows.md, troubleshooting.md, changelog.md, quickstart.md
 
-- [MCP Docs](https://code.claude.com/docs/en/mcp)
-- [Advanced Tool Use](https://www.anthropic.com/engineering/advanced-tool-use)
-- claude-envoy preferred over raw MCP - adapt from [claude-oracle pattern](https://github.com/n1ira/claude-oracle/tree/main)
-- Platform MCPs: [Reddit](https://claudelog.com/claude-code-mcps/reddit-mcp/), [Twitter](https://claudelog.com/claude-code-mcps/twitter-mcp/)
+## Extended Patterns (./docs/)
 
-## Memory
+Read these for specific scenarios:
+- `docs/context-hygiene.md` - CLAUDE.md priority rules, poison context detection
 
-- [Memory Tool](https://platform.claude.com/docs/en/agents-and-tools/tool-use/memory-tool)
-- [AgentDB](https://agentdb.ruv.io/) - [Management IDE](https://agentdb.ruv.io/demo/management-ide)
+## Community Patterns
 
-## General
-
-- [Poison Context Awareness](https://claudelog.com/mechanics/poison-context-awareness/)
-- [CLAUDE.md Supremacy](https://claudelog.com/mechanics/claude-md-supremacy/)
-- [Plugins](https://code.claude.com/docs/en/plugins) - packaging solutions
+For advanced patterns beyond official docs:
+- [claudelog.com](https://claudelog.com) - community mechanics and patterns
+- [AgentDB](https://agentdb.ruv.io/) - memory management

@@ -89,6 +89,10 @@ If custom skill selected, ask:
 - Keep scope focused - better to have multiple narrow specialists than one broad one
 - Skills determine what knowledge/capabilities the specialist has access to
 
+## Reference Patterns
+
+See `docs/agent-catalog.md` for agent design patterns and responsibility mapping.
+
 ## Agent-Skill Workflow Pattern
 
 When an agent has workflow skills, the agent profile should:

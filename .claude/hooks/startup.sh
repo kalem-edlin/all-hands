@@ -3,6 +3,17 @@
 # Initialize claude-envoy (creates venv if needed)
 "$CLAUDE_PROJECT_DIR/.claude/envoy/envoy" info > /dev/null 2>&1
 
+# Sync claude-code-docs (clone if missing, pull if behind)
+DOCS_DIR="$HOME/.claude-code-docs"
+if [ ! -d "$DOCS_DIR" ]; then
+    git clone --quiet https://github.com/ericbuess/claude-code-docs.git "$DOCS_DIR" 2>/dev/null &
+else
+    # Background sync - fetch and pull if behind
+    (cd "$DOCS_DIR" && git fetch --quiet origin main 2>/dev/null && \
+     [ "$(git rev-list HEAD..origin/main --count 2>/dev/null)" -gt 0 ] && \
+     git pull --quiet origin main 2>/dev/null) &
+fi
+
 # Check for active plan on current branch
 branch=$(git branch --show-current 2>/dev/null)
 if [ -n "$branch" ]; then

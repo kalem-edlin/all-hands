@@ -34,10 +34,22 @@ description: What the skill does AND when to use it. Max 1024 chars.
 Design for context efficiency:
 
 1. **Metadata** (~200 chars): Name + description loaded at startup
-2. **Body** (1-10KB): Main instructions, loaded when triggered
+2. **Body** (<500 lines optimal): Main instructions, loaded when triggered
 3. **Referenced URLs**: External docs, fetched on-demand via WebFetch
 
-Keep body concise. Link to external docs for deep content.
+Keep body concise. Link to external docs for deep content. One-level-deep references only (avoid nested file refs).
+
+## Degrees of Freedom
+
+Match constraint level to task criticality:
+
+| Level | When to Use | Example |
+|-------|-------------|---------|
+| High (text) | Multiple valid approaches | "Generate appropriate tests" |
+| Medium (parameterized) | Preferred pattern exists | Script with configurable params |
+| Low (exact) | Fragile/critical ops | Exact shell commands |
+
+Fewer options = more reliable execution.
 
 ## Content Organization
 

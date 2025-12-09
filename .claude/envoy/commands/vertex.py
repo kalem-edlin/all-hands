@@ -97,19 +97,22 @@ Given user requirements and a proposed plan, evaluate:
 
 Be thorough and direct. Only ask questions for user discretion you can't answer yourself.
 
-Verdict logic:
-- "approved": Plan is acceptable. You may still have recommended_edits, but NO user_questions.
-- "needs_simplification": Plan is over-engineered. Provide specific simplification guidance.
-- "needs_clarification": You have questions that MUST be answered before you can evaluate. Use sparingly - only when you genuinely cannot make a judgment without user input.
+IMPORTANT: This is SYSTEM VALIDATION only. User approval is a separate step after validation passes.
 
-CRITICAL: If user_questions is non-empty, verdict MUST be "needs_clarification". An "approved" verdict with pending questions is invalid. However, don't manufacture questions to avoid approving - if the plan fulfills requirements appropriately, approve it.
+Validation result: "valid" or "invalid" (binary).
+- "valid": Plan is acceptable and ready for user approval.
+- "invalid": Plan has issues (over-engineered, unclear requirements, missing details, etc.)
+
+The verdict_context MUST explain the reasoning - whether over-engineered, what's missing, lack of user clarification, or why it passes.
+
+CRITICAL: If user_questions is non-empty, validation_result MUST be "invalid". A "valid" result with pending questions is not allowed.
 
 Output JSON:
 {
-  "verdict": "approved" | "needs_simplification" | "needs_clarification",
-  "verdict_context": "Explanation of verdict with specific reasoning",
-  "recommended_edits": ["Suggested improvements (allowed even if approved)"],
-  "user_questions": ["Questions requiring user input before approval [- MUST be empty if verdict is approved"]
+  "validation_result": "valid" | "invalid",
+  "verdict_context": "Specific reasoning - what's wrong, over-engineering issues, missing clarification, or why it passes",
+  "recommended_edits": ["Edits to fix issues (required if invalid), or minor improvements (optional if valid)"],
+  "user_questions": ["Questions needing user input - MUST be empty if validation_result is valid"]
 }"""
 
     def add_arguments(self, parser) -> None:

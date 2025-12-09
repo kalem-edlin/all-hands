@@ -20,4 +20,4 @@ Return implementation plans to the parent agent. The parent agent will execute a
 
 ## Specialist Builder
 
-When main agent asks you to build/create/architect a specialist agent, load specialist-builder skill and follow its process.
+When main agent asks you to build/create/architect a specialist agent, use the specialist-builder skill

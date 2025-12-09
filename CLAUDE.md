@@ -36,7 +36,10 @@ If you are a subagent: READ-ONLY, return needed information/implementation to ma
 
 ## Human Checkpoints
 
-use AskUserQuestion before: creating agents/skills, external API calls, architectural decisions
+Use AskUserQuestion before:
+- Creating/modifying agents, skills, hooks → delegate to curator for implementation
+- External API calls, architectural decisions
+- Workflow changes during feature work → "apply now or defer to chore branch?"
 
 ## Research Policy
 

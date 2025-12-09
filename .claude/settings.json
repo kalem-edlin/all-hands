@@ -99,5 +99,29 @@
     ]
   },
   "companyAnnouncements": ["Kalem's AI Agent Framework Rules!"],
-  "enableAllProjectMcpServers": false
+  "enableAllProjectMcpServers": false,
+  "permissions": {
+    "allow": [
+      "Bash(gh api:*)",
+      "Bash(cat:*)",
+      "Bash(envoy:*)",
+      "Bash(.claude/envoy/envoy tavily search:*)",
+      "Bash(.claude/envoy/envoy tavily extract:*)",
+      "Bash(.claude/envoy/envoy vertex ask:*)",
+      "Bash(.claude/envoy/envoy vertex validate:*)",
+      "Bash(.claude/envoy/envoy vertex review:*)",
+      "Bash(.claude/envoy/envoy vertex architect:*)",
+      "Bash(.claude/envoy/envoy plans status:*)",
+      "Bash(.claude/envoy/envoy plans capture:*)",
+      "Bash(.claude/envoy/envoy plans cleanup:*)",
+      "Bash(.claude/envoy/envoy plans create:*)",
+      "Bash(.claude/envoy/envoy plans set-status:*)",
+      "Bash(.claude/envoy/envoy plans frontmatter:*)",
+      "Bash(.claude/envoy/envoy plans clear-queries:*)",
+      "Bash(.claude/envoy/envoy xai search:*)",
+      "Bash(.claude/envoy/envoy perplexity research:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
 }

@@ -69,20 +69,23 @@ branch: <branch>
 ### 5. Validate
 Run: `envoy vertex validate`
 
-Handle response:
-- `verdict: approved` → proceed to step 6
-- `verdict: needs_simplification` → simplify plan, re-validate
-- `verdict: needs_clarification` → ask user questions, update plan, re-validate
+This is SYSTEM validation only (not user approval). Handle the `validation_result`:
+- `valid` → proceed to step 6 (user approval)
+- `invalid` → review `verdict_context` for reasoning, implement `recommended_edits`, ask any `user_questions`, then re-validate
 
-### 6. User Approval
-Use **AskUserQuestion**: "Plan is validated. Activate and begin implementation?"
+### 6. User Approval (REQUIRED - separate from validation)
+After system validation passes, you MUST ask the user for approval.
 
-**If user approves:**
+Use **AskUserQuestion**: "Plan passed validation. Would you like to activate it and begin implementation?"
+
+Wait for user's response. Only a human saying "yes" (or equivalent) counts as approval.
+
+**If user says yes/approve/proceed:**
 1. Run `envoy plans set-status active`
 2. Run `envoy plans clear-queries`
 3. Return to main agent: "Plan activated. Read plan file and begin implementation."
 
-**If user declines with feedback:**
+**If user says no or provides feedback:**
 - Incorporate feedback
 - Loop back to step 4
 
