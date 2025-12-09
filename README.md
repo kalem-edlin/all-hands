@@ -29,7 +29,7 @@ cp -r claude-agents/.claude/hooks .claude/
 ├── agents/           # Subagent definitions (planner, curator, researcher)
 ├── skills/           # Knowledge skills for subagents
 ├── hooks/            # Lifecycle hooks (planning workflow, validation)
-├── commands/         # Slash commands (/plan, /plan-review)
+├── commands/         # Slash commands (/plan, /plan-checkpoint)
 ├── envoy/            # External tool integrations (replaces MCP)
 └── plans/            # Auto-generated plan files per branch
 ```
@@ -57,11 +57,8 @@ cp -r claude-agents/.claude/hooks .claude/
 # Start planning workflow (auto-triggers on feature branches)
 /plan
 
-# Validate plan before implementation
-/plan-validate
-
 # Review implementation against plan
-/plan-review
+/plan-checkpoint
 ```
 
 ## Configuration

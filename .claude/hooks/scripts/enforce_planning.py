@@ -13,6 +13,29 @@ def get_envoy_path() -> Path:
     return cwd / ".claude" / "envoy" / "envoy"
 
 
+def get_current_branch() -> str:
+    """Get current git branch name."""
+    result = subprocess.run(
+        ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode == 0:
+        return result.stdout.strip()
+    return ""
+
+
+def is_direct_mode_branch() -> bool:
+    """Check if current branch is a direct-mode branch (no planning)."""
+    branch = get_current_branch()
+    direct_branches = {"main", "master", "develop", "staging", "production"}
+    if branch in direct_branches:
+        return True
+    if branch.startswith("quick/"):
+        return True
+    return False
+
+
 def get_plan_status() -> dict:
     """Get current plan status via envoy."""
     envoy = get_envoy_path()
@@ -41,10 +64,14 @@ def main():
     except (json.JSONDecodeError, EOFError):
         return
 
+    # Early return for direct mode branches (skip envoy call)
+    if is_direct_mode_branch():
+        return
+
     # Get plan status
     plan_data = get_plan_status()
 
-    # Direct mode - no planning enforcement
+    # Direct mode from envoy (fallback check)
     if plan_data.get("mode") == "direct":
         return
 

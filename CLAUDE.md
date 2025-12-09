@@ -10,36 +10,40 @@ If you are a subagent: READ-ONLY, return needed information/implementation to ma
 ## Planning
 
 - When either:
-  - hook STDOUT requests planning mode
+  - STDOUT Requests planning mode
   - the user explicity requests planning mode,
-  - hook STDOUT Created plan directory: [plan-dir]
-- you MUST run `/plan` immediately - but only if not in Direct Mode (non planning).
+- you MUST run `/plan` immediately - if the instructions fit the scenario
+- `/plan` MUST BE USED before initial calls to the `planner` agent
 
 - If in planning active mode (non direct mode), you MUST read the `.claude/plans/<branch>/plan.md` file into context.
 
 ## Main Agent: Delegation First
 
-- Main agent should NEVER use skills - skills are for subagents only.
+- Main agent should NEVER use skills - skills are for subagents only
 
-- Main agent MUST delegate to relevant subagents for information instead of WebSearches and WebFetches or directly reading files into context. 
+- Main agent MUST delegate to relevant subagents for information instead of WebSearches and WebFetches or directly reading files into context
 
 - Since you are required to delegate, if there is no suitable subagent, you MUST use AskUserQuestion to get explicit user approval to either: Proceed Against the Workflow Rules (dangerous), Suggest a new specialist sub agent, or respond to a new user prompt
 
 ## Project Rules
 
 - Never leave comments that mark a update in code given a user prompt to change code.
+- When deleting files/functions, use Explore agent to find and update all references.
 
 ## Git
 
-- Branches: feat/, chore/, fix/, refactor/, exp/, docs/, quick/
-- Commits: Extremely concise, sacrifice grammar for concision
+- **Plan mode**: Planner agent handles git ops at checkpoints (has git-ops skill)
+- **Direct mode** (main branch, no plan): Main agent uses git-ops skill directly
 
 ## Human Checkpoints
 
 Use AskUserQuestion before:
 - Creating/modifying agents, skills, hooks → delegate to curator for implementation
 - External API calls, architectural decisions
-- Workflow changes during feature work → "apply now or defer to chore branch?"
+
+## CLAUDE.md Maintenance
+
+This file MUST only be edited via curator agent consultation. Changes require curator approval.
 
 ## Research Policy
 
