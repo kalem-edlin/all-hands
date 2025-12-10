@@ -61,7 +61,9 @@ This file MUST only be edited via curator agent consultation. Changes require cu
 **Implementation (write-capable, cross-session):**
 @.claude/docs/parallel-orchestration.md
 
-## claude-envoy Errors
+## claude-envoy Usage
+
+- Ensure you use it via `.claude/envoy/envoy <command> <args>` called relative to the project root.
 
 When any subagent reports an `envoy` command failure:
 1. Use AskUserQuestion: "[Tool] failed: [error]. Options: (A) Retry, (B) [use your best inferred alternative], (C) Skip"
