@@ -5,8 +5,11 @@ import { cmdUpdate } from './commands/update.js';
 import { cmdSyncBack } from './commands/sync-back.js';
 import { cmdCheckIgnored } from './commands/check-ignored.js';
 import { checkGitInstalled, checkGhInstalled } from './lib/git.js';
+import { createRequire } from 'module';
 
-const VERSION = '1.0.0';
+const require = createRequire(import.meta.url);
+const pkg = require('../package.json');
+const VERSION = pkg.version;
 
 async function main() {
   // Check dependencies

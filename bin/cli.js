@@ -3811,12 +3811,12 @@ var YargsInstance = class {
   async getCompletion(args, done) {
     argsert("<array> [function]", [args, done], arguments.length);
     if (!done) {
-      return new Promise((resolve6, reject) => {
+      return new Promise((resolve7, reject) => {
         __classPrivateFieldGet(this, _YargsInstance_completion, "f").getCompletion(args, (err, completions) => {
           if (err)
             reject(err);
           else
-            resolve6(completions);
+            resolve7(completions);
         });
       });
     } else {
@@ -4857,11 +4857,11 @@ var yargs_default = Yargs;
 
 // src/commands/init.ts
 import { existsSync as existsSync3, readFileSync as readFileSync5, writeFileSync, mkdirSync, copyFileSync, renameSync } from "fs";
-import { join as join2, dirname as dirname4 } from "path";
+import { join as join2, dirname as dirname4, resolve as resolve6 } from "path";
 import { spawnSync as spawnSync2 } from "child_process";
 
 // src/lib/manifest.ts
-import { readFileSync as readFileSync4, existsSync, readdirSync as readdirSync2, statSync as statSync3 } from "fs";
+import { readFileSync as readFileSync4, existsSync, readdirSync as readdirSync2 } from "fs";
 import { join, relative as relative2 } from "path";
 
 // node_modules/@isaacs/balanced-match/dist/esm/index.js
@@ -6455,41 +6455,24 @@ var Manifest = class {
     return minimatch(path2, pattern, { dot: true });
   }
   getDistributableFiles() {
-    const files = /* @__PURE__ */ new Set();
-    for (const pattern of this.distributePatterns) {
-      this.collectMatchingFiles(pattern, files);
-    }
+    const allFiles = /* @__PURE__ */ new Set();
+    this.walkDir(this.allhandsRoot, (filePath) => {
+      allFiles.add(relative2(this.allhandsRoot, filePath));
+    });
     const filtered = /* @__PURE__ */ new Set();
-    for (const file of files) {
-      if (!this.isExcluded(file)) {
+    for (const file of allFiles) {
+      if (this.isDistributable(file) && !this.isExcluded(file)) {
         filtered.add(file);
       }
     }
     return filtered;
   }
-  collectMatchingFiles(pattern, files) {
-    if (pattern.includes("**")) {
-      const parts = pattern.split("**");
-      const base = parts[0].replace(/\/$/, "") || ".";
-      const basePath = base === "." ? this.allhandsRoot : join(this.allhandsRoot, base);
-      if (existsSync(basePath)) {
-        this.walkDir(basePath, (filePath) => {
-          const relPath = relative2(this.allhandsRoot, filePath);
-          if (this.isDistributable(relPath)) {
-            files.add(relPath);
-          }
-        });
-      }
-    } else {
-      const fullPath = join(this.allhandsRoot, pattern);
-      if (existsSync(fullPath) && statSync3(fullPath).isFile()) {
-        files.add(pattern);
-      }
-    }
-  }
   walkDir(dir, callback) {
     const entries = readdirSync2(dir, { withFileTypes: true });
     for (const entry of entries) {
+      if (entry.name === ".git" || entry.name === "node_modules") {
+        continue;
+      }
       const fullPath = join(dir, entry.name);
       if (entry.isDirectory()) {
         this.walkDir(fullPath, callback);
@@ -6635,10 +6618,10 @@ async function confirm(message) {
     input: process.stdin,
     output: process.stdout
   });
-  return new Promise((resolve6) => {
+  return new Promise((resolve7) => {
     rl.question(`${message} [y/N]: `, (answer) => {
       rl.close();
-      resolve6(answer.toLowerCase() === "y");
+      resolve7(answer.toLowerCase() === "y");
     });
   });
 }
@@ -6675,8 +6658,7 @@ function migrateExistingFiles(target) {
   return migrated;
 }
 async function cmdInit(target, autoYes = false) {
-  const targetPath = join2(process.cwd(), target);
-  const resolvedTarget = existsSync3(targetPath) ? targetPath : target;
+  const resolvedTarget = resolve6(process.cwd(), target);
   const allhandsRoot = getAllhandsRoot();
   const manifest = new Manifest(allhandsRoot);
   console.log(`Initializing allhands in: ${resolvedTarget}`);
@@ -6862,10 +6844,10 @@ async function confirm2(message) {
     input: process.stdin,
     output: process.stdout
   });
-  return new Promise((resolve6) => {
+  return new Promise((resolve7) => {
     rl.question(`${message} [y/N]: `, (answer) => {
       rl.close();
-      resolve6(answer.toLowerCase() === "y");
+      resolve7(answer.toLowerCase() === "y");
     });
   });
 }
@@ -7197,7 +7179,10 @@ function cmdCheckIgnored(files) {
 }
 
 // src/cli.ts
-var VERSION = "1.0.0";
+import { createRequire } from "module";
+var require2 = createRequire(import.meta.url);
+var pkg = require2("../package.json");
+var VERSION = pkg.version;
 async function main() {
   if (!checkGitInstalled()) {
     console.error("Error: git is not installed. Please install git first.");

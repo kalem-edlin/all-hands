@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync, copyFileSync, renameSync } from 'fs';
-import { join, dirname } from 'path';
+import { join, dirname, resolve } from 'path';
 import { spawnSync } from 'child_process';
 import { Manifest } from '../lib/manifest.js';
 import { isGitRepo, git, ghCli } from '../lib/git.js';
@@ -79,8 +79,7 @@ function migrateExistingFiles(target: string): Record<string, string> {
 }
 
 export async function cmdInit(target: string, autoYes: boolean = false): Promise<number> {
-  const targetPath = join(process.cwd(), target);
-  const resolvedTarget = existsSync(targetPath) ? targetPath : target;
+  const resolvedTarget = resolve(process.cwd(), target);
 
   const allhandsRoot = getAllhandsRoot();
   const manifest = new Manifest(allhandsRoot);

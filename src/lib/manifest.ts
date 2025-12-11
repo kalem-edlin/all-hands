@@ -1,4 +1,4 @@
-import { readFileSync, existsSync, readdirSync, statSync } from 'fs';
+import { readFileSync, existsSync, readdirSync } from 'fs';
 import { join, relative } from 'path';
 import { minimatch } from 'minimatch';
 
@@ -56,16 +56,14 @@ export class Manifest {
   }
 
   getDistributableFiles(): Set<string> {
-    const files = new Set<string>();
+    const allFiles = new Set<string>();
+    this.walkDir(this.allhandsRoot, (filePath) => {
+      allFiles.add(relative(this.allhandsRoot, filePath));
+    });
 
-    for (const pattern of this.distributePatterns) {
-      this.collectMatchingFiles(pattern, files);
-    }
-
-    // Filter out excluded files
     const filtered = new Set<string>();
-    for (const file of files) {
-      if (!this.isExcluded(file)) {
+    for (const file of allFiles) {
+      if (this.isDistributable(file) && !this.isExcluded(file)) {
         filtered.add(file);
       }
     }
@@ -73,33 +71,12 @@ export class Manifest {
     return filtered;
   }
 
-  private collectMatchingFiles(pattern: string, files: Set<string>): void {
-    // For patterns with **, do recursive directory walk
-    if (pattern.includes('**')) {
-      const parts = pattern.split('**');
-      const base = parts[0].replace(/\/$/, '') || '.';
-      const basePath = base === '.' ? this.allhandsRoot : join(this.allhandsRoot, base);
-
-      if (existsSync(basePath)) {
-        this.walkDir(basePath, (filePath) => {
-          const relPath = relative(this.allhandsRoot, filePath);
-          if (this.isDistributable(relPath)) {
-            files.add(relPath);
-          }
-        });
-      }
-    } else {
-      // Direct file or simple glob
-      const fullPath = join(this.allhandsRoot, pattern);
-      if (existsSync(fullPath) && statSync(fullPath).isFile()) {
-        files.add(pattern);
-      }
-    }
-  }
-
   private walkDir(dir: string, callback: (filePath: string) => void): void {
     const entries = readdirSync(dir, { withFileTypes: true });
     for (const entry of entries) {
+      if (entry.name === '.git' || entry.name === 'node_modules') {
+        continue;
+      }
       const fullPath = join(dir, entry.name);
       if (entry.isDirectory()) {
         this.walkDir(fullPath, callback);
