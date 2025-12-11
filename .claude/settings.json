@@ -110,6 +110,7 @@
       "Bash(git:*)",
       "Bash(gh:*)",
       "Bash(cat:*)",
+      "Bash(ls:*)",
       "Read(~/.claude-code-docs/docs/*)",
       "Bash(.claude/envoy/envoy tavily search:*)",
       "Bash(.claude/envoy/envoy tavily extract:*)",

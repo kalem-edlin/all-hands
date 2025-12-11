@@ -1,0 +1,30 @@
+{
+  "$comment": "AllHands Distribution Manifest - defines which files are distributed vs internal",
+  "distribute": [
+    ".claude/agents/**",
+    ".claude/skills/**",
+    ".claude/commands/**",
+    ".claude/hooks/**",
+    ".claude/envoy/**",
+    ".claude/settings.json",
+    ".claude/docs/**",
+    ".husky/**",
+    "CLAUDE.md"
+  ],
+  "exclude": [
+    "**/.venv/**",
+    "**/__pycache__/**",
+    "**/*.pyc",
+    "**/.git/**"
+  ],
+  "internal": [
+    "scripts/allhands/**",
+    "scripts/allhands.sh",
+    ".allhands-manifest.json",
+    ".github/**",
+    "README.md",
+    "package.json",
+    "package-lock.json",
+    ".claude/plans/**"
+  ]
+}

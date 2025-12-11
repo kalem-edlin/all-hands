@@ -63,7 +63,7 @@ This file MUST only be edited via curator agent consultation. Changes require cu
 
 ## claude-envoy Usage
 
-- Ensure you use it via `.claude/envoy/envoy <command> <args>` called relative to the project root.
+- Ensure you use it via `.claude/envoy/envoy <command> <args>` (NEVER use it via `/Users/[path_to_project]/.claude/envoy/envoy <command> <args>`).
 
 When any subagent reports an `envoy` command failure:
 1. Use AskUserQuestion: "[Tool] failed: [error]. Options: (A) Retry, (B) [use your best inferred alternative], (C) Skip"
