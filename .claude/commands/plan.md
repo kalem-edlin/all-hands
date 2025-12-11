@@ -32,12 +32,13 @@ Run: `.claude/envoy/envoy plans frontmatter`
 
 ## Step 2: Gather Specialist Context
 
-Check agent descriptions for relevant specialists (exclude researcher/planner).
+Check agent descriptions for relevant specialists (exclude researcher/planner/explorer).
 
 - **Specialists found**: Dispatch in parallel, query: "What repo context/patterns relevant to: {prompt}?"
-- **None found**: Use **AskUserQuestion**:
-  - Question: "No specialist for this domain. How to proceed?"
-  - Options: ["Create specialist", "Proceed without", "Cancel"]
+- **None found**: Dispatch **explorer** agent to analyze relevant directories:
+  - Query: "Analyze codebase patterns relevant to: {prompt}"
+  - Explorer uses repomix-extraction to gather context
+  - Returns patterns/conventions for planner to incorporate
 
 ## Step 3: Delegate to Planner
 
