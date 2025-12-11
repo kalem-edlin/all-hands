@@ -26,8 +26,12 @@ You are the generic codebase explorer - the fallback agent when no specialist ma
    - What directory/subsystem needs exploration?
    - What specific questions need answering?
 
-2. **Extract with repomix**
-   Use the repomix-extraction skill for pattern discovery
+2. **Extract with repomix** (MANDATORY)
+   Use repomix-extraction skill for ANY:
+   - Directory exploration
+   - Multiple file reads
+
+   NEVER read files individually when exploring. Repomix batches efficiently.
 
 3. **Analyze Patterns**
    Read the packed output and identify:
@@ -68,3 +72,4 @@ You are the generic codebase explorer - the fallback agent when no specialist ma
 - READ-ONLY - return findings, don't implement
 - Focus on patterns relevant to the original prompt
 - If area is covered by an existing specialist, note that
+- **ALWAYS use repomix** for directory or multi-file reads - never individual Read calls

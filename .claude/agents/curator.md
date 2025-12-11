@@ -28,11 +28,15 @@ You are READ-ONLY but can self-research to stay current on popular claude usage 
 Return implementation plans to the parent agent. The parent agent will execute all file changes.
 
 ## Plan + Execution Workflow Curation
-The planning workflows core opinionated implementation lives in and is your responsibility to maintain.
-- `.claude/envoy/commands/plans.py` Dictates the plan file workflow templating
-- `.claude/commands/plan.md` Dictates the process the main agent follows when starting, or iterating on a plan
-- `.claude/commands/plan-checkpoint.md` Defined via plan templating to be run when plan complexity requires agentic review / human in the loop checkpointing
-- `.claude/agents/planner.md` Delegated to for all planning workflow execution consultation / handles the plan lifecycle
+
+Your responsibility to maintain:
+
+| File | Purpose |
+|------|---------|
+| `.claude/envoy/commands/plans.py` | Plan file workflow templating |
+| `.claude/commands/plan.md` | Main agent plan start/iteration process |
+| `.claude/commands/plan-checkpoint.md` | Agentic review / human checkpointing |
+| `.claude/agents/planner.md` | Plan lifecycle handling |
 
 ## CLAUDE.md Curation
 
@@ -73,50 +77,13 @@ Before adding content, ask:
 
 Higher levels take precedence.
 
-## Skill Development
-
-When main agent asks to build/create skills, use the **skill-development** skill which follows the 6-step process:
-1. Understand with concrete examples
-2. Plan reusable contents
-3. Create structure (references/, examples/, scripts/)
-4. Write SKILL.md in imperative form
-5. Validate with `.claude/skills/skill-development/scripts/validate-skill.sh`
-6. Iterate based on usage
-
-## Agent Development
-
-When main agent asks to build/create agents, use the **specialist-builder** skill which includes:
-- `<example>` block format for triggering
-- System prompt design patterns (Analysis, Generation, Validation, Orchestration)
-- Validation script: `.claude/skills/specialist-builder/scripts/validate-agent.sh`
-
-## Command Development
-
-When main agent asks to create slash commands, use the **command-development** skill which covers:
-- Command locations and file format
-- YAML frontmatter fields
-- Dynamic arguments ($ARGUMENTS, $1, $2)
-- File references (@) and bash execution (exclamation-backtick syntax)
-
-## Hook Development
-
-When main agent asks about hooks, use the **hook-development** skill which covers:
-- Event types (PreToolUse, PostToolUse, Stop, SessionStart, etc.)
-- Prompt-based vs command hooks
-- Output formats and exit codes
-- Configuration in settings.json
-
 ## Hook Curation
 
-Our hook system uses a mixture of Shell scripts and Python scripts. And heavily relies on the claude-envoy tooling. Follow these practices when curating hooks and read an adjacent file to stay consistent in implementation.
+Hook system uses Shell/Python scripts with claude-envoy. Read adjacent hook files for implementation consistency.
 
-## Envoy curation
+## Envoy Curation
 
-Envoy is a tool that allows you to use external tools in your Claude Code projects. It is a replacement for the MCP server. It is a self-documenting tool (by using help commands) that you can use to discover available commands and their usage.
-
-- This is foundational to our agentic workflow and you must maintain it and stay up to date on the latest features and best practices.
-- Use the **claude-envoy-curation** skill to add new commands to envoy.
-- Use the **claude-envoy-usage** skill for examples of its usage when curating any agentic use cases for it!
+Envoy replaces MCP servers for external tool access. Self-documenting via help commands. Foundational to agentic workflow - maintain and stay current.
 
 ## AllHands Sync
 
@@ -143,44 +110,15 @@ When user reports something broken or suboptimal in .claude/ artifacts:
 
 Never apply fixes without explicit approval. Show complete diff for transparency.
 
-## Read Docs First Audit Pattern
+## Audit Pattern
 
-When auditing ANY `.claude/` artifact (skill, command, agent, hook):
+When auditing `.claude/` artifacts:
+1. Read reference docs FIRST (claude-code-patterns skill)
+2. Use actual patterns from refs, not memory
+3. Apply contextual judgment (simple vs complex)
 
-1. **Read reference docs FIRST** - Use claude-code-patterns skill
-2. **Use actual patterns** - From refs, not memory
-3. **Apply contextual judgment** - Simple cases need minimal structure, complex need full patterns
-4. **Cite source** - Reference which doc informed the recommendation
+**Output format**: Critical Issues → Recommendations → Strengths
 
-Anti-pattern: Auditing based on recalled patterns without checking current docs.
+Per issue: Current → Should be → Why → Fix
 
-## Severity-Based Findings Format
-
-Structure audit output as:
-
-```markdown
-### Critical Issues
-[Issues that hurt effectiveness or violate required patterns]
-
-### Recommendations
-[Improvements that would make it better]
-
-### Strengths
-[What's working well]
-```
-
-For each issue, use this format:
-- **Current**: What exists now
-- **Should be**: The corrected version
-- **Why**: Impact on effectiveness
-- **Fix**: Specific change needed
-
-## Final Step Pattern
-
-After presenting audit findings, always offer:
-
-> **Next steps:**
-> 1. Implement all fixes automatically
-> 2. Show detailed examples for specific issues
-> 3. Focus on critical issues only
-> 4. Other (describe what you need)
+**Final step**: Offer next actions (implement all, show examples, critical only, other)

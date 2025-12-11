@@ -1,6 +1,6 @@
 ---
 name: repomix-extraction
-description: Directory extraction using repomix for pattern discovery. Use when skills/directives fall short and you need to understand codebase patterns in a specific directory.
+description: Directory extraction using repomix. Use for ANY directory exploration or multi-file read - always more efficient than individual Read calls.
 ---
 
 # Repomix Extraction
@@ -9,10 +9,12 @@ Pack directory contents into AI-friendly format for comprehensive pattern analys
 
 ## When to Use
 
-- Skills/directives don't cover the directory you need to understand
-- Need to discover patterns in unfamiliar codebase areas
-- Creating specialist agents that need repo pattern knowledge
-- Analyzing code structure before making changes
+**ALWAYS use repomix instead of individual Read calls when:**
+- Exploring any directory
+- Reading multiple files
+- Understanding codebase patterns
+
+Repomix batches files efficiently in a single call. Never read files individually when exploring.
 
 ## Quick Reference
 
