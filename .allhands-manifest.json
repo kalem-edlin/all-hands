@@ -23,9 +23,11 @@
     "pnpm-lock.yaml"
   ],
   "internal": [
-    "scripts/allhands/**",
-    "scripts/allhands.sh",
+    "src/**",
+    "bin/**",
+    "tsconfig.json",
     "scripts/hooks/**",
+    "scripts/allhands.sh",
     ".allhands-manifest.json",
     ".github/**",
     "docs/**",
