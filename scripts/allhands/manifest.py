@@ -116,10 +116,17 @@ def is_ignored(path: str, patterns: List[str]) -> bool:
         if fnmatch.fnmatch(path, pattern):
             return True
         if "**" in pattern:
-            parts = pattern.split("**")
+            parts = pattern.split("**", 1)
             if len(parts) == 2:
                 prefix, suffix = parts
                 prefix = prefix.rstrip("/")
-                if path.startswith(prefix):
-                    return True
+                suffix = suffix.lstrip("/")
+                if path.startswith(prefix) if prefix else True:
+                    remaining = path[len(prefix):].lstrip("/") if prefix else path
+                    if not suffix:
+                        return True
+                    if fnmatch.fnmatch(remaining, f"*{suffix}") or fnmatch.fnmatch(
+                        remaining, f"*/{suffix}"
+                    ):
+                        return True
     return False

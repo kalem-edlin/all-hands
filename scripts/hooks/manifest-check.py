@@ -6,9 +6,12 @@ Warns on commit if files exist that aren't covered by distribute or internal pat
 """
 
 import json
-import fnmatch
 import sys
 from pathlib import Path
+
+# Add scripts dir to path for allhands module import
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from allhands.manifest import is_ignored  # noqa: E402
 
 
 def load_manifest(repo_root: Path) -> dict:
@@ -20,28 +23,9 @@ def load_manifest(repo_root: Path) -> dict:
         return json.load(f)
 
 
-def matches_pattern(path: str, pattern: str) -> bool:
-    """Check if path matches glob pattern."""
-    if "**" in pattern:
-        parts = pattern.split("**")
-        if len(parts) == 2:
-            prefix, suffix = parts
-            prefix = prefix.rstrip("/")
-            suffix = suffix.lstrip("/")
-            if path.startswith(prefix) or not prefix:
-                remaining = path[len(prefix):].lstrip("/") if prefix else path
-                if not suffix:
-                    return True
-                return fnmatch.fnmatch(remaining, f"*{suffix}") or fnmatch.fnmatch(remaining, f"*/{suffix}")
-    return fnmatch.fnmatch(path, pattern)
-
-
 def is_covered(path: str, patterns: list) -> bool:
-    """Check if path is covered by any pattern."""
-    for pattern in patterns:
-        if matches_pattern(path, pattern):
-            return True
-    return False
+    """Check if path is covered by any pattern (reuses is_ignored logic)."""
+    return is_ignored(path, patterns)
 
 
 def get_managed_files(repo_root: Path) -> list:

@@ -14,48 +14,22 @@ if [ -z "$MANAGED_CHANGES" ]; then
     exit 0
 fi
 
-# Load ignore patterns
-IGNORED=""
-if [ -f ".allhandsignore" ]; then
-    while IFS= read -r pattern || [ -n "$pattern" ]; do
-        # Skip comments and empty lines
-        case "$pattern" in
-            \#*|"") continue ;;
-        esac
-        IGNORED="$IGNORED $pattern"
-    done < .allhandsignore
+# Use Python CLI for reliable pattern matching (handles ** and spaces correctly)
+# shellcheck disable=SC2086
+SYNC_FILES=$(echo $MANAGED_CHANGES | xargs python3 -m allhands check-ignored 2>/dev/null || echo $MANAGED_CHANGES)
+
+if [ -z "$SYNC_FILES" ]; then
+    exit 0
 fi
 
-# Check if ALLHANDS_PATH is set for diff comparison
-ALLHANDS_PATH="${ALLHANDS_PATH:-}"
-
-# Filter out ignored files AND files identical to allhands source
-SYNC_FILES=""
-for file in $MANAGED_CHANGES; do
-    is_ignored=false
-    for pattern in $IGNORED; do
-        case "$file" in
-            $pattern) is_ignored=true; break ;;
-        esac
-    done
-
-    if [ "$is_ignored" = false ]; then
-        # If we know allhands path, check if file differs from source
-        if [ -n "$ALLHANDS_PATH" ] && [ -f "$ALLHANDS_PATH/$file" ]; then
-            # Compare staged version to allhands source
-            STAGED_CONTENT=$(git show ":$file" 2>/dev/null || true)
-            SOURCE_CONTENT=$(cat "$ALLHANDS_PATH/$file" 2>/dev/null || true)
-            if [ "$STAGED_CONTENT" = "$SOURCE_CONTENT" ]; then
-                # File is identical to allhands - not a real change
-                continue
-            fi
-        fi
-        SYNC_FILES="$SYNC_FILES
+# Format for display
+SYNC_FILES_FORMATTED=""
+for file in $SYNC_FILES; do
+    SYNC_FILES_FORMATTED="$SYNC_FILES_FORMATTED
   → $file"
-    fi
 done
 
-if [ -z "$(echo "$SYNC_FILES" | tr -d '[:space:]')" ]; then
+if [ -z "$(echo "$SYNC_FILES_FORMATTED" | tr -d '[:space:]')" ]; then
     exit 0
 fi
 
@@ -66,7 +40,7 @@ echo "│  ⚠️  CLAUDE-ALL-HANDS SYNC WARNING                              �
 echo "├────────────────────────────────────────────────────────────────┤"
 echo "│  These changes will sync to claude-all-hands on merge:        │"
 echo "└────────────────────────────────────────────────────────────────┘"
-echo "$SYNC_FILES"
+echo "$SYNC_FILES_FORMATTED"
 echo ""
 echo "────────────────────────────────────────────────────────────────"
 echo "  If these are TARGET-SPECIFIC, add to .allhandsignore before commit"

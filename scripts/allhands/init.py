@@ -159,6 +159,10 @@ def cmd_init(target: Path, auto_yes: bool = False) -> int:
         source_file = allhands_root / rel_path
         target_file = target / rel_path
 
+        # Skip if source doesn't exist (pattern matched deleted file)
+        if not source_file.exists():
+            continue
+
         # Ensure parent directory exists
         target_file.parent.mkdir(parents=True, exist_ok=True)
 
@@ -220,7 +224,9 @@ CLAUDE.project.md
     if result.returncode == 0:
         print("  Husky installed")
     else:
-        print(f"  Husky install skipped (may already be configured)")
+        print("  Husky install skipped (may already be configured)")
+        if result.stderr:
+            print(f"  Details: {result.stderr.strip()}")
 
     print(f"\n{'='*60}")
     print(f"Done: {copied} copied, {skipped} unchanged")
