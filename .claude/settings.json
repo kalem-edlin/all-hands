@@ -2,8 +2,7 @@
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
   "env": {
     "PARALLEL_MAX_WORKERS": "3",
-    "PROJECT_NAME": "test-target",
-    "PATH": "$HOME/bin:$PATH"
+    "PROJECT_NAME": "test-target"
   },
   "hooks": {
     "SessionStart": [
@@ -116,7 +115,25 @@
       "Bash(cat:*)",
       "Bash(ls:*)",
       "Read(~/.claude-code-docs/docs/*)",
-      "Bash(envoy:*)",
+      "Bash(.claude/envoy/envoy tavily search:*)",
+      "Bash(.claude/envoy/envoy tavily extract:*)",
+      "Bash(.claude/envoy/envoy vertex ask:*)",
+      "Bash(.claude/envoy/envoy vertex validate:*)",
+      "Bash(.claude/envoy/envoy vertex review:*)",
+      "Bash(.claude/envoy/envoy vertex architect:*)",
+      "Bash(.claude/envoy/envoy plans status:*)",
+      "Bash(.claude/envoy/envoy plans capture:*)",
+      "Bash(.claude/envoy/envoy plans cleanup:*)",
+      "Bash(.claude/envoy/envoy plans create:*)",
+      "Bash(.claude/envoy/envoy plans set-status:*)",
+      "Bash(.claude/envoy/envoy plans frontmatter:*)",
+      "Bash(.claude/envoy/envoy plans clear-queries:*)",
+      "Bash(.claude/envoy/envoy xai search:*)",
+      "Bash(.claude/envoy/envoy perplexity research:*)",
+      "Bash(.claude/envoy/envoy parallel spawn:*)",
+      "Bash(.claude/envoy/envoy parallel status:*)",
+      "Bash(.claude/envoy/envoy parallel results:*)",
+      "Bash(.claude/envoy/envoy parallel cleanup:*)",
       "SlashCommand(/parallel-discovery:*)",
       "SlashCommand(/plan:*)",
       "SlashCommand(/plan-checkpoint:*)",

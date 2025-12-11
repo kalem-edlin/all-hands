@@ -25,7 +25,7 @@ For extending claude-envoy with new commands.
 
 ```bash
 # See current commands
-envoy info
+.claude/envoy/envoy info
 
 # Read base class
 cat .claude/envoy/commands/base.py
@@ -89,11 +89,11 @@ self.timeout_ms  # From ENVOY_TIMEOUT_MS env var
 
 ```bash
 # Test command
-envoy {group} {command} "test"
+.claude/envoy/envoy {group} {command} "test"
 
 # Verify registration
-envoy info
+.claude/envoy/envoy info
 
 # Check help
-envoy {group} {command} --help
+.claude/envoy/envoy {group} {command} --help
 ```
