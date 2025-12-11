@@ -129,7 +129,11 @@
       "Bash(.claude/envoy/envoy parallel spawn:*)",
       "Bash(.claude/envoy/envoy parallel status:*)",
       "Bash(.claude/envoy/envoy parallel results:*)",
-      "Bash(.claude/envoy/envoy parallel cleanup:*)"
+      "Bash(.claude/envoy/envoy parallel cleanup:*)",
+      "SlashCommand(/parallel-discovery:*)",
+      "SlashCommand(/plan:*)",
+      "SlashCommand(/plan-checkpoint:*)",
+      "SlashCommand(/parallel-orchestration:*)"
     ],
     "deny": [],
     "ask": []
