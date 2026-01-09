@@ -31,7 +31,7 @@ steps:
     * Returns approach with `pending_refinement` if user requested changes
     * Address the pending_refinement in updated approach
   4: |
-    If available (not research agent) use repomix extraction skill to gather context relevant codebase files over areas of focus to generate approaches
+    Use Glob, Grep, Read to gather relevant codebase files for approach generation
   5: |
     Report key notes for all approaches to be aware of (relevant key technologies, stack, patterns, dependencies, known constraints / caveats, existing APIs etc) in notes
     * Include references to relevant documentation found in step 1

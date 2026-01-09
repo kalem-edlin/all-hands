@@ -2,7 +2,6 @@
 name: documentor
 description: |
   Documentation extraction specialist. Extracts documentation from implementation walkthroughs, audits existing docs, and coordinates documentation chunks. Triggers: "extract docs", "audit docs", "coordinate docs".
-skills: repomix-extraction
 tools: Read, Glob, Grep, Bash, Write, Edit
 model: inherit
 color: yellow
@@ -104,7 +103,7 @@ Documentation specialist responsible for extracting learnings from implementatio
 - Body: Full document content with inline file path references to codebase
 
 **Context gathering:**
-- Uses repomix extraction skill to read relevant codebase files
+- Uses Glob, Grep, Read to analyze relevant codebase files
 - Infers documentation structure based on codebase organization (no prescribed layout)
 </shared_practices>
 
@@ -115,8 +114,6 @@ Documentation specialist responsible for extracting learnings from implementatio
 | `envoy plan mark-prompt-extracted` | Mark prompt as documented |
 | `envoy knowledge search` | Semantic search existing docs |
 | `envoy git diff-base` | Get changes since base branch |
-| `envoy repomix estimate` | Check token budget |
-| `envoy repomix extract` | Get code content |
 </envoy_commands>
 
 <constraints>

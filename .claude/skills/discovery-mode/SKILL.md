@@ -31,7 +31,6 @@ Enable agents to perform read-only codebase analysis during planning phase. Agen
 - **Read-only mode** - NO file edits except via envoy findings commands
 - **Envoy-mediated writes** - use `write-approach` and `write-option` commands
 - **Use assigned specialist name** - main agent provides name for findings subdirectory
-- **50k repomix budget** - per repomix-extraction skill
 </constraints>
 
 <workflow>
@@ -39,7 +38,7 @@ Enable agents to perform read-only codebase analysis during planning phase. Agen
 Main agent provides: target directories, questions, specialist name
 
 ### 2. Analyze Codebase
-Use: repomix (via envoy), Glob, Grep, Read
+Use: Glob, Grep, Read
 
 ### 3. Write Findings
 

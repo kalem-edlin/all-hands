@@ -12,7 +12,7 @@ Execute individual prompts from an active plan. Read prompt → implement → tr
 # 1. Get prompt to implement
 .claude/envoy/envoy plans get-prompt <task-number>
 
-# 2. Implement using repomix-extraction skill for context
+# 2. Implement using Glob, Grep, Read for context
 
 # 3. Track progress
 .claude/envoy/envoy plans append-history <task> --summary "Added auth middleware" --files '["src/auth.ts"]'
@@ -39,7 +39,7 @@ git worktree add .worktrees/task-N-V <branch>
 ```
 
 ### 3. Implement
-- Use repomix-extraction skill for context gathering
+- Use Glob, Grep, Read for context gathering
 - Make code changes per prompt instructions
 - Follow existing codebase patterns
 

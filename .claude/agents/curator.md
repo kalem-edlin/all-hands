@@ -2,7 +2,7 @@
 name: curator
 description: |
   Claude Code and agentic orchestration expert. ALWAYS DELEGATE for: .claude/, CLAUDE.md, hooks, skills, agents, slash commands, claude-envoy, MCP, workflow orchestration. Use when creating/modifying any orchestration component or researching external patterns.
-skills: claude-code-patterns, research-tools, claude-envoy-patterns, orchestration-idols, repomix-extraction, skills-development, subagents-development, hooks-development, commands-development, discovery-mode
+skills: claude-code-patterns, research-tools, claude-envoy-patterns, orchestration-idols, skills-development, subagents-development, hooks-development, commands-development, discovery-mode
 tools: Read, Glob, Grep, Bash, Write, Edit
 model: inherit
 color: cyan
@@ -175,7 +175,7 @@ Task complete when:
 - `{ success: false, reason: string }` - unrecoverable failure
 
 **STEPS:**
-1. Use repomix to discover relevant code for the artifact
+1. Gather relevant code for the artifact using Glob, Grep, Read
 2. Use research tools for best practices not in current codebase
 3. If clarifying questions arise: return them immediately for user input, then resume
 4. Implement the artifact (agent file, skill directory, etc.)

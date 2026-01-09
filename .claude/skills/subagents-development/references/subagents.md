@@ -51,11 +51,11 @@ Skills are loaded into the subagent's context automatically when it starts:
 name: researcher
 description: External research specialist with web search capability
 tools: Read, Glob, Grep, Bash
-skills: research-tools, repomix-extraction
+skills: research-tools
 ---
 ```
 
-The researcher agent auto-loads `research-tools` (web search, deep research) and `repomix-extraction` (directory analysis) skills, giving it the domain expertise needed to perform research tasks.
+The researcher agent auto-loads `research-tools` (web search, deep research) skill, giving it the domain expertise needed to perform research tasks.
 </skills_field_importance>
 </file_format>
 

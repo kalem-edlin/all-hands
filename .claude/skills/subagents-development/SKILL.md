@@ -91,7 +91,7 @@ Project-level subagents override user-level when names conflict.
 - Skills are loaded into subagent's context automatically at start
 - **Dictates what domain expertise the agent has access to**
 - Without skills, agent operates with no specialized knowledge
-- Example: `skills: research-tools, repomix-extraction`
+- Example: `skills: research-tools, discovery-mode`
 </field>
 
 <field name="permissionMode">
