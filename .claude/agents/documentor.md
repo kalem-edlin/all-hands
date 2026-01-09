@@ -3,7 +3,7 @@ name: documentor
 description: |
   Documentation extraction specialist. Extracts documentation from implementation walkthroughs, audits existing docs, and coordinates documentation chunks. Triggers: "extract docs", "audit docs", "coordinate docs".
 tools: Read, Glob, Grep, Bash, Write, Edit
-model: inherit
+model: opus
 color: yellow
 ---
 

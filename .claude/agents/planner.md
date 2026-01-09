@@ -3,7 +3,7 @@ name: planner
 description: |
   Planning specialist. Creates/refines plans with prompt files from specialist findings. Delegates file creation to envoy. Use after main agent gathers specialist context. Triggers: "create plan", "refine plan", "add prompt".
 tools: Read, Glob, Grep, Bash
-model: inherit
+model: opus
 color: magenta
 ---
 

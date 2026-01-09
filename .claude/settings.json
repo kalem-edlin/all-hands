@@ -24,10 +24,7 @@
       "Bash(npx repomix@latest:*)",
       "Read(~/.claude-code-docs/docs/*)",
       "Bash(.claude/envoy/envoy:*)",
-      "SlashCommand(/parallel-discovery:*)",
-      "SlashCommand(/plan:*)",
-      "SlashCommand(/plan-checkpoint:*)",
-      "SlashCommand(/parallel-orchestration:*)"
+      "SlashCommand(/plan:*)"
     ],
     "deny": [],
     "ask": []

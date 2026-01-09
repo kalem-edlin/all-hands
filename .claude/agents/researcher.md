@@ -4,7 +4,7 @@ description: |
   External research specialist with web search capability. Use for ANY external information gathering: API docs, library documentation, best practices, implementation patterns, external URLs. Cannot implement - discovery only.
 skills: research-tools
 tools: Read, Glob, Grep, Bash
-model: inherit
+model: opus
 color: blue
 ---
 

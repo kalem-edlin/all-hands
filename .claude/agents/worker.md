@@ -3,7 +3,7 @@ name: worker
 description: |
   Generic codebase implementation specialist. Fallback when no domain-specific specialist matches for IMPLEMENTATION tasks. Uses Glob, Grep, Read for context gathering before implementation.
 tools: Read, Glob, Grep, Bash, Write, Edit
-model: inherit
+model: opus
 color: green
 ---
 
