@@ -147,7 +147,7 @@ export class KnowledgeService {
    * Cosine distance: 0 = identical, 1 = orthogonal, 2 = opposite
    */
   distanceToSimilarity(distance: number): number {
-    return 1 - distance;
+    return 1 - distance / 2;
   }
 
   /**
