@@ -34,6 +34,7 @@ Your assignments should guide writers toward capturing KNOWLEDGE that isn't obvi
 **INPUTS** (from main agent):
 - `mode`: "init"
 - `scope_paths`: optional paths to scope (default: entire codebase)
+- `user_request`: optional user-specified context
 - `feature_branch`: branch name for worktree naming
 
 **OUTPUTS** (to main agent):
@@ -129,23 +130,27 @@ Your assignments should guide writers toward capturing KNOWLEDGE that isn't obvi
 <adjust_workflow>
 **INPUTS** (from main agent):
 - `mode`: "adjust"
-- `changed_files`: list of files from git diff
-- `user_request`: optional user-specified scope
+- `use_diff`: boolean - if true, get changed files from git
+- `scope_paths`: optional list of paths to scope
+- `user_request`: optional user-specified context
 - `feature_branch`: branch name for worktree naming
 
 **OUTPUTS** (to main agent):
 - `{ success: true, structure_committed: true, assignments: [...] }` - targeted updates
 
 **STEPS:**
-1. **Analyze changes AND existing docs:**
+1. **Discover what needs documenting:**
    ```bash
-   # What changed in the codebase
+   # If use_diff is true, get changed files from git
    envoy git diff-base --name-only
+
+   # Analyze affected paths
    envoy docs tree <affected-path> --depth 4
-   
+   envoy docs complexity <affected-path>
+
    # What documentation already exists
    envoy docs tree docs/ --depth 4
-   
+
    # Check if changed concepts are already documented
    envoy knowledge search docs "<changed-feature>" --metadata-only
    envoy knowledge search docs "<affected-product>" --metadata-only

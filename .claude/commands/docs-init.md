@@ -12,6 +12,18 @@ Current branch: !`git branch --show-current`
 Base branch: !`envoy git get-base-branch`
 </context>
 
+<main_agent_role>
+Main agent is ORCHESTRATOR ONLY. Do NOT perform any codebase discovery, file analysis, or documentation planning. All discovery work is delegated to the taxonomist agent.
+
+Main agent responsibilities:
+1. Setup branch (create docs branch if on base)
+2. Parse arguments (paths, context)
+3. Verify clean git state
+4. Delegate to taxonomist with raw inputs
+5. Orchestrate writers based on taxonomist output
+6. Handle merging, validation, and PR creation
+</main_agent_role>
+
 <process>
 <step name="setup_branch">
 Check if current branch equals base branch:
@@ -27,12 +39,10 @@ Check if current branch equals base branch:
 
 <step name="parse_arguments">
 Parse $ARGUMENTS:
-- Extract paths (directories to document)
-- Extract optional user context
+- Extract paths (pass to taxonomist as scope)
+- Extract optional user context (pass to taxonomist)
 
-If no paths provided:
-- Document entire codebase
-- Focus on: src/, lib/, packages/, app/ directories
+Do NOT run discovery commands - pass raw inputs to taxonomist.
 </step>
 
 <step name="ensure_committed_state">
@@ -68,12 +78,15 @@ Before delegating to taxonomist, verify clean git state:
 </step>
 
 <step name="delegate_to_taxonomist">
-Delegate to **documentation-taxonomist agent** with init-workflow:
+Delegate to **documentation-taxonomist agent** with init-workflow.
+
+Taxonomist handles ALL discovery: analyzing codebase structure, checking existing docs, identifying products/features, creating directory structure, assigning writers.
 
 **INPUTS:**
 ```yaml
 mode: "init"
-scope_paths: [<parsed_paths or defaults>]
+scope_paths: [<paths from arguments, or empty for full codebase>]
+user_request: "<optional context from user>"
 feature_branch: "<current_branch>"
 ```
 
@@ -184,9 +197,11 @@ Report completion with PR link.
 </success_criteria>
 
 <constraints>
+- MUST NOT perform codebase discovery - delegate ALL discovery to taxonomist
+- MUST NOT run envoy docs tree, envoy docs complexity, or envoy knowledge search
 - MUST verify clean git state before documentation (ensure_committed_state step)
 - MUST only create docs branch if already on base branch
-- MUST use taxonomist for segmentation
+- MUST delegate to taxonomist for all segmentation and discovery
 - MUST run writers in parallel with worktrees
 - MUST monitor parallel workers for stuck/blocked state
 - MUST report lagging workers to user after reasonable timeout

@@ -6,8 +6,12 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSync } from "fs";
 import { join, relative, extname, basename } from "path";
 import { createHash } from "crypto";
-import { Index, MetricKind, ScalarKind, type Matches } from "usearch";
+import { createRequire } from "module";
+import { Index, MetricKind, ScalarKind } from "usearch";
 import matter from "gray-matter";
+
+// Create require function for ESM compatibility (needed for fetch caching)
+const require = createRequire(import.meta.url);
 
 // Types
 interface DocumentMeta {

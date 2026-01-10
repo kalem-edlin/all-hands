@@ -12,27 +12,25 @@ Current branch: !`git branch --show-current`
 Base branch: !`envoy git get-base-branch`
 </context>
 
+<main_agent_role>
+Main agent is ORCHESTRATOR ONLY. Do NOT perform any codebase discovery, file analysis, or documentation planning. All discovery work is delegated to the taxonomist agent.
+
+Main agent responsibilities:
+1. Parse arguments (paths, flags, context)
+2. Verify clean git state
+3. Delegate to taxonomist with raw inputs
+4. Orchestrate writers based on taxonomist output
+5. Handle merging, validation, and PR creation
+</main_agent_role>
+
 <process>
 <step name="parse_arguments">
 Parse $ARGUMENTS:
-- `--diff` flag: use git diff to find changed files
-- Paths: specific directories/files to document
-- Context: user-provided guidance
+- `--diff` flag: pass to taxonomist for git-based discovery
+- Paths: pass to taxonomist as scope
+- Context: pass to taxonomist as user guidance
 
-Determine mode:
-- If `--diff`: get changed files from git
-- If paths: use provided paths
-- If neither: ask user for scope
-</step>
-
-<step name="get_changed_files">
-If `--diff` mode:
-```bash
-envoy git diff-base --summary
-```
-Extract file paths from `changed_files[].path` in the response.
-
-Filter to source files only (exclude tests, configs, etc. unless explicitly requested).
+Do NOT run discovery commands - pass raw inputs to taxonomist.
 </step>
 
 <step name="ensure_committed_state">
@@ -68,12 +66,15 @@ Before delegating to taxonomist, verify clean git state:
 </step>
 
 <step name="delegate_to_taxonomist">
-Delegate to **documentation-taxonomist agent** with adjust-workflow:
+Delegate to **documentation-taxonomist agent** with adjust-workflow.
+
+Taxonomist handles ALL discovery: analyzing codebase, checking existing docs, identifying affected domains, creating directory structure.
 
 **INPUTS:**
 ```yaml
 mode: "adjust"
-changed_files: [<list from git diff or user paths>]
+use_diff: true | false  # from --diff flag
+scope_paths: [<paths from arguments, if any>]
 user_request: "<optional context from user>"
 feature_branch: "<current_branch>"
 ```
@@ -183,9 +184,11 @@ When called standalone:
 </success_criteria>
 
 <constraints>
+- MUST NOT perform codebase discovery - delegate ALL discovery to taxonomist
+- MUST NOT run envoy docs tree, envoy docs complexity, or envoy knowledge search
 - MUST verify clean git state before documentation (ensure_committed_state step)
-- MUST use taxonomist for intelligent segmentation
-- MUST support --diff flag for git-based changes
+- MUST delegate to taxonomist for all segmentation and discovery
+- MUST pass --diff flag to taxonomist (not process it directly)
 - MUST work both standalone and in workflow context
 - MUST monitor parallel workers for stuck/blocked state (if multiple segments)
 - MUST report lagging workers to user after reasonable timeout

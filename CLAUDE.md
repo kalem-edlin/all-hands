@@ -27,7 +27,9 @@ Claude quality degrades at ~50% context usage. Agents MUST self-monitor:
 - Discovery agents: return findings in batches via envoy
 - Implementation agents: commit incrementally
 
-## Envoy Error Handling
+## Envoy Usage and Error Handling
+
+Always call envoy via `envoy <group> <command> [args]` - DO NOT use npx, tsx, ts-node or any other wrapper.
 
 Envoy commands fail in two ways:
 1. **stderr/non-zero exit**: Command crashed
