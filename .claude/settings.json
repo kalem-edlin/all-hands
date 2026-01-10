@@ -21,6 +21,7 @@
       "Bash(ls:*)",
       "Bash(rg:*)",
       "Bash(mkdir:*)",
+      "Bash(mkdir -p:*)",
       "Bash(npx repomix@latest:*)",
       "Read(~/.claude-code-docs/docs/*)",
       "Bash(envoy:*)",

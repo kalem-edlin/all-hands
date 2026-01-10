@@ -12,6 +12,7 @@ import { Command } from "commander";
 import { execSync, spawnSync } from "child_process";
 import { existsSync, readFileSync, readdirSync, statSync } from "fs";
 import { join, relative, extname, dirname } from "path";
+import matter from "gray-matter";
 import { BaseCommand, CommandResult } from "./base.js";
 import {
   findSymbol,
@@ -69,8 +70,30 @@ const getMostRecentHashForRange = (
 };
 
 /**
+ * Get most recent commit hash for entire file.
+ * Used for non-AST files where we can't identify symbol line ranges.
+ */
+const getMostRecentHashForFile = (
+  filePath: string,
+  cwd: string
+): { hash: string; success: boolean } => {
+  const logResult = spawnSync(
+    "git",
+    ["log", "-1", "--format=%h", "--", filePath],
+    { encoding: "utf-8", cwd }
+  );
+
+  if (logResult.status !== 0 || !logResult.stdout.trim()) {
+    return { hash: "0000000", success: false };
+  }
+
+  return { hash: logResult.stdout.trim().substring(0, 7), success: true };
+};
+
+/**
  * Format a symbol reference with git blame hash.
- * Output: [ref:file:symbol:hash]
+ * Output: [ref:file:symbol:hash] for AST-supported files with symbol
+ * Output: [ref:file::hash] for file-only refs (no symbol or non-AST files)
  */
 class FormatReferenceCommand extends BaseCommand {
   readonly name = "format-reference";
@@ -79,15 +102,15 @@ class FormatReferenceCommand extends BaseCommand {
   defineArguments(cmd: Command): void {
     cmd
       .argument("<file>", "Path to source file")
-      .argument("<symbol>", "Symbol name (function, class, variable, etc.)");
+      .argument("[symbol]", "Symbol name (optional for non-AST files)");
   }
 
   async execute(args: Record<string, unknown>): Promise<CommandResult> {
     const file = args.file as string;
-    const symbolName = args.symbol as string;
+    const symbolName = args.symbol as string | undefined;
 
-    if (!file || !symbolName) {
-      return this.error("validation_error", "file and symbol are required");
+    if (!file) {
+      return this.error("validation_error", "file is required");
     }
 
     const projectRoot = getProjectRoot();
@@ -96,6 +119,47 @@ class FormatReferenceCommand extends BaseCommand {
 
     if (!existsSync(absolutePath)) {
       return this.error("file_not_found", `File not found: ${relativePath}`);
+    }
+
+    // Check if file type is AST-supported
+    const ext = extname(absolutePath);
+    const supported = getSupportedExtensions();
+    const isAstSupported = supported.includes(ext);
+
+    // File-only reference (no symbol provided or non-AST file)
+    if (!symbolName) {
+      const { hash: fileHash, success } = getMostRecentHashForFile(
+        absolutePath,
+        projectRoot
+      );
+
+      if (!success || fileHash === "0000000") {
+        return this.error(
+          "uncommitted_file",
+          `File ${relativePath} has uncommitted changes or no git history`,
+          "Commit all changes before generating references: git add -A && git commit"
+        );
+      }
+
+      const reference = `[ref:${relativePath}::${fileHash}]`;
+
+      return this.success({
+        reference,
+        file: relativePath,
+        symbol: null,
+        hash: fileHash,
+        type: "file-only",
+        ast_supported: isAstSupported,
+      });
+    }
+
+    // Symbol reference - requires AST support
+    if (!isAstSupported) {
+      return this.error(
+        "unsupported_file_type",
+        `File type ${ext} does not support symbol references`,
+        `Use file-only reference: envoy docs format-reference ${file}`
+      );
     }
 
     // Find symbol in file
@@ -117,11 +181,11 @@ class FormatReferenceCommand extends BaseCommand {
       projectRoot
     );
 
-    if (!success) {
+    if (!success || mostRecentHash === "0000000") {
       return this.error(
-        "git_error",
-        "Failed to get git blame for symbol",
-        "Ensure file is tracked by git"
+        "uncommitted_file",
+        `File ${relativePath} has uncommitted changes or no git history`,
+        "Commit all changes before generating references: git add -A && git commit"
       );
     }
 
@@ -134,13 +198,16 @@ class FormatReferenceCommand extends BaseCommand {
       hash: mostRecentHash,
       line_range: { start: symbol.startLine, end: symbol.endLine },
       symbol_type: symbol.type,
+      type: "symbol",
     });
   }
 }
 
 /**
  * Validate all documentation references.
- * Scans docs/ for markdown files with [ref:file:symbol:hash] patterns.
+ * Supports two formats:
+ *   [ref:file:symbol:hash] - symbol reference (AST-supported files)
+ *   [ref:file::hash] - file-only reference (any file type)
  */
 class ValidateCommand extends BaseCommand {
   readonly name = "validate";
@@ -162,17 +229,22 @@ class ValidateCommand extends BaseCommand {
         message: "No docs directory found",
         stale: [],
         invalid: [],
+        frontmatter_errors: [],
         total_refs: 0,
+        total_files: 0,
       });
     }
 
-    const refs: Array<{
+    interface RefInfo {
       file: string;
       reference: string;
       refFile: string;
-      refSymbol: string;
+      refSymbol: string | null; // null for file-only refs
       refHash: string;
-    }> = [];
+      isFileOnly: boolean;
+    }
+
+    const refs: RefInfo[] = [];
 
     // Recursively find all markdown files
     const findMarkdownFiles = (dir: string): string[] => {
@@ -190,31 +262,132 @@ class ValidateCommand extends BaseCommand {
       return files;
     };
 
-    // Extract refs from all markdown files
-    const refPattern = /\[ref:([^:]+):([^:]+):([a-f0-9]+)\]/g;
     const mdFiles = findMarkdownFiles(absoluteDocsPath);
+
+    // Validate front matter for all markdown files
+    const frontmatterErrors: Array<{
+      doc_file: string;
+      reason: string;
+    }> = [];
+
+    // Placeholder hash detection
+    const placeholderErrors: Array<{
+      doc_file: string;
+      count: number;
+      examples: string[];
+      reason: string;
+    }> = [];
+
+    // Inline code block detection
+    const inlineCodeErrors: Array<{
+      doc_file: string;
+      block_count: number;
+      reason: string;
+    }> = [];
+
+    // Capability list detection (warnings)
+    const capabilityListWarnings: Array<{
+      doc_file: string;
+      reason: string;
+    }> = [];
 
     for (const mdFile of mdFiles) {
       const content = readFileSync(mdFile, "utf-8");
-      let match;
-      while ((match = refPattern.exec(content)) !== null) {
-        refs.push({
-          file: relative(projectRoot, mdFile),
-          reference: match[0],
-          refFile: match[1],
-          refSymbol: match[2],
-          refHash: match[3],
+      const relPath = relative(projectRoot, mdFile);
+
+      // Check for front matter block
+      if (!content.startsWith("---")) {
+        frontmatterErrors.push({
+          doc_file: relPath,
+          reason: "Missing front matter (file must start with ---)",
+        });
+        continue;
+      }
+
+      try {
+        const parsed = matter(content);
+
+        // Check for required description field
+        if (!parsed.data.description || typeof parsed.data.description !== "string") {
+          frontmatterErrors.push({
+            doc_file: relPath,
+            reason: "Missing or invalid 'description' field in front matter",
+          });
+        } else if (parsed.data.description.trim() === "") {
+          frontmatterErrors.push({
+            doc_file: relPath,
+            reason: "Empty 'description' field in front matter",
+          });
+        }
+
+        // Validate relevant_files if present
+        if (parsed.data.relevant_files !== undefined) {
+          if (!Array.isArray(parsed.data.relevant_files)) {
+            frontmatterErrors.push({
+              doc_file: relPath,
+              reason: "'relevant_files' must be an array",
+            });
+          }
+        }
+      } catch {
+        frontmatterErrors.push({
+          doc_file: relPath,
+          reason: "Invalid front matter syntax",
         });
       }
     }
 
-    if (refs.length === 0) {
-      return this.success({
-        message: "No references found in documentation",
-        stale: [],
-        invalid: [],
-        total_refs: 0,
-      });
+    // Extract refs from all markdown files
+    // Matches both [ref:file:symbol:hash] and [ref:file::hash]
+    const refPattern = /\[ref:([^:\]]+):([^:\]]*):([a-f0-9]+)\]/g;
+
+    for (const mdFile of mdFiles) {
+      const content = readFileSync(mdFile, "utf-8");
+      const relPath = relative(projectRoot, mdFile);
+      let match;
+      while ((match = refPattern.exec(content)) !== null) {
+        const isFileOnly = match[2] === "";
+        refs.push({
+          file: relPath,
+          reference: match[0],
+          refFile: match[1],
+          refSymbol: isFileOnly ? null : match[2],
+          refHash: match[3],
+          isFileOnly,
+        });
+      }
+
+      // Placeholder hash detection
+      const placeholderPattern = /\[ref:[^\]]+:(abc|123|000|hash|test)[a-f0-9]*\]/gi;
+      const placeholderMatches = content.match(placeholderPattern);
+      if (placeholderMatches) {
+        placeholderErrors.push({
+          doc_file: relPath,
+          count: placeholderMatches.length,
+          examples: placeholderMatches.slice(0, 3),
+          reason: "Placeholder hashes detected - writer didn't use format-reference",
+        });
+      }
+
+      // Inline code block detection (fenced code blocks in documentation)
+      const codeBlockPattern = /^```\w+$/gm;
+      const codeBlockMatches = content.match(codeBlockPattern);
+      if (codeBlockMatches && codeBlockMatches.length > 0) {
+        inlineCodeErrors.push({
+          doc_file: relPath,
+          block_count: codeBlockMatches.length,
+          reason: "Documentation contains inline code blocks",
+        });
+      }
+
+      // Capability list detection (tables with Command/Purpose headers)
+      const capabilityTablePattern = /\|\s*(Command|Option|Flag)\s*\|.*\|\s*(Purpose|Description)\s*\|/i;
+      if (capabilityTablePattern.test(content)) {
+        capabilityListWarnings.push({
+          doc_file: relPath,
+          reason: "Possible capability list table detected",
+        });
+      }
     }
 
     const stale: Array<{
@@ -222,6 +395,7 @@ class ValidateCommand extends BaseCommand {
       reference: string;
       stored_hash: string;
       current_hash: string;
+      ref_type: "symbol" | "file-only";
     }> = [];
 
     const invalid: Array<{
@@ -244,16 +418,48 @@ class ValidateCommand extends BaseCommand {
         continue;
       }
 
-      // Check if file type is supported for symbol validation
+      // File-only reference: check file hash staleness
+      if (ref.isFileOnly) {
+        const { hash: currentHash, success } = getMostRecentHashForFile(
+          absoluteRefFile,
+          projectRoot
+        );
+
+        if (!success) {
+          invalid.push({
+            doc_file: ref.file,
+            reference: ref.reference,
+            reason: "Git hash lookup failed",
+          });
+          continue;
+        }
+
+        if (currentHash !== ref.refHash) {
+          stale.push({
+            doc_file: ref.file,
+            reference: ref.reference,
+            stored_hash: ref.refHash,
+            current_hash: currentHash,
+            ref_type: "file-only",
+          });
+        }
+        continue;
+      }
+
+      // Symbol reference: validate symbol exists and check hash
       const ext = extname(absoluteRefFile);
       const supported = getSupportedExtensions();
       if (!supported.includes(ext)) {
-        // Can't validate symbol hash for unsupported files - file exists, skip hash check
+        invalid.push({
+          doc_file: ref.file,
+          reference: ref.reference,
+          reason: `File type ${ext} does not support symbol references`,
+        });
         continue;
       }
 
       // Check if symbol exists
-      const symbolFound = await symbolExists(absoluteRefFile, ref.refSymbol);
+      const symbolFound = await symbolExists(absoluteRefFile, ref.refSymbol!);
       if (!symbolFound) {
         invalid.push({
           doc_file: ref.file,
@@ -264,7 +470,7 @@ class ValidateCommand extends BaseCommand {
       }
 
       // Get current hash for symbol
-      const symbol = await findSymbol(absoluteRefFile, ref.refSymbol);
+      const symbol = await findSymbol(absoluteRefFile, ref.refSymbol!);
       if (!symbol) {
         continue; // Already validated above
       }
@@ -291,17 +497,50 @@ class ValidateCommand extends BaseCommand {
           reference: ref.reference,
           stored_hash: ref.refHash,
           current_hash: mostRecentHash,
+          ref_type: "symbol",
         });
       }
     }
 
+    const hasErrors = frontmatterErrors.length > 0 || stale.length > 0 || invalid.length > 0 ||
+      placeholderErrors.length > 0 || inlineCodeErrors.length > 0;
+    const hasWarnings = capabilityListWarnings.length > 0;
+    const fileOnlyRefs = refs.filter(r => r.isFileOnly).length;
+    const symbolRefs = refs.filter(r => !r.isFileOnly).length;
+
+    let message: string;
+    if (hasErrors) {
+      const parts: string[] = [];
+      if (frontmatterErrors.length > 0) parts.push(`${frontmatterErrors.length} front matter errors`);
+      if (invalid.length > 0) parts.push(`${invalid.length} invalid refs`);
+      if (stale.length > 0) parts.push(`${stale.length} stale refs`);
+      if (placeholderErrors.length > 0) parts.push(`${placeholderErrors.length} placeholder hashes`);
+      if (inlineCodeErrors.length > 0) parts.push(`${inlineCodeErrors.length} inline code blocks`);
+      message = `Validation found issues: ${parts.join(", ")}`;
+    } else if (hasWarnings) {
+      message = `Validated ${mdFiles.length} files with ${capabilityListWarnings.length} warnings`;
+    } else {
+      message = `Validated ${mdFiles.length} files and ${refs.length} references (${symbolRefs} symbol, ${fileOnlyRefs} file-only)`;
+    }
+
     return this.success({
-      message: `Validated ${refs.length} references`,
+      message,
+      total_files: mdFiles.length,
       total_refs: refs.length,
+      symbol_refs: symbolRefs,
+      file_only_refs: fileOnlyRefs,
+      frontmatter_error_count: frontmatterErrors.length,
       stale_count: stale.length,
       invalid_count: invalid.length,
+      placeholder_error_count: placeholderErrors.length,
+      inline_code_error_count: inlineCodeErrors.length,
+      capability_list_warning_count: capabilityListWarnings.length,
+      frontmatter_errors: frontmatterErrors,
       stale,
       invalid,
+      placeholder_errors: placeholderErrors,
+      inline_code_errors: inlineCodeErrors,
+      capability_list_warnings: capabilityListWarnings,
     });
   }
 }

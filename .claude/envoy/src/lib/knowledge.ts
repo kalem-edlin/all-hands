@@ -4,7 +4,8 @@
  */
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSync } from "fs";
-import { join, relative, extname } from "path";
+import { join, relative, extname, basename } from "path";
+import { createHash } from "crypto";
 import { Index, MetricKind, ScalarKind, type Matches } from "usearch";
 import matter from "gray-matter";
 
@@ -59,25 +60,8 @@ const INDEX_CONFIGS: Record<string, IndexConfig> = {
     name: "docs",
     paths: ["docs/"],
     extensions: [".md"],
-    description: "Project documentation for all agents",
+    description: "Project documentation",
     hasFrontmatter: true,
-  },
-  curator: {
-    name: "curator",
-    paths: [
-      ".claude/agents/",
-      ".claude/hooks/",
-      ".claude/skills/",
-      ".claude/commands/",
-      ".claude/output-styles/",
-      ".claude/envoy/README.md",
-      ".claude/settings.json",
-      ".claude/envoy/src/",
-      ".claude/envoy/package.json",
-    ],
-    extensions: [".md", ".yaml", ".yml", ".ts", ".json"],
-    description: ".claude/ files for curator agent",
-    hasFrontmatter: false,
   },
 };
 
@@ -120,14 +104,101 @@ export class KnowledgeService {
   }
 
   /**
-   * Lazy-load embedding model (first use downloads ~100-400MB)
+   * Get model cache directory
+   */
+  private getModelCacheDir(): string {
+    return join(this.knowledgeDir, "models");
+  }
+
+  /**
+   * Install caching wrapper for node-fetch (must call before importing web-ai-node)
+   */
+  private installFetchCache(): void {
+    const cacheDir = this.getModelCacheDir();
+    if (!existsSync(cacheDir)) {
+      mkdirSync(cacheDir, { recursive: true });
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const nodeFetchModule = require("node-fetch");
+    const originalFetch = nodeFetchModule.default || nodeFetchModule;
+
+    // Skip if already patched
+    if ((originalFetch as { __cached?: boolean }).__cached) return;
+
+    const self = this;
+    const cachedFetch = async function (url: string, init?: RequestInit) {
+      // Only cache model files
+      if (!url.includes("web-ai-models.org") && !url.includes(".onnx")) {
+        return originalFetch(url, init);
+      }
+
+      const urlHash = createHash("md5").update(url).digest("hex").slice(0, 8);
+      const fileName = `${urlHash}-${basename(url)}`;
+      const cachePath = join(self.getModelCacheDir(), fileName);
+
+      if (existsSync(cachePath)) {
+        console.error(`[knowledge] Using cached model: ${fileName}`);
+        const data = readFileSync(cachePath);
+        // Return a mock response with arrayBuffer method
+        return {
+          ok: true,
+          status: 200,
+          arrayBuffer: async () => data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength),
+        };
+      }
+
+      console.error(`[knowledge] Downloading model: ${basename(url)}`);
+      const response = await originalFetch(url, init);
+      if (!response.ok) {
+        return response;
+      }
+
+      const arrayBuffer = await response.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+      writeFileSync(cachePath, buffer);
+      console.error(`[knowledge] Cached model: ${fileName} (${(buffer.length / 1024 / 1024).toFixed(1)}MB)`);
+
+      // Return a mock response since we consumed the original
+      return {
+        ok: true,
+        status: 200,
+        arrayBuffer: async () => arrayBuffer,
+      };
+    };
+
+    (cachedFetch as { __cached?: boolean }).__cached = true;
+
+    // Patch the module's default export
+    if (nodeFetchModule.default) {
+      nodeFetchModule.default = cachedFetch;
+    }
+    // Also patch require.cache
+    const cacheKey = require.resolve("node-fetch");
+    if (require.cache[cacheKey]) {
+      require.cache[cacheKey]!.exports = cachedFetch;
+      require.cache[cacheKey]!.exports.default = cachedFetch;
+    }
+  }
+
+  /**
+   * Lazy-load embedding model with local caching
    */
   async getModel(): Promise<unknown> {
     if (this.model) return this.model;
 
+    this.ensureDir();
+    console.error("[knowledge] Loading embedding model...");
+    const startTime = Date.now();
+
+    // Install caching before importing the library
+    this.installFetchCache();
+
     const { TextModel } = await import("@visheratin/web-ai-node/text");
     const modelResult = await TextModel.create("gtr-t5-quant");
     this.model = modelResult.model;
+
+    console.error(`[knowledge] Model loaded in ${((Date.now() - startTime) / 1000).toFixed(1)}s`);
     return this.model;
   }
 
@@ -357,8 +428,9 @@ export class KnowledgeService {
 
   /**
    * Search with similarity computation
+   * @param metadataOnly - If true, only return file paths and descriptions (no full_resource_context)
    */
-  async search(indexName: string, query: string, k: number = 50): Promise<SearchResult[]> {
+  async search(indexName: string, query: string, k: number = 50, metadataOnly: boolean = false): Promise<SearchResult[]> {
     const { index, meta } = await this.loadIndex(indexName);
 
     if (Object.keys(meta.documents).length === 0) {
@@ -403,8 +475,8 @@ export class KnowledgeService {
         relevant_files: docMeta.relevant_files,
       };
 
-      // Include full context for high-similarity results
-      if (similarity >= SEARCH_FULL_CONTEXT_SIMILARITY_THRESHOLD) {
+      // Include full context for high-similarity results (unless metadata-only mode)
+      if (!metadataOnly && similarity >= SEARCH_FULL_CONTEXT_SIMILARITY_THRESHOLD) {
         const fullPath = join(this.projectRoot, path);
         if (existsSync(fullPath)) {
           result.full_resource_context = readFileSync(fullPath, "utf-8");
@@ -425,6 +497,7 @@ export class KnowledgeService {
     const results: Record<string, ReindexResult> = {};
 
     const indexes = indexName ? [indexName] : Object.keys(INDEX_CONFIGS);
+    console.error(`[knowledge] Reindexing ${indexes.length} index(es): ${indexes.join(", ")}`);
 
     for (const name of indexes) {
       const config = INDEX_CONFIGS[name];
@@ -432,15 +505,20 @@ export class KnowledgeService {
         throw new Error(`Unknown index: ${name}`);
       }
 
+      const indexStartTime = Date.now();
+      console.error(`[knowledge] Starting index '${name}'...`);
+
       // Create fresh index
       const index = this.createIndex();
       const meta = this.createEmptyMetadata();
 
       // Discover and index files
       const files = this.discoverFiles(config);
+      console.error(`[knowledge] Found ${files.length} files for '${name}'`);
       let totalTokens = 0;
 
-      for (const filePath of files) {
+      for (let i = 0; i < files.length; i++) {
+        const filePath = files[i];
         const fullPath = join(this.projectRoot, filePath);
         const content = readFileSync(fullPath, "utf-8");
 
@@ -455,12 +533,15 @@ export class KnowledgeService {
           }
         }
 
+        console.error(`[knowledge] [${name}] Embedding ${i + 1}/${files.length}: ${filePath}`);
         await this.indexDocument(index, meta, filePath, content, frontMatter);
         totalTokens += meta.documents[filePath].token_count;
       }
 
       // Save
       await this.saveIndex(name, index, meta);
+      const indexDuration = ((Date.now() - indexStartTime) / 1000).toFixed(1);
+      console.error(`[knowledge] Index '${name}' complete: ${files.length} files, ${totalTokens} tokens in ${indexDuration}s`);
 
       results[name] = {
         files_indexed: files.length,
@@ -488,6 +569,9 @@ export class KnowledgeService {
       throw new Error(`Unknown index: ${indexName}`);
     }
 
+    console.error(`[knowledge] Incremental reindex '${indexName}': ${changes.length} change(s)`);
+    const startTime = Date.now();
+
     const { index, meta } = await this.loadIndex(indexName);
     const processedFiles: { path: string; action: string }[] = [];
     const missingReferences: { doc_path: string; missing_files: string[] }[] = [];
@@ -511,6 +595,7 @@ export class KnowledgeService {
           delete meta.path_to_id[path];
           delete meta.documents[path];
           processedFiles.push({ path, action: "deleted" });
+          console.error(`[knowledge] [${indexName}] Deleted: ${path}`);
         }
       } else if (added || modified) {
         const fullPath = join(this.projectRoot, path);
@@ -546,13 +631,17 @@ export class KnowledgeService {
         }
 
         // Index document
+        const action = added ? "added" : "modified";
+        console.error(`[knowledge] [${indexName}] Embedding (${action}): ${path}`);
         await this.indexDocument(index, meta, path, content, frontMatter);
-        processedFiles.push({ path, action: added ? "added" : "modified" });
+        processedFiles.push({ path, action });
       }
     }
 
     // Save updated index
     await this.saveIndex(indexName, index, meta);
+    const duration = ((Date.now() - startTime) / 1000).toFixed(1);
+    console.error(`[knowledge] Incremental reindex '${indexName}' complete: ${processedFiles.length} file(s) in ${duration}s`);
 
     if (missingReferences.length > 0) {
       return {

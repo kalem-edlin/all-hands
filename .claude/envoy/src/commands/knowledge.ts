@@ -2,7 +2,7 @@
  * Knowledge commands - semantic search and indexing for documentation.
  *
  * Commands:
- *   envoy knowledge search <index_name> <query>
+ *   envoy knowledge search <index_name> <query> [--metadata-only]
  *   envoy knowledge reindex-all [--index_name <name>]
  *   envoy knowledge reindex-from-changes <index_name> --files <json_array>
  */
@@ -24,13 +24,15 @@ class SearchCommand extends BaseCommand {
 
   defineArguments(cmd: Command): void {
     cmd
-      .argument("<index_name>", "Index to search (docs, curator)")
-      .argument("<query>", "Descriptive phrase (e.g. 'how to handle API authentication' not 'auth')");
+      .argument("<index_name>", "Index name (docs)")
+      .argument("<query>", "Descriptive phrase (e.g. 'how to handle API authentication' not 'auth')")
+      .option("--metadata-only", "Return only file paths and descriptions (no full content)");
   }
 
   async execute(args: Record<string, unknown>): Promise<CommandResult> {
     const indexName = args.index_name as string;
     const query = args.query as string;
+    const metadataOnly = !!args["metadata-only"];
 
     if (!indexName || !query) {
       return this.error("validation_error", "index_name and query are required");
@@ -38,12 +40,13 @@ class SearchCommand extends BaseCommand {
 
     try {
       const service = new KnowledgeService(getProjectRoot());
-      const results = await service.search(indexName, query);
+      const results = await service.search(indexName, query, 50, metadataOnly);
 
       return this.success({
         message: "Search completed",
         query,
         index: indexName,
+        metadata_only: metadataOnly,
         results,
         result_count: results.length,
       });
@@ -96,7 +99,7 @@ class ReindexFromChangesCommand extends BaseCommand {
 
   defineArguments(cmd: Command): void {
     cmd
-      .argument("<index_name>", "Index to update (docs, curator)")
+      .argument("<index_name>", "Index name (docs)")
       .requiredOption("--files <json>", "JSON array of file changes");
   }
 
