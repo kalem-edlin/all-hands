@@ -400,7 +400,7 @@ const placeholderPattern = /\[ref:[^\]]+:(abc123[0-9]?|123456[0-9]?|000000[0-9]?
       }
 
       // Inline code block detection (fenced code blocks in documentation)
-      const codeBlockPattern = /^```\w+$/gm;
+const codeBlockPattern = /^```[a-z0-9_+-]*$/gm;
       const codeBlockMatches = content.match(codeBlockPattern);
       if (codeBlockMatches && codeBlockMatches.length > 0) {
         inlineCodeErrors.push({
