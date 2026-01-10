@@ -259,33 +259,15 @@ lib/
 - Not exact, account for variance
 </complexity_interpretation>
 
-<worktree_pattern>
-## Worktree Isolation
+<parallel_writers>
+## Parallel Writer Pattern
 
-Writers work in git worktrees to enable parallel documentation.
+Writers work directly on the branch without worktrees. The taxonomist ensures non-overlapping output directories, preventing conflicts.
 
-**Branch naming:** `<feature_branch>/docs-<domain>`
+**Segmentation rule:** Each segment gets a unique `output_path` (e.g., `docs/auth/`, `docs/api/`). Writers only modify files within their assigned output directory.
 
-**Example flow:**
-```bash
-# Create worktree
-git worktree add .trees/docs-auth -b feat/auth/docs-authentication
-
-# Work in worktree
-cd .trees/docs-auth
-# ... write docs, commit ...
-
-# Main agent merges
-git checkout feat/auth
-git merge feat/auth/docs-authentication
-
-# Cleanup
-git worktree remove .trees/docs-auth
-git branch -d feat/auth/docs-authentication
-```
-
-**Directory:** `.trees/docs-<domain>`
-</worktree_pattern>
+**Why no worktrees:** Since each writer owns a distinct directory, there are no file conflicts. This simplifies the workflow and avoids worktree management overhead.
+</parallel_writers>
 
 <anti_patterns>
 - Creating docs without symbol references (no traceability)
@@ -299,8 +281,7 @@ git branch -d feat/auth/docs-authentication
 
 <success_criteria>
 - All code snippets have `[ref:...]` format
-- Segments are non-overlapping
+- Segments are non-overlapping (enables parallel writers without conflicts)
 - Complexity informs depth decisions
-- Worktrees used for parallel work
 - Validation passes after commits
 </success_criteria>

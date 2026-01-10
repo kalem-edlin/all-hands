@@ -4,7 +4,7 @@ argument-hint: [...optional paths] [optional context]
 ---
 
 <objective>
-Create comprehensive documentation for the codebase from scratch. Uses taxonomy-based approach with parallel documentation writers working in worktree isolation.
+Create comprehensive documentation for the codebase from scratch. Uses taxonomy-based approach with parallel documentation writers. Taxonomist ensures non-overlapping output directories, so writers work directly on the branch without conflicts.
 </objective>
 
 <context>
@@ -97,7 +97,6 @@ segments:
   - domain: "<domain-name>"
     files: ["<glob-patterns>"]
     output_path: "docs/<domain>/"
-    worktree_branch: "<branch>/docs-<domain>"
     depth: "overview" | "detailed" | "comprehensive"
     notes: "<guidance>"
 ```
@@ -112,7 +111,6 @@ mode: "write"
 domain: "<segment.domain>"
 files: <segment.files>
 output_path: "<segment.output_path>"
-worktree_branch: "<segment.worktree_branch>"
 depth: "<segment.depth>"
 notes: "<segment.notes>"
 ```
@@ -122,22 +120,7 @@ notes: "<segment.notes>"
 success: true
 ```
 
-All writers run in parallel using worktree isolation. Merge completed writers incrementally as they finish (don't wait for all).
-</step>
-
-<step name="merge_worktrees">
-As each writer completes:
-
-1. For each worktree branch, merge to main docs branch:
-   ```bash
-   git merge <worktree_branch> --no-ff -m "docs: merge <domain> documentation"
-   ```
-
-2. Clean up worktrees:
-   ```bash
-   git worktree remove .trees/docs-<domain>
-   git branch -d <worktree_branch>
-   ```
+Writers work directly on the branch. Taxonomist ensures non-overlapping output directories, so no conflicts occur.
 </step>
 
 <step name="validate_docs">
@@ -205,9 +188,8 @@ Report completion with PR link.
 
 <success_criteria>
 - Branch setup complete (docs branch from base OR stay on feature)
-- Taxonomist segmented codebase
-- Writers created docs in parallel (worktrees)
-- Worktrees merged to docs branch
+- Taxonomist segmented codebase with non-overlapping output directories
+- Writers created docs in parallel
 - Validation passed
 - Documentation committed
 - Knowledge index updated
@@ -220,10 +202,8 @@ Report completion with PR link.
 - MUST verify clean git state before documentation (ensure_committed_state step)
 - MUST only create docs branch if already on base branch
 - MUST delegate to taxonomist for all segmentation and discovery
-- MUST run writers in parallel with worktrees
-- MUST merge all worktrees back
+- MUST run writers in parallel
 - MUST validate before PR
-- MUST clean up worktrees after merge
 - MUST commit documentation changes before reindex (reindex reads from disk)
 - MUST reindex knowledge base after documentation committed
 - All delegations MUST follow INPUTS/OUTPUTS format

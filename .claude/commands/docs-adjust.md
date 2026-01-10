@@ -86,7 +86,6 @@ segments:
   - domain: "<domain-name>"
     files: ["<glob-patterns>"]
     output_path: "docs/<domain>/"
-    worktree_branch: "<branch>/docs-<domain>"
     depth: "overview" | "detailed" | "comprehensive"
     notes: "<guidance>"
     action: "create" | "update"
@@ -104,7 +103,6 @@ mode: "write"
 domain: "<segment.domain>"
 files: <segment.files>
 output_path: "<segment.output_path>"
-worktree_branch: "<segment.worktree_branch>"
 depth: "<segment.depth>"
 notes: "<segment.notes>"
 ```
@@ -114,13 +112,7 @@ notes: "<segment.notes>"
 success: true
 ```
 
-Merge completed writers incrementally as they finish (don't wait for all).
-</step>
-
-<step name="merge_worktrees">
-As each writer completes:
-1. Merge to feature branch
-2. Clean up worktree and branch
+Writers work directly on the branch. Taxonomist ensures non-overlapping output directories, so no conflicts occur.
 </step>
 
 <step name="validate_and_report">
@@ -200,9 +192,8 @@ When called standalone:
 
 <success_criteria>
 - Changed files identified (if --diff)
-- Taxonomist created targeted segments
+- Taxonomist created targeted segments with non-overlapping output directories
 - Writers updated relevant docs
-- Worktrees merged
 - Validation run
 - Documentation committed
 - Knowledge index updated
@@ -217,7 +208,6 @@ When called standalone:
 - MUST pass --diff flag to taxonomist (not process it directly)
 - MUST work both standalone and in workflow context
 - MUST validate after documentation
-- MUST clean up worktrees
 - MUST commit documentation changes before reindex (reindex reads from disk)
 - MUST reindex knowledge base after documentation committed
 - All delegations MUST follow INPUTS/OUTPUTS format

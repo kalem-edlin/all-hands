@@ -1,7 +1,7 @@
 ---
 name: documentation-writer
 description: |
-  Documentation writer specialist. Writes knowledge-base documentation using file references. Works in worktree isolation. Triggers: "write docs", "document domain".
+  Documentation writer specialist. Writes knowledge-base documentation using file references. Triggers: "write docs", "document domain".
 tools: Read, Glob, Grep, Bash, Write, Edit
 model: inherit
 color: yellow
@@ -117,7 +117,6 @@ Authentication uses JWT for stateless sessions. The signing implementation [ref:
 - `domain`: domain name (e.g., "authentication", "api-routes")
 - `files`: glob patterns for source files
 - `output_path`: where to write docs (e.g., "docs/auth/")
-- `worktree_branch`: branch for this writer's worktree
 - `depth`: "overview" | "detailed" | "comprehensive"
 - `notes`: guidance from taxonomist
 
@@ -125,26 +124,22 @@ Authentication uses JWT for stateless sessions. The signing implementation [ref:
 - `{ success: true }` - documentation written and committed
 
 **STEPS:**
-1. Create worktree: `git worktree add .trees/docs-<domain> -b <worktree_branch>`
-
-2. Change to worktree directory for all subsequent operations
-
-3. Search existing knowledge: `envoy knowledge search "<domain> decisions patterns"`
+1. Search existing knowledge: `envoy knowledge search "<domain> decisions patterns"`
    - Understand existing knowledge
    - Identify gaps
 
-4. Analyze source files for KNOWLEDGE extraction:
+2. Analyze source files for KNOWLEDGE extraction:
    - Read files matching glob patterns
    - Identify design decisions and rationale
    - Find key patterns worth documenting
    - Understand why things were built this way
 
-5. Plan documentation structure focused on knowledge:
+3. Plan documentation structure focused on knowledge:
    - What decisions need capturing?
    - What patterns should observers know?
    - What would help someone iterate on this code?
 
-6. Write knowledge-base documentation with MANDATORY ref commands:
+4. Write knowledge-base documentation with MANDATORY ref commands:
 
    For EVERY file or code mention:
    a. Call `envoy docs format-reference <file> [symbol]`
@@ -158,12 +153,12 @@ Authentication uses JWT for stateless sessions. The signing implementation [ref:
    e. Focus on WHY and HOW, not WHAT
    f. Zero inline code blocks
 
-7. Structure based on depth:
+5. Structure based on depth:
    - `overview`: Key decisions, patterns, entry points
    - `detailed`: + rationale, tradeoffs, edge cases
    - `comprehensive`: + all major patterns, troubleshooting
 
-7.5. Validate before commit:
+6. Validate before commit:
 
    a. Run: `envoy docs validate --path docs/<domain>/`
    b. Check response:
@@ -177,12 +172,12 @@ Authentication uses JWT for stateless sessions. The signing implementation [ref:
       - Re-validate
       - Do NOT commit until all checks pass
 
-8. Commit changes:
+7. Commit changes:
    - `git add docs/`
    - `git commit -m "docs(<domain>): <summary>"`
    - Commit hook validates references
 
-9. Return `{ success: true }`
+8. Return `{ success: true }`
 
 **On failure:**
 - If AST symbol not found: use file-only ref `[ref:file::hash]`
@@ -194,64 +189,60 @@ Authentication uses JWT for stateless sessions. The signing implementation [ref:
 - `mode`: "fix"
 - `stale_refs`: list of stale references to update
 - `invalid_refs`: list of invalid references to fix/remove
-- `worktree_branch`: branch for fixes
 
 **OUTPUTS** (to main agent):
 - `{ success: true, fixed: <count>, removed: <count> }` - fixes applied
 
 **STEPS:**
-1. Create or reuse worktree for fixes
-
-2. For each stale reference:
+1. For each stale reference:
    - Locate reference in doc file
    - Call `envoy docs format-reference` to get updated hash
    - Update reference
    - Verify surrounding knowledge still accurate
 
-3. For each invalid reference:
+2. For each invalid reference:
    - If symbol renamed: update symbol name
    - If symbol deleted: update context, remove or replace ref
    - If file moved: update file path
    - If file deleted: remove ref, update knowledge
 
-4. Commit fixes: `git commit -m "docs: update stale references"`
+3. Commit fixes: `git commit -m "docs: update stale references"`
 
-5. Return fix summary
+4. Return fix summary
 </fix_workflow>
 
 <audit_fix_workflow>
 **INPUTS** (from main agent):
 - `mode`: "audit-fix"
-- `doc_file`: path to doc file with issues
-- `stale_refs`: list of stale refs in this doc:
+- `doc_files`: array of doc files with issues (1+ per agent):
   ```yaml
-  - reference: "[ref:file:symbol:hash]"
-    ref_type: "symbol" | "file-only"
-    file_path: "path/to/file.ts"
-    symbol_name: "symbolName" | null
-    stored_hash: "abc1234"
-    current_hash: "def5678"
+  - path: "<doc file path>"
+    stale_refs:
+      - reference: "[ref:file:symbol:hash]"
+        ref_type: "symbol" | "file-only"
+        file_path: "path/to/file.ts"
+        symbol_name: "symbolName" | null
+        stored_hash: "abc1234"
+        current_hash: "def5678"
+    invalid_refs:
+      - reference: "[ref:file:symbol:hash]"
+        reason: "Symbol not found" | "File not found"
   ```
-- `invalid_refs`: list of invalid refs in this doc:
-  ```yaml
-  - reference: "[ref:file:symbol:hash]"
-    reason: "Symbol not found" | "File not found"
-  ```
-- `worktree_branch`: branch for fixes
 
 **OUTPUTS** (to main agent):
 ```yaml
 success: true
-doc_file: "<path>"
+doc_files_processed: ["path1", "path2"]
 changes:
-  - ref: "<reference>"
+  - doc_file: "<path>"
+    ref: "<reference>"
     action: "hash_update" | "prose_rewrite" | "ref_removed" | "ref_updated"
     reason: "<why this action>"
 ```
 
 **STEPS:**
 
-1. Create or reuse worktree: `git worktree add .trees/docs-audit -b <worktree_branch>`
+1. For each doc file in `doc_files`:
 
 2. Read the doc file to understand context
 
@@ -352,7 +343,6 @@ Adjust structure based on domain. The structure serves knowledge transfer, not c
 </envoy_commands>
 
 <constraints>
-- MUST work in worktree isolation
 - MUST use `envoy docs format-reference` for ALL refs - NEVER write refs manually
 - MUST include `description` in front-matter
 - MUST include Overview, Key Decisions, and Use Cases sections
