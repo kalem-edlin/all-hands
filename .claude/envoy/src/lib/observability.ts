@@ -28,6 +28,24 @@ const MAX_LOG_STRING_LENGTH = parseInt(
   10
 );
 
+/** Max depth for nested structures (default 2) */
+const MAX_LOG_DEPTH = parseInt(
+  process.env.ENVOY_LOG_MAX_DEPTH ?? "2",
+  10
+);
+
+/** Max array items before summarizing (default 3) */
+const MAX_LOG_ARRAY_ITEMS = parseInt(
+  process.env.ENVOY_LOG_MAX_ARRAY_ITEMS ?? "3",
+  10
+);
+
+/** Max object keys before summarizing (default 5) */
+const MAX_LOG_OBJECT_KEYS = parseInt(
+  process.env.ENVOY_LOG_MAX_OBJECT_KEYS ?? "5",
+  10
+);
+
 // --- Types ---
 
 export type LogLevel = "info" | "warn" | "error";
@@ -101,6 +119,61 @@ function trimStrings(
   return value;
 }
 
+/**
+ * Truncate deep/wide structures to prevent log bloat.
+ * Summarizes arrays beyond maxItems and objects beyond maxKeys.
+ * At maxDepth, replaces nested structures with summary strings.
+ */
+function truncateStructure(
+  value: unknown,
+  maxDepth = MAX_LOG_DEPTH,
+  maxArrayItems = MAX_LOG_ARRAY_ITEMS,
+  maxObjectKeys = MAX_LOG_OBJECT_KEYS,
+  visited = new WeakSet<object>()
+): unknown {
+  const truncate = (val: unknown, depth: number): unknown => {
+    if (val === null || val === undefined) return val;
+    if (typeof val !== "object") return val;
+
+    // Circular reference check
+    if (visited.has(val as object)) return "[Circular]";
+    visited.add(val as object);
+
+    if (Array.isArray(val)) {
+      if (val.length === 0) return [];
+      if (depth >= maxDepth) return `[${val.length} items]`;
+
+      const items = val
+        .slice(0, maxArrayItems)
+        .map((v) => truncate(v, depth + 1));
+      if (val.length > maxArrayItems) {
+        items.push(`...+${val.length - maxArrayItems} more`);
+      }
+      return items;
+    }
+
+    // Object
+    const keys = Object.keys(val as Record<string, unknown>);
+    if (keys.length === 0) return {};
+    if (depth >= maxDepth) return `{${keys.length} fields}`;
+
+    const result: Record<string, unknown> = {};
+    const keysToInclude = keys.slice(0, maxObjectKeys);
+
+    for (const k of keysToInclude) {
+      result[k] = truncate((val as Record<string, unknown>)[k], depth + 1);
+    }
+
+    if (keys.length > maxObjectKeys) {
+      result[`...+${keys.length - maxObjectKeys} more`] = true;
+    }
+
+    return result;
+  };
+
+  return truncate(value, 0);
+}
+
 // --- Logging ---
 
 /**
@@ -109,18 +182,18 @@ function trimStrings(
 export function log(entry: Omit<LogEntry, "timestamp">): void {
   ensureObservabilityDir();
   const branch = getBranch() || undefined;
+
+  // Apply structure truncation first (depth/breadth), then string trimming
+  const sanitize = (obj: Record<string, unknown>): Record<string, unknown> =>
+    trimStrings(truncateStructure(obj)) as Record<string, unknown>;
+
   const fullEntry: LogEntry = {
     timestamp: new Date().toISOString(),
     branch,
     plan_name: getPlanName(branch),
     ...entry,
-    // Trim long strings in args and context to prevent log bloat
-    args: entry.args
-      ? (trimStrings(entry.args) as Record<string, unknown>)
-      : undefined,
-    context: entry.context
-      ? (trimStrings(entry.context) as Record<string, unknown>)
-      : undefined,
+    args: entry.args ? sanitize(entry.args) : undefined,
+    context: entry.context ? sanitize(entry.context) : undefined,
   };
   try {
     appendFileSync(getLogPath(), JSON.stringify(fullEntry) + "\n");
