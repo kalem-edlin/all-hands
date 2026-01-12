@@ -2,7 +2,6 @@
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
   "env": {
     "PARALLEL_MAX_WORKERS": "3",
-    "PROJECT_NAME": "test-target",
     "SEARCH_SIMILARITY_THRESHOLD": "0.65",
     "SEARCH_FULL_CONTEXT_SIMILARITY_THRESHOLD": "0.82",
     "SEARCH_CONTEXT_TOKEN_LIMIT": "5000",

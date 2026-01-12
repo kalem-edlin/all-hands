@@ -42,7 +42,7 @@ A template file contains:
 
 <template_example>
 ```markdown
-# {{PROJECT_NAME}} Implementation Plan
+# Implementation Plan
 
 ## Overview
 {{1-2 sentence summary of what this plan covers}}
