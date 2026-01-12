@@ -91,7 +91,7 @@ Apply exclusions when analyzing source directories. Never assign excluded paths 
 
 - List of workspace member paths (e.g., `apps/*`, `packages/*`)
 - Each member = candidate main domain
-- Always add `dx-root` domain for root-level config/DX files
+- Consider `tooling` domain for root-level config/DX files (only if complexity warrants - simple repos can fold DX into relevant main product domains)
 
 **If no workspace detected:** Treat as single-app repo, analyze top-level structure for domains.
 </workspace_detection>
