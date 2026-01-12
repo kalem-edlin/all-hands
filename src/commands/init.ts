@@ -5,14 +5,7 @@ import { isGitRepo } from '../lib/git.js';
 import { Manifest, filesAreDifferent } from '../lib/manifest.js';
 import { getAllhandsRoot } from '../lib/paths.js';
 import { ConflictResolution, askConflictResolution, confirm, getNextBackupPath } from '../lib/ui.js';
-
-const SYNC_CONFIG_FILENAME = '.allhands-sync-config.json';
-
-const SYNC_CONFIG_TEMPLATE = {
-  $comment: 'Customization for claude-all-hands push command',
-  includes: [],
-  excludes: [],
-};
+import { SYNC_CONFIG_FILENAME, SYNC_CONFIG_TEMPLATE } from '../lib/constants.js';
 
 const ENVOY_SHELL_FUNCTION = `
 # AllHands envoy command - resolves to .claude/envoy/envoy from current directory

@@ -1,6 +1,6 @@
-import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync } from 'fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
-import { dirname, join } from 'path';
+import { dirname, join, relative } from 'path';
 import { minimatch } from 'minimatch';
 import * as readline from 'readline';
 import { git, isGitRepo } from '../lib/git.js';
@@ -8,8 +8,8 @@ import { checkGhAuth, checkGhInstalled, getGhUser, gh } from '../lib/gh.js';
 import { Manifest, filesAreDifferent } from '../lib/manifest.js';
 import { getAllhandsRoot, UPSTREAM_REPO } from '../lib/paths.js';
 import { askQuestion, confirm } from '../lib/ui.js';
-
-const SYNC_CONFIG_FILENAME = '.allhands-sync-config.json';
+import { SYNC_CONFIG_FILENAME } from '../lib/constants.js';
+import { walkDir } from '../lib/fs-utils.js';
 
 interface SyncConfig {
   includes?: string[];
@@ -18,7 +18,12 @@ interface SyncConfig {
 
 interface FileEntry {
   path: string;
-  type: 'M' | 'A'; // Modified or Added
+  type: 'M' | 'A';
+}
+
+interface PrerequisiteResult {
+  success: boolean;
+  ghUser?: string;
 }
 
 function loadSyncConfig(cwd: string): SyncConfig | null {
@@ -30,35 +35,20 @@ function loadSyncConfig(cwd: string): SyncConfig | null {
     const content = readFileSync(configPath, 'utf-8');
     return JSON.parse(content);
   } catch {
-    return null;
+    console.error(`Error: Failed to parse ${SYNC_CONFIG_FILENAME}`);
+    process.exit(1);
   }
 }
 
 function expandGlob(pattern: string, baseDir: string): string[] {
   const results: string[] = [];
   walkDir(baseDir, (filePath) => {
-    const relPath = filePath.substring(baseDir.length + 1);
+    const relPath = relative(baseDir, filePath);
     if (minimatch(relPath, pattern, { dot: true })) {
       results.push(relPath);
     }
   });
   return results;
-}
-
-function walkDir(dir: string, callback: (filePath: string) => void): void {
-  if (!existsSync(dir)) return;
-  const entries = readdirSync(dir, { withFileTypes: true });
-  for (const entry of entries) {
-    if (entry.name === '.git' || entry.name === 'node_modules') {
-      continue;
-    }
-    const fullPath = join(dir, entry.name);
-    if (entry.isDirectory()) {
-      walkDir(fullPath, callback);
-    } else if (entry.isFile()) {
-      callback(fullPath);
-    }
-  }
 }
 
 async function askMultiLineInput(prompt: string): Promise<string> {
@@ -87,47 +77,42 @@ async function askMultiLineInput(prompt: string): Promise<string> {
   });
 }
 
-export async function cmdPush(
-  include: string[],
-  exclude: string[],
-  dryRun: boolean,
-  titleArg?: string,
-  bodyArg?: string
-): Promise<number> {
-  const cwd = process.cwd();
-
-  // Step 1: Prerequisites
+function checkPrerequisites(cwd: string): PrerequisiteResult {
   if (!checkGhInstalled()) {
     console.error('Error: gh CLI required. Install: https://cli.github.com');
-    return 1;
+    return { success: false };
   }
 
   if (!checkGhAuth()) {
     console.error('Error: Not authenticated. Run: gh auth login');
-    return 1;
+    return { success: false };
   }
 
   if (!isGitRepo(cwd)) {
     console.error('Error: Not in a git repository');
-    return 1;
+    return { success: false };
   }
 
-  // Step 2: Load config
-  const syncConfig = loadSyncConfig(cwd);
-  const finalIncludes = include.length > 0 ? include : (syncConfig?.includes || []);
-  const finalExcludes = exclude.length > 0 ? exclude : (syncConfig?.excludes || []);
+  const ghUser = getGhUser();
+  if (!ghUser) {
+    console.error('Error: Could not determine GitHub username');
+    return { success: false };
+  }
 
-  // Step 3: Get upstream file list
+  return { success: true, ghUser };
+}
+
+function collectFilesToPush(
+  cwd: string,
+  finalIncludes: string[],
+  finalExcludes: string[]
+): FileEntry[] {
   const allhandsRoot = getAllhandsRoot();
   const manifest = new Manifest(allhandsRoot);
   const upstreamFiles = manifest.getDistributableFiles();
-
-  // Step 4: Identify changed files
   const filesToPush: FileEntry[] = [];
 
-  // Check tracked upstream files for modifications
   for (const relPath of upstreamFiles) {
-    // Skip if excluded
     if (finalExcludes.some((pattern) => minimatch(relPath, pattern, { dot: true }))) {
       continue;
     }
@@ -140,18 +125,160 @@ export async function cmdPush(
     }
   }
 
-  // Add included files (excludes don't apply to explicit includes)
   for (const pattern of finalIncludes) {
     const matchedFiles = expandGlob(pattern, cwd);
     for (const relPath of matchedFiles) {
-      // Skip if already in list
       if (filesToPush.some((f) => f.path === relPath)) continue;
-
       filesToPush.push({ path: relPath, type: 'A' });
     }
   }
 
-  // Step 5: Show preview
+  return filesToPush;
+}
+
+async function waitForFork(ghUser: string, repoName: string): Promise<boolean> {
+  console.log('Waiting for fork to be ready...');
+  for (let i = 0; i < 15; i++) {
+    await new Promise((r) => setTimeout(r, 2000));
+    if (gh(['repo', 'view', `${ghUser}/${repoName}`, '--json', 'name']).success) {
+      return true;
+    }
+  }
+  return false;
+}
+
+async function createPullRequest(
+  cwd: string,
+  ghUser: string,
+  filesToPush: FileEntry[],
+  title: string,
+  body: string
+): Promise<number> {
+  const repoName = UPSTREAM_REPO.split('/')[1];
+  const forkCheck = gh(['repo', 'view', `${ghUser}/${repoName}`, '--json', 'name']);
+
+  if (!forkCheck.success) {
+    console.log('Creating fork...');
+    const forkResult = gh(['repo', 'fork', UPSTREAM_REPO, '--clone=false']);
+    if (!forkResult.success) {
+      console.error('Error creating fork:', forkResult.stderr);
+      return 1;
+    }
+    if (!(await waitForFork(ghUser, repoName))) {
+      console.error('Error: Timed out waiting for fork to be ready.');
+      return 1;
+    }
+  }
+
+  const tempDir = join(tmpdir(), `allhands-push-${Date.now()}`);
+  mkdirSync(tempDir, { recursive: true });
+
+  try {
+    console.log('Cloning fork...');
+    const cloneResult = gh(['repo', 'clone', `${ghUser}/${repoName}`, tempDir, '--', '--depth=1']);
+    if (!cloneResult.success) {
+      console.error('Error cloning fork:', cloneResult.stderr);
+      return 1;
+    }
+
+    console.log('Fetching upstream...');
+    const addRemoteResult = git(['remote', 'add', 'upstream', `https://github.com/${UPSTREAM_REPO}`], tempDir);
+    if (!addRemoteResult.success) {
+      console.error('Error adding upstream remote:', addRemoteResult.stderr);
+      return 1;
+    }
+
+    const fetchResult = git(['fetch', 'upstream', 'main', '--depth=1'], tempDir);
+    if (!fetchResult.success) {
+      console.error('Error fetching upstream:', fetchResult.stderr);
+      return 1;
+    }
+
+    const branchName = `contrib/${ghUser}/${Date.now()}`;
+    console.log(`Creating branch: ${branchName}`);
+
+    const checkoutResult = git(['checkout', '-b', branchName, 'upstream/main'], tempDir);
+    if (!checkoutResult.success) {
+      console.error('Error creating branch:', checkoutResult.stderr);
+      return 1;
+    }
+
+    console.log('Copying files...');
+    for (const file of filesToPush) {
+      const src = join(cwd, file.path);
+      const dest = join(tempDir, file.path);
+      mkdirSync(dirname(dest), { recursive: true });
+      copyFileSync(src, dest);
+    }
+
+    const addResult = git(['add', '.'], tempDir);
+    if (!addResult.success) {
+      console.error('Error staging files:', addResult.stderr);
+      return 1;
+    }
+
+    const commitResult = git(['commit', '-m', title], tempDir);
+    if (!commitResult.success) {
+      console.error('Error committing:', commitResult.stderr);
+      return 1;
+    }
+
+    console.log('Pushing to fork...');
+    const pushResult = git(['push', '-u', 'origin', branchName], tempDir);
+    if (!pushResult.success) {
+      console.error('Error pushing:', pushResult.stderr);
+      return 1;
+    }
+
+    console.log('Creating PR...');
+    const prArgs = [
+      'pr', 'create',
+      '--repo', UPSTREAM_REPO,
+      '--head', `${ghUser}:${branchName}`,
+      '--title', title,
+      '--body', body || 'Contribution via claude-all-hands push',
+    ];
+
+    const prResult = gh(prArgs);
+    if (!prResult.success) {
+      console.error('Error creating PR:', prResult.stderr);
+      return 1;
+    }
+
+    console.log('\nPR created successfully!');
+    console.log(prResult.stdout);
+
+    return 0;
+  } finally {
+    try {
+      rmSync(tempDir, { recursive: true, force: true });
+    } catch {
+      // Ignore cleanup errors
+    }
+  }
+}
+
+export async function cmdPush(
+  include: string[],
+  exclude: string[],
+  dryRun: boolean,
+  titleArg?: string,
+  bodyArg?: string
+): Promise<number> {
+  const cwd = process.cwd();
+
+  const prereqs = checkPrerequisites(cwd);
+  if (!prereqs.success) {
+    return 1;
+  }
+  const ghUser = prereqs.ghUser!;
+
+  const syncConfig = loadSyncConfig(cwd);
+  const finalIncludes = include.length > 0 ? include : (syncConfig?.includes || []);
+  const finalExcludes = exclude.length > 0 ? exclude : (syncConfig?.excludes || []);
+
+  const filesToPush = collectFilesToPush(cwd, finalIncludes, finalExcludes);
+
   if (filesToPush.length === 0) {
     console.log('No changes to push');
     return 0;
@@ -170,7 +297,6 @@ export async function cmdPush(
     return 0;
   }
 
-  // Step 6: Get PR details (from args or prompt)
   const title = titleArg || await askQuestion('PR title: ');
   if (!title.trim()) {
     console.error('Error: Title cannot be empty');
@@ -179,7 +305,6 @@ export async function cmdPush(
 
   const body = bodyArg !== undefined ? bodyArg : await askMultiLineInput('\nPR body:');
 
-  // Step 7: Confirm (skip if title/body provided via args)
   if (!titleArg) {
     console.log();
     if (!(await confirm(`Create PR with title "${title}"?`))) {
@@ -190,115 +315,7 @@ export async function cmdPush(
     console.log(`\nCreating PR: "${title}"`);
   }
 
-
-  // Step 8: Fork workflow
-  const ghUser = getGhUser();
-  if (!ghUser) {
-    console.error('Error: Could not determine GitHub username');
-    return 1;
-  }
-
   console.log(`\nUsing GitHub account: ${ghUser}`);
 
-  // Check if fork exists
-  const repoName = UPSTREAM_REPO.split('/')[1];
-  const forkCheck = gh(['repo', 'view', `${ghUser}/${repoName}`, '--json', 'name']);
-
-  if (!forkCheck.success) {
-    console.log('Creating fork...');
-    const forkResult = gh(['repo', 'fork', UPSTREAM_REPO, '--clone=false']);
-    if (!forkResult.success) {
-      console.error('Error creating fork:', forkResult.stderr);
-      return 1;
-    }
-    // Wait a moment for fork to be ready
-    await new Promise((r) => setTimeout(r, 2000));
-  }
-
-  // Create temp directory
-  const tempDir = join(tmpdir(), `allhands-push-${Date.now()}`);
-  mkdirSync(tempDir, { recursive: true });
-
-  try {
-    // Clone fork (shallow)
-    console.log('Cloning fork...');
-    const cloneResult = gh(['repo', 'clone', `${ghUser}/${repoName}`, tempDir, '--', '--depth=1']);
-    if (!cloneResult.success) {
-      console.error('Error cloning fork:', cloneResult.stderr);
-      return 1;
-    }
-
-    // Add upstream and fetch
-    console.log('Fetching upstream...');
-    git(['remote', 'add', 'upstream', `https://github.com/${UPSTREAM_REPO}`], tempDir);
-    const fetchResult = git(['fetch', 'upstream', 'main', '--depth=1'], tempDir);
-    if (!fetchResult.success) {
-      console.error('Error fetching upstream:', fetchResult.stderr);
-      return 1;
-    }
-
-    // Create branch from upstream/main
-    const branchName = `contrib/${ghUser}/${Date.now()}`;
-    console.log(`Creating branch: ${branchName}`);
-
-    const checkoutResult = git(['checkout', '-b', branchName, 'upstream/main'], tempDir);
-    if (!checkoutResult.success) {
-      console.error('Error creating branch:', checkoutResult.stderr);
-      return 1;
-    }
-
-    // Copy files
-    console.log('Copying files...');
-    for (const file of filesToPush) {
-      const src = join(cwd, file.path);
-      const dest = join(tempDir, file.path);
-      mkdirSync(dirname(dest), { recursive: true });
-      copyFileSync(src, dest);
-    }
-
-    // Stage and commit
-    git(['add', '.'], tempDir);
-    const commitResult = git(['commit', '-m', title], tempDir);
-    if (!commitResult.success) {
-      console.error('Error committing:', commitResult.stderr);
-      return 1;
-    }
-
-    // Push to fork
-    console.log('Pushing to fork...');
-    const pushResult = git(['push', '-u', 'origin', branchName], tempDir);
-    if (!pushResult.success) {
-      console.error('Error pushing:', pushResult.stderr);
-      return 1;
-    }
-
-    // Create PR
-    console.log('Creating PR...');
-    const prArgs = [
-      'pr', 'create',
-      '--repo', UPSTREAM_REPO,
-      '--head', `${ghUser}:${branchName}`,
-      '--title', title,
-      '--body', body || 'Contribution via claude-all-hands push',
-    ];
-
-    const prResult = gh(prArgs);
-    if (!prResult.success) {
-      console.error('Error creating PR:', prResult.stderr);
-      return 1;
-    }
-
-    // Step 9: Output
-    console.log('\nPR created successfully!');
-    console.log(prResult.stdout);
-
-    return 0;
-  } finally {
-    // Cleanup
-    try {
-      rmSync(tempDir, { recursive: true, force: true });
-    } catch {
-      // Ignore cleanup errors
-    }
-  }
+  return createPullRequest(cwd, ghUser, filesToPush, title, body);
 }

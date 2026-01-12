@@ -1,14 +1,7 @@
 import { existsSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { isGitRepo } from '../lib/git.js';
-
-const SYNC_CONFIG_FILENAME = '.allhands-sync-config.json';
-
-const TEMPLATE_CONFIG = {
-  $comment: 'Customization for claude-all-hands push command',
-  includes: [],
-  excludes: [],
-};
+import { SYNC_CONFIG_FILENAME, SYNC_CONFIG_TEMPLATE } from '../lib/constants.js';
 
 export async function cmdPullManifest(): Promise<number> {
   const cwd = process.cwd();
@@ -26,7 +19,7 @@ export async function cmdPullManifest(): Promise<number> {
     return 1;
   }
 
-  writeFileSync(configPath, JSON.stringify(TEMPLATE_CONFIG, null, 2) + '\n');
+  writeFileSync(configPath, JSON.stringify(SYNC_CONFIG_TEMPLATE, null, 2) + '\n');
 
   console.log(`Created ${SYNC_CONFIG_FILENAME}`);
   console.log('\nUsage:');
