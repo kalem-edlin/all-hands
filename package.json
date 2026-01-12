@@ -1,6 +1,6 @@
 {
   "name": "claude-all-hands",
-  "version": "1.0.24",
+  "version": "1.0.25",
   "description": "CLI for syncing Claude agent configurations to all-hands repository",
   "type": "module",
   "bin": {
