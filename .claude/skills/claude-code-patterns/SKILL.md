@@ -9,7 +9,7 @@ Reference for Claude Code native features. Docs auto-sync to `~/.claude-code-doc
 
 <quick_start>
 1. Identify what you're building (skill, agent, hook, etc.)
-2. MUSTRead corresponding docs from `~/.claude-code-docs/docs/`
+2. MUST Read corresponding docs from `~/.claude-code-docs/docs/`
 3. Apply patterns from doc categories below
 </quick_start>
 
