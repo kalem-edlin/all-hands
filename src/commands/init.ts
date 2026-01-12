@@ -6,6 +6,7 @@ import { Manifest, filesAreDifferent } from '../lib/manifest.js';
 import { getAllhandsRoot } from '../lib/paths.js';
 import { ConflictResolution, askConflictResolution, confirm, getNextBackupPath } from '../lib/ui.js';
 import { SYNC_CONFIG_FILENAME, SYNC_CONFIG_TEMPLATE } from '../lib/constants.js';
+import { restoreDotfiles } from '../lib/dotfiles.js';
 
 const ENVOY_SHELL_FUNCTION = `
 # AllHands envoy command - resolves to .claude/envoy/envoy from current directory
@@ -161,6 +162,13 @@ export async function cmdInit(target: string, autoYes: boolean = false): Promise
 
     copyFileSync(sourceFile, targetFile);
     copied++;
+  }
+
+  // Restore dotfiles (gitignore → .gitignore, etc.)
+  // npm excludes these files, so we ship them without dots and rename here
+  const dotfileResult = restoreDotfiles(resolvedTarget);
+  if (dotfileResult.renamed.length > 0) {
+    console.log(`\nRestored ${dotfileResult.renamed.length} dotfile(s)`);
   }
 
   // Setup envoy shell function

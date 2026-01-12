@@ -4,6 +4,7 @@ import { Manifest, filesAreDifferent } from '../lib/manifest.js';
 import { isGitRepo, getStagedFiles } from '../lib/git.js';
 import { getAllhandsRoot } from '../lib/paths.js';
 import { ConflictResolution, askConflictResolution, confirm, getNextBackupPath } from '../lib/ui.js';
+import { restoreDotfiles } from '../lib/dotfiles.js';
 
 export async function cmdUpdate(autoYes: boolean = false): Promise<number> {
   const targetRoot = process.cwd();
@@ -138,6 +139,12 @@ export async function cmdUpdate(autoYes: boolean = false): Promise<number> {
       copyFileSync(sourceFile, targetFile);
       created++;
     }
+  }
+
+  // Restore dotfiles (gitignore → .gitignore, etc.)
+  const dotfileResult = restoreDotfiles(targetRoot);
+  if (dotfileResult.renamed.length > 0) {
+    console.log(`\nRestored ${dotfileResult.renamed.length} dotfile(s)`);
   }
 
   // Handle deleted files

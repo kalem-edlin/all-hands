@@ -4856,9 +4856,9 @@ var Yargs = YargsFactory(esm_default);
 var yargs_default = Yargs;
 
 // src/commands/init.ts
-import { appendFileSync, copyFileSync, existsSync as existsSync6, mkdirSync, readFileSync as readFileSync6, renameSync, writeFileSync } from "fs";
+import { appendFileSync, copyFileSync, existsSync as existsSync7, mkdirSync, readFileSync as readFileSync6, renameSync as renameSync2, writeFileSync } from "fs";
 import { homedir } from "os";
-import { basename as basename3, dirname as dirname6, join as join5, resolve as resolve6 } from "path";
+import { basename as basename4, dirname as dirname7, join as join6, resolve as resolve6 } from "path";
 
 // src/lib/git.ts
 import { execSync, spawnSync } from "child_process";
@@ -6765,6 +6765,30 @@ var SYNC_CONFIG_TEMPLATE = {
   excludes: []
 };
 
+// src/lib/dotfiles.ts
+import { existsSync as existsSync6, renameSync } from "fs";
+import { basename as basename3, dirname as dirname6, join as join5 } from "path";
+var DOTFILE_NAMES = ["gitignore", "npmrc", "npmignore"];
+function restoreDotfiles(targetDir) {
+  const renamed = [];
+  const skipped = [];
+  walkDir(targetDir, (filePath) => {
+    const name = basename3(filePath);
+    if (DOTFILE_NAMES.includes(name)) {
+      const dir = dirname6(filePath);
+      const dotName = "." + name;
+      const dotPath = join5(dir, dotName);
+      if (existsSync6(dotPath)) {
+        skipped.push(filePath);
+      } else {
+        renameSync(filePath, dotPath);
+        renamed.push(filePath);
+      }
+    }
+  });
+  return { renamed, skipped };
+}
+
 // src/commands/init.ts
 var ENVOY_SHELL_FUNCTION = `
 # AllHands envoy command - resolves to .claude/envoy/envoy from current directory
@@ -6776,16 +6800,16 @@ function setupEnvoyShellFunction() {
   const shell = process.env.SHELL || "";
   let shellRc = null;
   if (shell.includes("zsh")) {
-    shellRc = join5(homedir(), ".zshrc");
+    shellRc = join6(homedir(), ".zshrc");
   } else if (shell.includes("bash")) {
-    const bashProfile = join5(homedir(), ".bash_profile");
-    const bashRc = join5(homedir(), ".bashrc");
-    shellRc = existsSync6(bashProfile) ? bashProfile : bashRc;
+    const bashProfile = join6(homedir(), ".bash_profile");
+    const bashRc = join6(homedir(), ".bashrc");
+    shellRc = existsSync7(bashProfile) ? bashProfile : bashRc;
   }
   if (!shellRc) {
     return { added: false, shellRc: null };
   }
-  if (existsSync6(shellRc)) {
+  if (existsSync7(shellRc)) {
     const content = readFileSync6(shellRc, "utf-8");
     if (content.includes("envoy()") || content.includes(".claude/envoy/envoy")) {
       return { added: false, shellRc };
@@ -6800,7 +6824,7 @@ async function cmdInit(target, autoYes = false) {
   const manifest = new Manifest(allhandsRoot);
   console.log(`Initializing allhands in: ${resolvedTarget}`);
   console.log(`Source: ${allhandsRoot}`);
-  if (!existsSync6(resolvedTarget)) {
+  if (!existsSync7(resolvedTarget)) {
     console.error(`Error: Target directory does not exist: ${resolvedTarget}`);
     return 1;
   }
@@ -6813,12 +6837,12 @@ async function cmdInit(target, autoYes = false) {
       }
     }
   }
-  const targetClaudeMd = join5(resolvedTarget, "CLAUDE.md");
-  const targetProjectMd = join5(resolvedTarget, "CLAUDE.project.md");
+  const targetClaudeMd = join6(resolvedTarget, "CLAUDE.md");
+  const targetProjectMd = join6(resolvedTarget, "CLAUDE.project.md");
   let claudeMdMigrated = false;
-  if (existsSync6(targetClaudeMd) && !existsSync6(targetProjectMd)) {
+  if (existsSync7(targetClaudeMd) && !existsSync7(targetProjectMd)) {
     console.log("\nMigrating CLAUDE.md \u2192 CLAUDE.project.md...");
-    renameSync(targetClaudeMd, targetProjectMd);
+    renameSync2(targetClaudeMd, targetProjectMd);
     claudeMdMigrated = true;
     console.log("  Done - your instructions preserved in CLAUDE.project.md");
   }
@@ -6827,10 +6851,10 @@ async function cmdInit(target, autoYes = false) {
   const conflicts = [];
   for (const relPath of distributable) {
     if (relPath === "CLAUDE.md" && claudeMdMigrated) continue;
-    if (projectSpecificFiles.has(relPath) && existsSync6(join5(resolvedTarget, relPath))) continue;
-    const sourceFile = join5(allhandsRoot, relPath);
-    const targetFile = join5(resolvedTarget, relPath);
-    if (existsSync6(targetFile) && existsSync6(sourceFile)) {
+    if (projectSpecificFiles.has(relPath) && existsSync7(join6(resolvedTarget, relPath))) continue;
+    const sourceFile = join6(allhandsRoot, relPath);
+    const targetFile = join6(resolvedTarget, relPath);
+    if (existsSync7(targetFile) && existsSync7(sourceFile)) {
       if (filesAreDifferent(sourceFile, targetFile)) {
         conflicts.push(relPath);
       }
@@ -6852,10 +6876,10 @@ Auto-overwriting ${conflicts.length} conflicting files (--yes mode)`);
     if (resolution === "backup") {
       console.log("\nCreating backups...");
       for (const relPath of conflicts) {
-        const targetFile = join5(resolvedTarget, relPath);
+        const targetFile = join6(resolvedTarget, relPath);
         const backupPath = getNextBackupPath(targetFile);
         copyFileSync(targetFile, backupPath);
-        console.log(`  ${relPath} \u2192 ${basename3(backupPath)}`);
+        console.log(`  ${relPath} \u2192 ${basename4(backupPath)}`);
       }
     }
   }
@@ -6864,15 +6888,15 @@ Auto-overwriting ${conflicts.length} conflicting files (--yes mode)`);
   let copied = 0;
   let skipped = 0;
   for (const relPath of [...distributable].sort()) {
-    const sourceFile = join5(allhandsRoot, relPath);
-    const targetFile = join5(resolvedTarget, relPath);
-    if (projectSpecificFiles.has(relPath) && existsSync6(targetFile)) {
+    const sourceFile = join6(allhandsRoot, relPath);
+    const targetFile = join6(resolvedTarget, relPath);
+    if (projectSpecificFiles.has(relPath) && existsSync7(targetFile)) {
       skipped++;
       continue;
     }
-    if (!existsSync6(sourceFile)) continue;
-    mkdirSync(dirname6(targetFile), { recursive: true });
-    if (existsSync6(targetFile)) {
+    if (!existsSync7(sourceFile)) continue;
+    mkdirSync(dirname7(targetFile), { recursive: true });
+    if (existsSync7(targetFile)) {
       if (!filesAreDifferent(sourceFile, targetFile)) {
         skipped++;
         continue;
@@ -6880,6 +6904,11 @@ Auto-overwriting ${conflicts.length} conflicting files (--yes mode)`);
     }
     copyFileSync(sourceFile, targetFile);
     copied++;
+  }
+  const dotfileResult = restoreDotfiles(resolvedTarget);
+  if (dotfileResult.renamed.length > 0) {
+    console.log(`
+Restored ${dotfileResult.renamed.length} dotfile(s)`);
   }
   console.log("\nSetting up envoy shell command...");
   const envoyResult = setupEnvoyShellFunction();
@@ -6892,9 +6921,9 @@ Auto-overwriting ${conflicts.length} conflicting files (--yes mode)`);
     console.log("  Could not detect shell config (add manually to your shell rc):");
     console.log('    envoy() { "$PWD/.claude/envoy/envoy" "$@"; }');
   }
-  const syncConfigPath = join5(resolvedTarget, SYNC_CONFIG_FILENAME);
+  const syncConfigPath = join6(resolvedTarget, SYNC_CONFIG_FILENAME);
   let syncConfigCreated = false;
-  if (existsSync6(syncConfigPath)) {
+  if (existsSync7(syncConfigPath)) {
     console.log(`
 ${SYNC_CONFIG_FILENAME} already exists - skipping`);
   } else if (!autoYes) {
@@ -6929,8 +6958,8 @@ ${"=".repeat(60)}`);
 }
 
 // src/commands/update.ts
-import { existsSync as existsSync7, mkdirSync as mkdirSync2, copyFileSync as copyFileSync2, unlinkSync, renameSync as renameSync2 } from "fs";
-import { join as join6, dirname as dirname7, basename as basename4 } from "path";
+import { existsSync as existsSync8, mkdirSync as mkdirSync2, copyFileSync as copyFileSync2, unlinkSync, renameSync as renameSync3 } from "fs";
+import { join as join7, dirname as dirname8, basename as basename5 } from "path";
 async function cmdUpdate(autoYes = false) {
   const targetRoot = process.cwd();
   if (!isGitRepo(targetRoot)) {
@@ -6938,7 +6967,7 @@ async function cmdUpdate(autoYes = false) {
     return 1;
   }
   const allhandsRoot = getAllhandsRoot();
-  if (!existsSync7(join6(allhandsRoot, ".internal.json"))) {
+  if (!existsSync8(join7(allhandsRoot, ".internal.json"))) {
     console.error(`Error: Internal config not found at ${allhandsRoot}`);
     console.error("Set ALLHANDS_PATH to your claude-all-hands directory");
     return 1;
@@ -6958,12 +6987,12 @@ async function cmdUpdate(autoYes = false) {
     console.error("\nRun 'git stash' or commit first.");
     return 1;
   }
-  const targetClaudeMd = join6(targetRoot, "CLAUDE.md");
-  const targetProjectMd = join6(targetRoot, "CLAUDE.project.md");
+  const targetClaudeMd = join7(targetRoot, "CLAUDE.md");
+  const targetProjectMd = join7(targetRoot, "CLAUDE.project.md");
   let claudeMdMigrated = false;
-  if (existsSync7(targetClaudeMd) && !existsSync7(targetProjectMd)) {
+  if (existsSync8(targetClaudeMd) && !existsSync8(targetProjectMd)) {
     console.log("\nMigrating CLAUDE.md \u2192 CLAUDE.project.md...");
-    renameSync2(targetClaudeMd, targetProjectMd);
+    renameSync3(targetClaudeMd, targetProjectMd);
     claudeMdMigrated = true;
     console.log("  Done - your instructions preserved in CLAUDE.project.md");
   }
@@ -6974,15 +7003,15 @@ async function cmdUpdate(autoYes = false) {
   for (const relPath of distributable) {
     if (relPath === "CLAUDE.md" && claudeMdMigrated) continue;
     if (projectSpecificFiles.has(relPath)) continue;
-    const sourceFile = join6(allhandsRoot, relPath);
-    const targetFile = join6(targetRoot, relPath);
-    if (!existsSync7(sourceFile)) {
-      if (existsSync7(targetFile)) {
+    const sourceFile = join7(allhandsRoot, relPath);
+    const targetFile = join7(targetRoot, relPath);
+    if (!existsSync8(sourceFile)) {
+      if (existsSync8(targetFile)) {
         deletedInSource.push(relPath);
       }
       continue;
     }
-    if (existsSync7(targetFile)) {
+    if (existsSync8(targetFile)) {
       if (filesAreDifferent(sourceFile, targetFile)) {
         conflicts.push(relPath);
       }
@@ -7004,10 +7033,10 @@ Auto-overwriting ${conflicts.length} conflicting files (--yes mode)`);
     if (resolution === "backup") {
       console.log("\nCreating backups...");
       for (const relPath of conflicts) {
-        const targetFile = join6(targetRoot, relPath);
+        const targetFile = join7(targetRoot, relPath);
         const backupPath = getNextBackupPath(targetFile);
         copyFileSync2(targetFile, backupPath);
-        console.log(`  ${relPath} \u2192 ${basename4(backupPath)}`);
+        console.log(`  ${relPath} \u2192 ${basename5(backupPath)}`);
       }
     }
   }
@@ -7015,11 +7044,11 @@ Auto-overwriting ${conflicts.length} conflicting files (--yes mode)`);
   let created = 0;
   for (const relPath of [...distributable].sort()) {
     if (projectSpecificFiles.has(relPath)) continue;
-    const sourceFile = join6(allhandsRoot, relPath);
-    const targetFile = join6(targetRoot, relPath);
-    if (!existsSync7(sourceFile)) continue;
-    mkdirSync2(dirname7(targetFile), { recursive: true });
-    if (existsSync7(targetFile)) {
+    const sourceFile = join7(allhandsRoot, relPath);
+    const targetFile = join7(targetRoot, relPath);
+    if (!existsSync8(sourceFile)) continue;
+    mkdirSync2(dirname8(targetFile), { recursive: true });
+    if (existsSync8(targetFile)) {
       if (filesAreDifferent(sourceFile, targetFile)) {
         copyFileSync2(sourceFile, targetFile);
         updated++;
@@ -7028,6 +7057,11 @@ Auto-overwriting ${conflicts.length} conflicting files (--yes mode)`);
       copyFileSync2(sourceFile, targetFile);
       created++;
     }
+  }
+  const dotfileResult = restoreDotfiles(targetRoot);
+  if (dotfileResult.renamed.length > 0) {
+    console.log(`
+Restored ${dotfileResult.renamed.length} dotfile(s)`);
   }
   if (deletedInSource.length > 0) {
     console.log(`
@@ -7038,8 +7072,8 @@ ${deletedInSource.length} files removed from allhands source:`);
     const shouldDelete = autoYes || await confirm("Delete these from target?");
     if (shouldDelete) {
       for (const f of deletedInSource) {
-        const targetFile = join6(targetRoot, f);
-        if (existsSync7(targetFile)) {
+        const targetFile = join7(targetRoot, f);
+        if (existsSync8(targetFile)) {
           unlinkSync(targetFile);
           console.log(`  Deleted: ${f}`);
         }
@@ -7062,16 +7096,16 @@ Updated: ${updated}, Created: ${created}`);
 }
 
 // src/commands/pull-manifest.ts
-import { existsSync as existsSync8, writeFileSync as writeFileSync2 } from "fs";
-import { join as join7 } from "path";
+import { existsSync as existsSync9, writeFileSync as writeFileSync2 } from "fs";
+import { join as join8 } from "path";
 async function cmdPullManifest() {
   const cwd = process.cwd();
   if (!isGitRepo(cwd)) {
     console.error("Error: Not in a git repository");
     return 1;
   }
-  const configPath = join7(cwd, SYNC_CONFIG_FILENAME);
-  if (existsSync8(configPath)) {
+  const configPath = join8(cwd, SYNC_CONFIG_FILENAME);
+  if (existsSync9(configPath)) {
     console.error(`Error: ${SYNC_CONFIG_FILENAME} already exists`);
     console.error("Remove it first if you want to regenerate");
     return 1;
@@ -7086,9 +7120,9 @@ async function cmdPullManifest() {
 }
 
 // src/commands/push.ts
-import { copyFileSync as copyFileSync3, existsSync as existsSync9, mkdirSync as mkdirSync3, readFileSync as readFileSync7, rmSync } from "fs";
+import { copyFileSync as copyFileSync3, existsSync as existsSync10, mkdirSync as mkdirSync3, readFileSync as readFileSync7, rmSync } from "fs";
 import { tmpdir } from "os";
-import { dirname as dirname8, join as join8 } from "path";
+import { dirname as dirname9, join as join9 } from "path";
 import * as readline2 from "readline";
 
 // src/lib/gh.ts
@@ -7124,8 +7158,8 @@ function getGhUser() {
 
 // src/commands/push.ts
 function loadSyncConfig(cwd) {
-  const configPath = join8(cwd, SYNC_CONFIG_FILENAME);
-  if (!existsSync9(configPath)) {
+  const configPath = join9(cwd, SYNC_CONFIG_FILENAME);
+  if (!existsSync10(configPath)) {
     return null;
   }
   try {
@@ -7198,9 +7232,9 @@ function collectFilesToPush(cwd, finalIncludes, finalExcludes) {
     if (!localGitFiles.has(relPath)) {
       continue;
     }
-    const localFile = join8(cwd, relPath);
-    const upstreamFile = join8(allhandsRoot, relPath);
-    if (existsSync9(localFile) && filesAreDifferent(localFile, upstreamFile)) {
+    const localFile = join9(cwd, relPath);
+    const upstreamFile = join9(allhandsRoot, relPath);
+    if (existsSync10(localFile) && filesAreDifferent(localFile, upstreamFile)) {
       filesToPush.push({ path: relPath, type: "M" });
     }
   }
@@ -7210,9 +7244,9 @@ function collectFilesToPush(cwd, finalIncludes, finalExcludes) {
       if (PUSH_BLOCKLIST.includes(relPath)) continue;
       if (finalExcludes.some((p) => minimatch(relPath, p, { dot: true }))) continue;
       if (filesToPush.some((f) => f.path === relPath)) continue;
-      const localFile = join8(cwd, relPath);
-      const upstreamFile = join8(allhandsRoot, relPath);
-      if (existsSync9(upstreamFile) && !filesAreDifferent(localFile, upstreamFile)) {
+      const localFile = join9(cwd, relPath);
+      const upstreamFile = join9(allhandsRoot, relPath);
+      if (existsSync10(upstreamFile) && !filesAreDifferent(localFile, upstreamFile)) {
         continue;
       }
       filesToPush.push({ path: relPath, type: "A" });
@@ -7245,7 +7279,7 @@ async function createPullRequest(cwd, ghUser, filesToPush, title, body) {
       return 1;
     }
   }
-  const tempDir = join8(tmpdir(), `allhands-push-${Date.now()}`);
+  const tempDir = join9(tmpdir(), `allhands-push-${Date.now()}`);
   mkdirSync3(tempDir, { recursive: true });
   try {
     console.log("Cloning fork...");
@@ -7274,9 +7308,9 @@ async function createPullRequest(cwd, ghUser, filesToPush, title, body) {
     }
     console.log("Copying files...");
     for (const file of filesToPush) {
-      const src = join8(cwd, file.path);
-      const dest = join8(tempDir, file.path);
-      mkdirSync3(dirname8(dest), { recursive: true });
+      const src = join9(cwd, file.path);
+      const dest = join9(tempDir, file.path);
+      mkdirSync3(dirname9(dest), { recursive: true });
       copyFileSync3(src, dest);
     }
     const addResult = git(["add", "."], tempDir);
