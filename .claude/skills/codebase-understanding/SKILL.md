@@ -173,6 +173,5 @@ Need codebase context?
 - Knowledge search invoked before raw codebase exploration
 - File references from knowledge docs used to guide code exploration
 - LSP used for symbol references before large file reads
-- Context budget preserved through targeted reads
 - Design motivations ("why") understood alongside implementation ("what")
 </success_criteria>

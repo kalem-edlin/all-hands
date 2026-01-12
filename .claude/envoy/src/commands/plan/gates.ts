@@ -12,11 +12,7 @@ import {
   deletePrompt,
   getApproachId,
   getBranch,
-  getFileTokenCount,
-  getLoggingGateLogsPath,
-  getMaxLogTokens,
   getPromptId,
-  getTestingGateLogsPath,
   listPrompts,
   planExists,
   readAllFindings,
@@ -28,18 +24,16 @@ import {
   readPrompt,
   readTestingGateFeedback,
   readVariantsGateFeedback,
-  resetLoggingGateDone,
-  resetTestingGateDone,
   updateApproachFeedback,
   updatePromptStatus,
   updatePromptVariantSolution,
   watchForDone,
-  writeFindingsGateFeedback,
   writeFindings,
+  writeFindingsGateFeedback,
   writeLoggingGateFeedback,
   writePlanGateFeedback,
   writeTestingGateFeedback,
-  writeVariantsGateFeedback,
+  writeVariantsGateFeedback
 } from "../../lib/index.js";
 import { BaseCommand, CommandResult } from "../base.js";
 
@@ -409,20 +403,6 @@ export class BlockPromptTestingGateCommand extends BaseCommand {
 
     const data = feedback.data;
 
-    // Check token count on log file
-    const tokenResult = getFileTokenCount(logsPath);
-    if (tokenResult.success) {
-      const maxTokens = getMaxLogTokens();
-      if (tokenResult.tokenCount > maxTokens) {
-        resetTestingGateDone(promptNum, variant || null);
-        return this.error(
-          "logs_too_large",
-          `Log file has ${tokenResult.tokenCount} tokens, max allowed is ${maxTokens}. Please reduce log size and set done: true again.`,
-          `Current: ${tokenResult.tokenCount} tokens, Max: ${maxTokens} tokens`
-        );
-      }
-    }
-
     // Append thoughts to user_input.md if non-empty
     if (data.thoughts && data.thoughts.trim()) {
       const id = getPromptId(promptNum, variant || null);
@@ -638,20 +618,6 @@ export class BlockDebuggingLoggingGateCommand extends BaseCommand {
     }
 
     const data = feedback.data;
-
-    // Check token count on log file
-    const tokenResult = getFileTokenCount(logsPath);
-    if (tokenResult.success) {
-      const maxTokens = getMaxLogTokens();
-      if (tokenResult.tokenCount > maxTokens) {
-        resetLoggingGateDone(promptNum, variant || null);
-        return this.error(
-          "logs_too_large",
-          `Log file has ${tokenResult.tokenCount} tokens, max allowed is ${maxTokens}. Please reduce log size and set done: true again.`,
-          `Current: ${tokenResult.tokenCount} tokens, Max: ${maxTokens} tokens`
-        );
-      }
-    }
 
     // Append thoughts to user_input.md if non-empty
     if (data.thoughts && data.thoughts.trim()) {

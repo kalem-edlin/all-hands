@@ -482,13 +482,6 @@ Manage Facebook Ads campaigns, ad sets, and ads via the Marketing API.
 See [basic-operations.md](basic-operations.md) for campaign creation and management.
 </basic_operations>
 </quick_start>
-
-<advanced_features>
-**Custom audiences**: See [audiences.md](audiences.md)
-**Conversion tracking**: See [conversions.md](conversions.md)
-**Budget optimization**: See [budgets.md](budgets.md)
-**API reference**: See [api-reference.md](api-reference.md)
-</advanced_features>
 ```
 
 **Benefits**:
