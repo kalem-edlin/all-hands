@@ -1,0 +1,57 @@
+# Status File Schema
+# Single source of truth for milestone session state
+
+fields:
+  milestone:
+    type: string
+    required: true
+    description: "Name of the current milestone"
+
+  spec:
+    type: string
+    required: true
+    description: "Path to the milestone spec file"
+
+  branch:
+    type: string
+    required: true
+    description: "Git branch for this milestone"
+
+  stage:
+    type: enum
+    values: [planning, executing, reviewing, pr, compound]
+    required: true
+    description: "Current milestone stage"
+
+  loop:
+    type: object
+    required: true
+    description: "Loop configuration"
+    properties:
+      enabled:
+        type: boolean
+        default: false
+        description: "Whether the execution loop is running"
+      emergent:
+        type: boolean
+        default: false
+        description: "Whether emergent refinement mode is enabled"
+      iteration:
+        type: integer
+        default: 0
+        description: "Current loop iteration count"
+
+  compound_run:
+    type: boolean
+    default: false
+    description: "Whether compound phase has been run for this milestone"
+
+  created:
+    type: date
+    required: true
+    description: "Session start timestamp"
+
+  updated:
+    type: date
+    required: true
+    description: "Last state change timestamp"

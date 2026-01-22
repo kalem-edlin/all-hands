@@ -1,0 +1,65 @@
+# Prompt File Schema
+# Single source of truth for prompt file structure
+
+frontmatter:
+  number:
+    type: integer
+    required: true
+    description: "Prompt execution order (01, 02, etc.)"
+
+  title:
+    type: string
+    required: true
+    description: "Human-readable task name"
+
+  status:
+    type: enum
+    values: [pending, in_progress, done]
+    default: pending
+    description: "Current execution state"
+
+  dependencies:
+    type: array
+    items: integer
+    default: []
+    description: "Prompt numbers that must complete first"
+
+  priority:
+    type: enum
+    values: [high, medium, low]
+    default: medium
+    description: "Execution priority within dependency tier"
+
+  attempts:
+    type: integer
+    default: 0
+    description: "Number of execution attempts"
+
+  created:
+    type: date
+    required: true
+    description: "Creation timestamp (ISO 8601)"
+
+  updated:
+    type: date
+    required: true
+    description: "Last modification timestamp (ISO 8601)"
+
+body:
+  description: "Markdown task instructions for the executing agent"
+  sections:
+    - name: "Tasks"
+      required: true
+      description: "List of 1-5 specific tasks to complete"
+
+    - name: "Acceptance Criteria"
+      required: false
+      description: "Validation requirements for completion"
+
+    - name: "Progress"
+      required: false
+      description: "Agent-updated section for work done, decisions made"
+
+    - name: "Oracle Findings"
+      required: false
+      description: "Compaction handler notes from previous attempts"

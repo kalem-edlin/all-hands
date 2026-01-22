@@ -6,5 +6,6 @@ node_modules/
 .trees/**
 
 # Envoy observability files
-.claude/envoy.log
-.claude/metrics.jsonl
+.planning/
+
+

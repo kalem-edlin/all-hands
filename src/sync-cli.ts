@@ -19,7 +19,7 @@ async function main() {
   }
 
   const argv = await yargs(hideBin(process.argv))
-    .scriptName('claude-all-hands')
+    .scriptName('all-hands')
     .version(VERSION)
     .usage('$0 <command> [options]')
     .command(

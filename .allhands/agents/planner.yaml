@@ -1,0 +1,8 @@
+name: planner
+flow: MILESTONE_PLANNING.md
+message_template: |
+  Milestone: ${MILESTONE_NAME}
+  Spec: ${SPEC_PATH}
+template_vars:
+  - MILESTONE_NAME
+  - SPEC_PATH

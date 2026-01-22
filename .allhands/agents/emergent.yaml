@@ -1,0 +1,10 @@
+name: emergent
+flow: EMERGENT_REFINEMENT.md
+message_template: |
+  Alignment doc: ${ALIGNMENT_PATH}
+  Status: ${STATUS_PATH}
+  Iteration: ${ITERATION}
+template_vars:
+  - ALIGNMENT_PATH
+  - STATUS_PATH
+  - ITERATION

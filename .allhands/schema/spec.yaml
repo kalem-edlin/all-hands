@@ -1,0 +1,53 @@
+# Milestone Spec Schema
+# Single source of truth for milestone specification files
+
+frontmatter:
+  name:
+    type: string
+    required: true
+    description: "Milestone name (used for branch naming, directory creation)"
+
+  status:
+    type: enum
+    values: [roadmap, in_progress, completed]
+    default: roadmap
+    description: "Milestone implementation status"
+
+  created:
+    type: date
+    required: true
+    description: "Spec creation timestamp"
+
+  updated:
+    type: date
+    required: true
+    description: "Last modification timestamp"
+
+  dependencies:
+    type: array
+    items: string
+    default: []
+    description: "Other milestone names this depends on"
+
+body:
+  description: "Markdown document capturing the milestone vision"
+  sections:
+    - name: "Motivation"
+      required: true
+      description: "Why this milestone matters. User goals and pain points."
+
+    - name: "Goals"
+      required: true
+      description: "What success looks like. Concrete outcomes."
+
+    - name: "Non-Goals"
+      required: false
+      description: "Explicit scope boundaries. What we're NOT doing."
+
+    - name: "Open Questions"
+      required: false
+      description: "Uncertainties to resolve during ideation/planning."
+
+    - name: "Technical Considerations"
+      required: false
+      description: "Known constraints, dependencies, risks."

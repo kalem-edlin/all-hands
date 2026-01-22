@@ -1,5 +1,5 @@
 {
-  "$comment": "Files explicitly withheld from distribution - everything else (minus gitignored) is distributed",
+  "$comment": "Files explicitly withheld from distribution to consumer repos",
   "internal": [
     "src/**",
     "bin/**",
@@ -12,7 +12,14 @@
     "README.md",
     "package.json",
     "package-lock.json",
-    "ISSUES.md",
-    ".env.example"
-  ]
+    ".env.ai.example",
+    ".planning/**",
+    ".worktree/**",
+    "principles.md",
+    ".allhands/node_modules/**",
+    ".allhands/package-lock.json",
+    ".claude/envoy/**",
+    ".claude/backup-skills/**"
+  ],
+  "$distribution_comment": "What DOES get distributed: .allhands/, .claude/ (hooks, settings, commands, skills, agents), CLAUDE.md"
 }

@@ -8,14 +8,17 @@ import { ConflictResolution, askConflictResolution, confirm, getNextBackupPath }
 import { SYNC_CONFIG_FILENAME, SYNC_CONFIG_TEMPLATE } from '../lib/constants.js';
 import { restoreDotfiles } from '../lib/dotfiles.js';
 
-const ENVOY_SHELL_FUNCTION = `
-# AllHands envoy command - resolves to .claude/envoy/envoy from current directory
-envoy() {
-  "$PWD/.claude/envoy/envoy" "$@"
+const AH_SHELL_FUNCTION = `
+# AllHands CLI - resolves to .allhands/allhands from current directory
+ah() {
+  "$PWD/.allhands/allhands" "$@"
+}
+allhands() {
+  "$PWD/.allhands/allhands" "$@"
 }
 `;
 
-function setupEnvoyShellFunction(): { added: boolean; shellRc: string | null } {
+function setupAhShellFunction(): { added: boolean; shellRc: string | null } {
   const shell = process.env.SHELL || '';
   let shellRc: string | null = null;
 
@@ -33,12 +36,12 @@ function setupEnvoyShellFunction(): { added: boolean; shellRc: string | null } {
 
   if (existsSync(shellRc)) {
     const content = readFileSync(shellRc, 'utf-8');
-    if (content.includes('envoy()') || content.includes('.claude/envoy/envoy')) {
+    if (content.includes('ah()') || content.includes('allhands()') || content.includes('.allhands/allhands')) {
       return { added: false, shellRc };
     }
   }
 
-  appendFileSync(shellRc, ENVOY_SHELL_FUNCTION);
+  appendFileSync(shellRc, AH_SHELL_FUNCTION);
   return { added: true, shellRc };
 }
 
@@ -168,17 +171,18 @@ export async function cmdInit(target: string, autoYes: boolean = false): Promise
   // npm excludes these files, so we ship them without dots and rename here
   restoreDotfiles(resolvedTarget);
 
-  // Setup envoy shell function
-  console.log('\nSetting up envoy shell command...');
-  const envoyResult = setupEnvoyShellFunction();
-  if (envoyResult.added && envoyResult.shellRc) {
-    console.log(`  Added envoy function to ${envoyResult.shellRc}`);
-    console.log('  Run `source ' + envoyResult.shellRc + '` or restart terminal to use');
-  } else if (envoyResult.shellRc) {
-    console.log('  envoy function already configured');
+  // Setup ah/allhands shell functions
+  console.log('\nSetting up shell commands (ah, allhands)...');
+  const ahResult = setupAhShellFunction();
+  if (ahResult.added && ahResult.shellRc) {
+    console.log(`  Added ah and allhands functions to ${ahResult.shellRc}`);
+    console.log('  Run `source ' + ahResult.shellRc + '` or restart terminal to use');
+  } else if (ahResult.shellRc) {
+    console.log('  Shell functions already configured');
   } else {
     console.log('  Could not detect shell config (add manually to your shell rc):');
-    console.log('    envoy() { "$PWD/.claude/envoy/envoy" "$@"; }');
+    console.log('    ah() { "$PWD/.allhands/allhands" "$@"; }');
+    console.log('    allhands() { "$PWD/.allhands/allhands" "$@"; }');
   }
 
   // Offer to create sync config for push command
@@ -188,7 +192,7 @@ export async function cmdInit(target: string, autoYes: boolean = false): Promise
   if (existsSync(syncConfigPath)) {
     console.log(`\n${SYNC_CONFIG_FILENAME} already exists - skipping`);
   } else if (!autoYes) {
-    console.log('\nThe push command lets you contribute changes back to claude-all-hands.');
+    console.log('\nThe push command lets you contribute changes back to all-hands.');
     console.log('A sync config file lets you customize which files to include/exclude.');
     if (await confirm(`Create ${SYNC_CONFIG_FILENAME}?`)) {
       writeFileSync(syncConfigPath, JSON.stringify(SYNC_CONFIG_TEMPLATE, null, 2) + '\n');

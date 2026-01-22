@@ -1,0 +1,8 @@
+name: executor
+flow: PROMPT_EXECUTION.md
+message_template: |
+  Your prompt file: ${PROMPT_PATH}
+  Alignment doc: ${ALIGNMENT_PATH}
+template_vars:
+  - PROMPT_PATH
+  - ALIGNMENT_PATH

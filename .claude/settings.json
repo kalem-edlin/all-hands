@@ -16,21 +16,6 @@
     "CODESEARCH_TOOL_BUDGET": "12"
   },
   "permissions": {
-    "allow": [
-      "Grep",
-      "Write",
-      "Edit",
-      "Bash(git:*)",
-      "Bash(gh:*)",
-      "Bash(cat:*)",
-      "Bash(rm:*)",
-      "Bash(ls:*)",
-      "Bash(rg:*)",
-      "Bash(mkdir:*)",
-      "Bash(mkdir -p:*)",
-      "Read(~/.claude-code-docs/docs/*)",
-      "Bash(envoy:*)"
-    ],
     "deny": ["Task(claude-code-guide)", "Task(Explore)"],
     "ask": []
   },
@@ -125,6 +110,17 @@
           {
             "type": "command",
             "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/envoy/envoy util log-event PreCompact"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "(Write|Edit)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/validate_frontmatter.sh"
           }
         ]
       }

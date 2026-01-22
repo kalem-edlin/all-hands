@@ -2,7 +2,7 @@ import { existsSync } from 'fs';
 import { dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
 
-export const UPSTREAM_REPO = 'kalem-edlin/claude-all-hands';
+export const UPSTREAM_REPO = 'kalem-edlin/all-hands';
 export const UPSTREAM_OWNER = 'kalem-edlin';
 
 export function getAllhandsRoot(): string {
