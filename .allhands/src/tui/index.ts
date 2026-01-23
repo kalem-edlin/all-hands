@@ -173,7 +173,7 @@ export class TUI {
     this.render();
 
     try {
-      const service = new KnowledgeService(this.options.cwd);
+      const service = new KnowledgeService(this.options.cwd, { quiet: true });
 
       // Reindex roadmap
       this.log('Indexing roadmap specs...');

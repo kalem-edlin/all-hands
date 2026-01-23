@@ -93,11 +93,19 @@ export class KnowledgeService {
   private model: unknown = null;
   private readonly knowledgeDir: string;
   private readonly projectRoot: string;
+  private readonly quiet: boolean;
 
-  constructor(projectRoot: string) {
+  constructor(projectRoot: string, options?: { quiet?: boolean }) {
     this.projectRoot = projectRoot;
+    this.quiet = options?.quiet ?? false;
     // Store knowledge index in .allhands/.knowledge
     this.knowledgeDir = join(projectRoot, ".allhands", ".knowledge");
+  }
+
+  private log(message: string): void {
+    if (!this.quiet) {
+      console.error(message);
+    }
   }
 
   /**
@@ -117,14 +125,14 @@ export class KnowledgeService {
     if (this.model) return this.model;
 
     this.ensureDir();
-    console.error("[knowledge] Loading embedding model...");
+    this.log("[knowledge] Loading embedding model...");
     const startTime = Date.now();
 
     const { TextModel } = await import("@visheratin/web-ai-node/text");
     const modelResult = await TextModel.create("gtr-t5-quant");
     this.model = modelResult.model;
 
-    console.error(`[knowledge] Model loaded in ${((Date.now() - startTime) / 1000).toFixed(1)}s`);
+    this.log(`[knowledge] Model loaded in ${((Date.now() - startTime) / 1000).toFixed(1)}s`);
     return this.model;
   }
 
@@ -395,7 +403,7 @@ export class KnowledgeService {
     this.ensureDir();
     const config = this.getIndexConfig(indexName);
     const startTime = Date.now();
-    console.error(`[knowledge] Reindexing ${indexName}...`);
+    this.log(`[knowledge] Reindexing ${indexName}...`);
 
     // Create fresh index
     const index = this.createIndex();
@@ -403,7 +411,7 @@ export class KnowledgeService {
 
     // Discover and index files
     const files = this.discoverFiles(config);
-    console.error(`[knowledge] Found ${files.length} files`);
+    this.log(`[knowledge] Found ${files.length} files`);
     let totalTokens = 0;
 
     for (let i = 0; i < files.length; i++) {
@@ -428,7 +436,7 @@ export class KnowledgeService {
         }
       }
 
-      console.error(`[knowledge] Embedding ${i + 1}/${files.length}: ${filePath}`);
+      this.log(`[knowledge] Embedding ${i + 1}/${files.length}: ${filePath}`);
       await this.indexDocument(index, meta, filePath, contentForEmbedding, frontMatter);
       totalTokens += meta.documents[filePath].token_count;
     }
@@ -436,7 +444,7 @@ export class KnowledgeService {
     // Save
     await this.saveIndex(indexName, index, meta);
     const duration = ((Date.now() - startTime) / 1000).toFixed(1);
-    console.error(`[knowledge] Reindex complete: ${files.length} files, ${totalTokens} tokens in ${duration}s`);
+    this.log(`[knowledge] Reindex complete: ${files.length} files, ${totalTokens} tokens in ${duration}s`);
 
     return {
       files_indexed: files.length,
@@ -464,7 +472,7 @@ export class KnowledgeService {
     files: { path: string; action: string }[];
   }> {
     const config = this.getIndexConfig(indexName);
-    console.error(`[knowledge] Incremental reindex (${indexName}): ${changes.length} change(s)`);
+    this.log(`[knowledge] Incremental reindex (${indexName}): ${changes.length} change(s)`);
     const startTime = Date.now();
 
     const { index, meta } = await this.loadIndex(indexName);
@@ -490,7 +498,7 @@ export class KnowledgeService {
           delete meta.path_to_id[path];
           delete meta.documents[path];
           processedFiles.push({ path, action: "deleted" });
-          console.error(`[knowledge] Deleted: ${path}`);
+          this.log(`[knowledge] Deleted: ${path}`);
         }
       } else if (added || modified) {
         const fullPath = join(this.projectRoot, path);
@@ -516,7 +524,7 @@ export class KnowledgeService {
 
         // Index document
         const action = added ? "added" : "modified";
-        console.error(`[knowledge] Embedding (${action}): ${path}`);
+        this.log(`[knowledge] Embedding (${action}): ${path}`);
         await this.indexDocument(index, meta, path, contentForEmbedding, frontMatter);
         processedFiles.push({ path, action });
       }
@@ -525,7 +533,7 @@ export class KnowledgeService {
     // Save updated index
     await this.saveIndex(indexName, index, meta);
     const duration = ((Date.now() - startTime) / 1000).toFixed(1);
-    console.error(`[knowledge] Incremental reindex complete: ${processedFiles.length} file(s) in ${duration}s`);
+    this.log(`[knowledge] Incremental reindex complete: ${processedFiles.length} file(s) in ${duration}s`);
 
     return {
       success: true,
