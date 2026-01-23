@@ -30,6 +30,15 @@
         ]
       },
       {
+        "matcher": "AskUserQuestion",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "ah hooks notification elicitation"
+          }
+        ]
+      },
+      {
         "matcher": "Task",
         "hooks": [
           {
@@ -113,6 +122,10 @@
           {
             "type": "command",
             "command": "ah hooks lifecycle agent-stop"
+          },
+          {
+            "type": "command",
+            "command": "ah hooks notification stop"
           }
         ]
       }
@@ -124,6 +137,10 @@
           {
             "type": "command",
             "command": "ah hooks lifecycle agent-compact"
+          },
+          {
+            "type": "command",
+            "command": "ah hooks notification compact"
           }
         ]
       }
@@ -149,11 +166,6 @@
     "ask": []
   },
   "enableAllProjectMcpServers": false,
-  "statusLine": {
-    "type": "command",
-    "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/statusline.sh",
-    "padding": 0
-  },
   "enabledPlugins": {
     "swift-lsp@claude-plugins-official": true,
     "vtsls@claude-code-lsps": true,
