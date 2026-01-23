@@ -20,6 +20,7 @@ export interface PromptFrontmatter {
   dependencies: number[];
   priority: PromptPriority;
   attempts: number;
+  commits: string[];
   created: string;
   updated: string;
 }
@@ -304,6 +305,7 @@ export function createPrompt(
     dependencies: options.dependencies || [],
     priority: options.priority || 'medium',
     attempts: 0,
+    commits: [],
     created: now,
     updated: now,
   };
@@ -425,4 +427,35 @@ export function incrementAttempts(filePath: string): number {
   const newAttempts = (prompt.frontmatter.attempts || 0) + 1;
   updatePromptFrontmatter(filePath, { attempts: newAttempts });
   return newAttempts;
+}
+
+/**
+ * Add a commit hash to a prompt's commits array
+ *
+ * Commits are stored in chronological order (oldest first).
+ * This tracks all work done on the prompt, including failed attempts.
+ */
+export function addCommitToPrompt(filePath: string, commitHash: string): PromptFile | null {
+  const prompt = parsePromptFile(filePath);
+  if (!prompt) return null;
+
+  const commits = prompt.frontmatter.commits || [];
+
+  // Avoid duplicates
+  if (commits.includes(commitHash)) {
+    return prompt;
+  }
+
+  return updatePromptFrontmatter(filePath, {
+    commits: [...commits, commitHash],
+  });
+}
+
+/**
+ * Get all commits for a prompt
+ */
+export function getPromptCommits(filePath: string): string[] {
+  const prompt = parsePromptFile(filePath);
+  if (!prompt) return [];
+  return prompt.frontmatter.commits || [];
 }

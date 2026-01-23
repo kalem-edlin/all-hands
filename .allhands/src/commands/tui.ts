@@ -135,7 +135,7 @@ async function handleAction(
           flowPath: join(flowsDir, 'IDEATION_SESSION.md'),
           preamble: 'Starting ideation session. Explore ideas and draft specs.',
           milestoneName: status?.milestone,
-          singleton: true,
+          promptScoped: false,
         }, branch);
         tui.log(`Spawned ideation in ${result.sessionName}:${result.windowName}`);
         updateRunningAgents(tui, branch);
@@ -155,7 +155,7 @@ async function handleAction(
           preamble: 'Starting coordinator session. You can inspect agents and manage the loop.',
           milestoneName: status?.milestone,
           nonCoding: true,
-          singleton: true,
+          promptScoped: false,
         }, branch);
         tui.log(`Spawned coordinator in ${result.sessionName}:${result.windowName}`);
         updateRunningAgents(tui, branch);
@@ -178,7 +178,7 @@ async function handleAction(
           flowPath: join(flowsDir, 'MILESTONE_PLANNING.md'),
           preamble: 'Plan the milestone. Create prompts and set up the alignment doc.',
           milestoneName: status.milestone,
-          singleton: true,
+          promptScoped: false,
         }, branch);
         tui.log(`Spawned planner in ${result.sessionName}:${result.windowName}`);
         updateRunningAgents(tui, branch);
@@ -198,7 +198,7 @@ async function handleAction(
           preamble: 'Review the current milestone work. Spawn jury sub-agents as needed.',
           milestoneName: status?.milestone,
           nonCoding: true,
-          singleton: true,
+          promptScoped: false,
         }, branch);
         tui.log(`Spawned judge in ${result.sessionName}:${result.windowName}`);
         updateRunningAgents(tui, branch);
@@ -241,7 +241,7 @@ async function handleAction(
           flowPath: join(flowsDir, 'PR_REVIEWING.md'),
           preamble: 'Review and address PR feedback.',
           milestoneName: status?.milestone,
-          singleton: true,
+          promptScoped: false,
         }, branch);
         tui.log(`Spawned pr-reviewer in ${result.sessionName}:${result.windowName}`);
         updateRunningAgents(tui, branch);
@@ -260,7 +260,7 @@ async function handleAction(
           flowPath: join(flowsDir, 'DOCUMENTATION_TAXONOMY.md'),
           preamble: 'Run compound phase: documentation and post-mortem.',
           milestoneName: status?.milestone,
-          singleton: true,
+          promptScoped: false,
         }, branch);
         tui.log(`Spawned documentor in ${result.sessionName}:${result.windowName}`);
         updateRunningAgents(tui, branch);
@@ -417,7 +417,7 @@ function spawnExecutorForPrompt(tui: TUI, prompt: PromptFile, branch: string): v
       promptNumber,
       milestoneName: prompt.frontmatter.title,
       focusWindow: false, // Don't steal focus from TUI
-      singleton: false, // Multiple executors can run (one per prompt)
+      promptScoped: true, // Multiple executors can run (one per prompt)
     },
     branch
   );
