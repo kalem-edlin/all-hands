@@ -9,7 +9,10 @@ const logger = pino({
   level: process.env.LOG_LEVEL ?? "info",
   transport: process.env.NODE_ENV !== "production" ? {
     target: "pino-pretty",
-    options: { colorize: true }
+    options: {
+      colorize: true,
+      destination: 2  // stderr - keeps stdout clean for hook JSON output
+    }
   } : undefined
 });
 

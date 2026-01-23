@@ -4,6 +4,9 @@
   "private": true,
   "description": "Internal CLI for All Hands harness",
   "type": "module",
+  "bin": {
+    "ah": "./bin/ah"
+  },
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run",

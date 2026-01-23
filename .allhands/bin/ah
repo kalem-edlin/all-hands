@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# All Hands CLI wrapper
+# Executes the TypeScript CLI via tsx
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CLI_PATH="${SCRIPT_DIR}/../src/cli.ts"
+
+exec npx --yes tsx "$CLI_PATH" "$@"
