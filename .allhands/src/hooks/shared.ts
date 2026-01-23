@@ -5,7 +5,7 @@
  * Hooks communicate via stdin/stdout JSON.
  */
 
-import { existsSync, mkdirSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -182,4 +182,107 @@ export function getCacheSubdir(name: string): string {
   }
 
   return subdir;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PreToolUse Context Injection Helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Output PreToolUse with context injection (modifies tool input).
+ * Prepends additionalContext to the specified field (default: 'prompt').
+ */
+export function injectContext(
+  originalInput: Record<string, unknown>,
+  additionalContext: string,
+  targetField: string = 'prompt'
+): never {
+  const currentValue = (originalInput[targetField] as string) || '';
+  const output: PreToolUseOutput = {
+    hookSpecificOutput: {
+      permissionDecision: 'allow',
+      updatedInput: {
+        ...originalInput,
+        [targetField]: `${additionalContext}\n\n---\n${currentValue}`,
+      },
+    },
+  };
+  console.log(JSON.stringify(output));
+  process.exit(0);
+}
+
+/**
+ * Output PreToolUse additional context without modifying input.
+ * Adds context to the conversation via systemMessage.
+ */
+export function preToolContext(context: string): never {
+  const output: PreToolUseOutput = {
+    hookSpecificOutput: {
+      permissionDecision: 'allow',
+    },
+    systemMessage: context,
+  };
+  console.log(JSON.stringify(output));
+  process.exit(0);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Search Context (for hook coordination)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Search context passed between hooks */
+export interface SearchContext {
+  timestamp: number;
+  queryType: 'structural' | 'semantic' | 'literal';
+  pattern: string;
+  target: string | null;
+  targetType: 'function' | 'class' | 'variable' | 'import' | 'decorator' | 'unknown';
+  suggestedLayers: string[];
+  definitionLocation?: string;
+  callers?: string[];
+}
+
+/**
+ * Get the search context file path for a session.
+ */
+function getSearchContextPath(sessionId: string): string {
+  const tmpDir = '/tmp/claude-search-context';
+  if (!existsSync(tmpDir)) {
+    mkdirSync(tmpDir, { recursive: true });
+  }
+  return join(tmpDir, `${sessionId}.json`);
+}
+
+/**
+ * Save search context for downstream hooks.
+ */
+export function saveSearchContext(sessionId: string, context: SearchContext): void {
+  const path = getSearchContextPath(sessionId);
+  writeFileSync(path, JSON.stringify(context, null, 2));
+}
+
+/**
+ * Load search context from upstream hooks.
+ * Returns null if not found or expired (>5 min).
+ */
+export function loadSearchContext(sessionId: string): SearchContext | null {
+  const path = getSearchContextPath(sessionId);
+  if (!existsSync(path)) {
+    return null;
+  }
+
+  try {
+    const data = readFileSync(path, 'utf-8');
+    const context = JSON.parse(data) as SearchContext;
+
+    // Check if expired (5 minute TTL)
+    const age = Date.now() - context.timestamp;
+    if (age > 5 * 60 * 1000) {
+      return null;
+    }
+
+    return context;
+  } catch {
+    return null;
+  }
 }

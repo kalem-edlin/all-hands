@@ -28,6 +28,52 @@
             "command": "ah hooks enforcement research-search"
           }
         ]
+      },
+      {
+        "matcher": "Task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "ah hooks context tldr-inject"
+          },
+          {
+            "type": "command",
+            "command": "ah hooks context arch-inject"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "ah hooks context edit-inject"
+          },
+          {
+            "type": "command",
+            "command": "ah hooks context signature"
+          }
+        ]
+      },
+      {
+        "matcher": "Read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "ah hooks context read-enforcer",
+            "timeout": 20
+          }
+        ]
+      },
+      {
+        "matcher": "Grep",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "ah hooks context search-router",
+            "timeout": 10
+          }
+        ]
       }
     ],
     "PostToolUse": [
@@ -41,6 +87,21 @@
           {
             "type": "command",
             "command": "ah hooks validation diagnostics"
+          },
+          {
+            "type": "command",
+            "command": "ah hooks context edit-notify"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "ah hooks session tldr-warm"
           }
         ]
       }

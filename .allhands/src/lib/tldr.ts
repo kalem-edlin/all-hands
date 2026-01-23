@@ -1,0 +1,384 @@
+/**
+ * TLDR Daemon Client
+ *
+ * Core library for communicating with the llm-tldr daemon.
+ * Provides token-efficient code analysis via AST/call-graph/DFG queries.
+ *
+ * All functions gracefully degrade if TLDR is not installed or daemon is unavailable.
+ */
+
+import { execSync, spawnSync } from 'child_process';
+import { existsSync } from 'fs';
+import { createHash } from 'crypto';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Types
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface DaemonResponse {
+  status: 'ok' | 'error' | 'indexing';
+  result?: unknown;
+  indexing?: boolean;
+  message?: string;
+  error?: string;
+}
+
+export interface SearchResult {
+  file: string;
+  name: string;
+  type: string;
+  line: number;
+  signature?: string;
+}
+
+export interface ExtractResult {
+  file: string;
+  symbols: Array<{
+    name: string;
+    type: string;
+    line: number;
+    signature?: string;
+    docstring?: string;
+  }>;
+  imports: string[];
+  exports: string[];
+}
+
+export interface ContextResult {
+  entry: string;
+  callees: string[];
+  callers: string[];
+  depth: number;
+}
+
+export interface CFGResult {
+  file: string;
+  function: string;
+  nodes: Array<{
+    id: string;
+    type: string;
+    label: string;
+    line?: number;
+  }>;
+  edges: Array<{
+    from: string;
+    to: string;
+    label?: string;
+  }>;
+}
+
+export interface DFGResult {
+  file: string;
+  function: string;
+  variables: Array<{
+    name: string;
+    definitions: number[];
+    uses: number[];
+  }>;
+  flows: Array<{
+    from: string;
+    to: string;
+    line: number;
+  }>;
+}
+
+export interface ArchResult {
+  layers: Array<{
+    name: string;
+    files: string[];
+    description?: string;
+  }>;
+  dependencies: Array<{
+    from: string;
+    to: string;
+  }>;
+}
+
+export interface DiagnosticsResult {
+  file: string;
+  errors: Array<{
+    line: number;
+    column: number;
+    message: string;
+    severity: 'error' | 'warning' | 'info';
+    source: string;
+  }>;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Detection & Availability
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Check if llm-tldr is installed.
+ */
+export function isTldrInstalled(): boolean {
+  try {
+    execSync('which tldr', { stdio: 'pipe' });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Get the socket path for the TLDR daemon.
+ * Format: /tmp/tldr-{md5(projectDir).slice(0,8)}.sock
+ */
+export function getTldrSocketPath(projectDir: string): string {
+  const hash = createHash('md5').update(projectDir).digest('hex').slice(0, 8);
+  return `/tmp/tldr-${hash}.sock`;
+}
+
+/**
+ * Check if the TLDR daemon is running for a project.
+ */
+export function isTldrDaemonRunning(projectDir: string): boolean {
+  const socketPath = getTldrSocketPath(projectDir);
+  return existsSync(socketPath);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Daemon Communication
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Query the TLDR daemon synchronously using netcat.
+ * Returns null if daemon is unavailable or times out.
+ *
+ * @param cmd - Command object to send to daemon
+ * @param projectDir - Project directory for socket path
+ * @param timeoutMs - Timeout in milliseconds (default 5000)
+ */
+export function queryDaemonSync(
+  cmd: object,
+  projectDir: string,
+  timeoutMs: number = 5000
+): DaemonResponse | null {
+  if (!isTldrInstalled()) {
+    return null;
+  }
+
+  const socketPath = getTldrSocketPath(projectDir);
+  if (!existsSync(socketPath)) {
+    return null;
+  }
+
+  try {
+    const cmdJson = JSON.stringify(cmd);
+    const timeoutSec = Math.ceil(timeoutMs / 1000);
+
+    // Use netcat for synchronous socket query
+    const result = spawnSync('nc', ['-U', '-w', String(timeoutSec), socketPath], {
+      input: cmdJson,
+      encoding: 'utf-8',
+      timeout: timeoutMs + 1000, // Buffer for nc startup
+    });
+
+    if (result.status !== 0 || !result.stdout) {
+      return null;
+    }
+
+    const response = JSON.parse(result.stdout.trim()) as DaemonResponse;
+
+    // Check if daemon is indexing
+    if (response.indexing) {
+      return { status: 'indexing', indexing: true, message: 'Index in progress' };
+    }
+
+    return response;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Query the TLDR daemon asynchronously.
+ * Uses the same netcat approach but wrapped in a promise.
+ */
+export async function queryDaemon(
+  cmd: object,
+  projectDir: string,
+  timeoutMs: number = 5000
+): Promise<DaemonResponse | null> {
+  // For now, use sync version wrapped in promise
+  // Could be optimized with proper async socket handling
+  return new Promise((resolve) => {
+    const result = queryDaemonSync(cmd, projectDir, timeoutMs);
+    resolve(result);
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Query Helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Search for symbols matching a pattern.
+ */
+export function searchDaemon(pattern: string, projectDir: string): SearchResult[] {
+  const response = queryDaemonSync({ cmd: 'search', pattern }, projectDir);
+  if (!response || response.status !== 'ok' || !response.result) {
+    return [];
+  }
+  return response.result as SearchResult[];
+}
+
+/**
+ * Extract symbols from a file.
+ */
+export function extractDaemon(filePath: string, projectDir: string): ExtractResult | null {
+  const response = queryDaemonSync({ cmd: 'extract', file: filePath }, projectDir);
+  if (!response || response.status !== 'ok' || !response.result) {
+    return null;
+  }
+  return response.result as ExtractResult;
+}
+
+/**
+ * Get call graph context for an entry point.
+ */
+export function contextDaemon(entry: string, projectDir: string): ContextResult | null {
+  const response = queryDaemonSync({ cmd: 'context', entry }, projectDir);
+  if (!response || response.status !== 'ok' || !response.result) {
+    return null;
+  }
+  return response.result as ContextResult;
+}
+
+/**
+ * Get control flow graph for a function.
+ */
+export function cfgDaemon(file: string, fn: string, projectDir: string): CFGResult | null {
+  const response = queryDaemonSync({ cmd: 'cfg', file, function: fn }, projectDir);
+  if (!response || response.status !== 'ok' || !response.result) {
+    return null;
+  }
+  return response.result as CFGResult;
+}
+
+/**
+ * Get data flow graph for a function.
+ */
+export function dfgDaemon(file: string, fn: string, projectDir: string): DFGResult | null {
+  const response = queryDaemonSync({ cmd: 'dfg', file, function: fn }, projectDir);
+  if (!response || response.status !== 'ok' || !response.result) {
+    return null;
+  }
+  return response.result as DFGResult;
+}
+
+/**
+ * Get architecture layers for the project.
+ */
+export function archDaemon(projectDir: string): ArchResult | null {
+  const response = queryDaemonSync({ cmd: 'arch' }, projectDir);
+  if (!response || response.status !== 'ok' || !response.result) {
+    return null;
+  }
+  return response.result as ArchResult;
+}
+
+/**
+ * Get diagnostics for a file (pyright + ruff).
+ */
+export function diagnosticsDaemon(file: string, projectDir: string): DiagnosticsResult | null {
+  const response = queryDaemonSync({ cmd: 'diagnostics', file }, projectDir);
+  if (!response || response.status !== 'ok' || !response.result) {
+    return null;
+  }
+  return response.result as DiagnosticsResult;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TUI Integration Points
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Warm the TLDR index for a project (async, non-blocking).
+ * Returns true if warming was initiated, false if unavailable.
+ */
+export async function warmIndex(projectDir: string): Promise<boolean> {
+  if (!isTldrInstalled()) {
+    return false;
+  }
+
+  try {
+    // Start daemon/warm asynchronously
+    execSync(`tldr daemon start "${projectDir}" &`, {
+      stdio: 'ignore',
+      timeout: 2000,
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Notify daemon of a file change for incremental updates.
+ */
+export async function notifyFileChanged(
+  projectDir: string,
+  filePath: string
+): Promise<DaemonResponse | null> {
+  return queryDaemon({ cmd: 'notify', file: filePath, event: 'change' }, projectDir);
+}
+
+/**
+ * Initialize TLDR on milestone start.
+ */
+export async function onMilestoneInit(projectDir: string): Promise<void> {
+  if (!isTldrInstalled()) {
+    return;
+  }
+
+  // Ensure daemon is running
+  if (!isTldrDaemonRunning(projectDir)) {
+    await warmIndex(projectDir);
+  }
+}
+
+/**
+ * Handle merge completion - re-index affected files.
+ */
+export async function onMergeComplete(targetDir: string): Promise<void> {
+  if (!isTldrInstalled() || !isTldrDaemonRunning(targetDir)) {
+    return;
+  }
+
+  // Trigger full re-index after merge
+  await queryDaemon({ cmd: 'reindex' }, targetDir);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Hook Activity Tracking
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Track hook activity for observability.
+ * Synchronous to avoid blocking hook execution.
+ */
+export function trackHookActivitySync(
+  hookName: string,
+  projectDir: string,
+  success: boolean,
+  metrics?: object
+): void {
+  // Best-effort tracking - don't block on failures
+  try {
+    queryDaemonSync(
+      {
+        cmd: 'track',
+        hook: hookName,
+        success,
+        metrics,
+        timestamp: new Date().toISOString(),
+      },
+      projectDir,
+      1000 // Short timeout for tracking
+    );
+  } catch {
+    // Ignore tracking failures
+  }
+}
