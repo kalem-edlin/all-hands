@@ -24,12 +24,6 @@ frontmatter:
     default: []
     description: "Prompt numbers that must complete first"
 
-  priority:
-    type: enum
-    values: [high, medium, low]
-    default: medium
-    description: "Execution priority within dependency tier"
-
   attempts:
     type: integer
     default: 0
@@ -41,31 +35,24 @@ frontmatter:
     default: []
     description: "Git commit hashes for work done on this prompt (chronological order, includes failed attempts)"
 
-  created:
-    type: date
-    required: true
-    description: "Creation timestamp (ISO 8601)"
-
-  updated:
-    type: date
-    required: true
-    description: "Last modification timestamp (ISO 8601)"
-
 body:
   description: "Markdown task instructions for the executing agent"
   sections:
     - name: "Tasks"
       required: true
-      description: "List of 1-5 specific tasks to complete"
+      description: "List of 2-6 specific tasks to complete with implementation approach ideas and suggested instructions"
 
     - name: "Acceptance Criteria"
-      required: false
+      required: true
       description: "Validation requirements for completion"
 
-    - name: "Progress"
-      required: false
-      description: "Agent-updated section for work done, decisions made"
+    - append_success_format: |
+        **Summary**: Brief explanation
+        **Limitations**: List of key limitations discovered that hindered implementation
+        **Decisions**: List of key decisions made that were open to make, or required to make in order to achieve the acceptance criteria
+        **Files**: List of key files affected
 
-    - name: "Oracle Findings"
-      required: false
-      description: "Compaction handler notes from previous attempts"
+    - append_failure_format: |
+        **Verdict**: Why the previous attempt was cleared for a blank slate, OR why the previous attempt was commited and expected to be built on top of
+        **Learnings**: What was learned in the attempt that failed
+        **Left to do**: Infered tips on how to keep going after failure

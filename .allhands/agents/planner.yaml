@@ -4,6 +4,8 @@ prompt_scoped: false
 message_template: |
   Milestone: ${MILESTONE_NAME}
   Spec: ${SPEC_PATH}
+  Prompts Folder: ${PROMPTS_FOLDER}
 template_vars:
   - MILESTONE_NAME
   - SPEC_PATH
+  - PROMPTS_FOLDER

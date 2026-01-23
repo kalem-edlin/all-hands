@@ -7,21 +7,16 @@ frontmatter:
     required: true
     description: "Milestone name (used for branch naming, directory creation)"
 
+  domain_name: 
+    type: string
+    required: true
+    description: "Domain name (used to group milestones into initiatives)"
+
   status:
     type: enum
     values: [roadmap, in_progress, completed]
     default: roadmap
     description: "Milestone implementation status"
-
-  created:
-    type: date
-    required: true
-    description: "Spec creation timestamp"
-
-  updated:
-    type: date
-    required: true
-    description: "Last modification timestamp"
 
   dependencies:
     type: array

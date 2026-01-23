@@ -36,13 +36,13 @@ fields:
     description: "Variables available for message_template interpolation"
     items: string
 
-  singleton:
+  prompt_scoped:
     type: boolean
     required: false
     default: false
     description: |
-      If true, only one instance of this agent can run at a time.
-      Spawning a second instance will fail with an error.
+      If true, this agent is scoped to a specific prompt and can have multiple
+      instances running concurrently (one per prompt).
 
-      Singleton agents use their name directly as AGENT_ID (e.g., "planner").
-      Non-singleton agents include the prompt number (e.g., "executor-01").
+      Prompt-scoped agents include the prompt number in their ID (e.g., "executor-01").
+      Non-prompt-scoped agents use their name directly as AGENT_ID (e.g., "coordinator").

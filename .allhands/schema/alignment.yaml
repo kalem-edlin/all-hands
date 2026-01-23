@@ -2,25 +2,15 @@
 # Single source of truth for alignment document structure
 
 frontmatter:
-  milestone:
+  milestone_name:
     type: string
     required: true
     description: "Name of the milestone this alignment doc serves"
 
-  spec:
+  spec_path:
     type: string
     required: true
     description: "Path to the milestone spec file"
-
-  created:
-    type: date
-    required: true
-    description: "Creation timestamp (ISO 8601)"
-
-  updated:
-    type: date
-    required: true
-    description: "Last modification timestamp (ISO 8601)"
 
 body:
   description: "Markdown document with header and append sections"
@@ -32,14 +22,10 @@ body:
     - name: "Hard Requirements"
       required: true
       description: "Concise, immutable user requirements. Guidelines for emergent mode."
-
-    - name: "Key Decisions"
-      required: false
-      description: "Append-only section. Each entry has: decision, files, summary, prompt link"
-
-append_format: |
-  ### [Prompt ##: Title]
-  **Decision**: What was decided
-  **Files**: List of key files affected
-  **Summary**: Brief explanation
-  **Link**: `./prompts/##-title.md`
+      
+    - append_format: |
+        ### [Prompt ##: Title]
+        **Decision**: What was decided
+        **Files**: List of key files affected
+        **Summary**: Brief explanation
+        **Link**: `./prompts/##-title.md`
