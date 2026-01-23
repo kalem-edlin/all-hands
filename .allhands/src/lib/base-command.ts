@@ -156,3 +156,33 @@ export function addCommonOptions(cmd: { option: (flags: string, description: str
   cmd.option('-v, --verbose', 'Enable verbose logging');
   return cmd;
 }
+
+/**
+ * BaseCommand - Abstract base class for command implementations.
+ * Provides helper methods for success/error responses.
+ */
+export abstract class BaseCommand {
+  abstract readonly name: string;
+  abstract readonly description: string;
+
+  abstract defineArguments(cmd: import('commander').Command): void;
+  abstract execute(args: Record<string, unknown>): Promise<CommandResult>;
+
+  /**
+   * Create a success result
+   */
+  protected success<T>(data: T): CommandResult<T> {
+    return { success: true, data };
+  }
+
+  /**
+   * Create an error result
+   */
+  protected error(code: string, message: string, details?: string): CommandResult {
+    return {
+      success: false,
+      error: `${code}: ${message}`,
+      details,
+    };
+  }
+}
