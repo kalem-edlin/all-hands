@@ -3,15 +3,10 @@
  * Uses @visheratin/web-ai-node for embeddings and usearch for HNSW indexing.
  */
 
-import { createHash } from "crypto";
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "fs";
 import matter from "gray-matter";
-import { createRequire } from "module";
 import { basename, extname, join, relative } from "path";
 import { Index, MetricKind, ScalarKind } from "usearch";
-
-// Create require function for ESM compatibility (needed for fetch caching)
-const require = createRequire(import.meta.url);
 
 // Types
 interface DocumentMeta {
@@ -111,85 +106,8 @@ export class KnowledgeService {
   }
 
   /**
-   * Get model cache directory
-   */
-  private getModelCacheDir(): string {
-    return join(this.knowledgeDir, "models");
-  }
-
-  /**
-   * Install caching wrapper for node-fetch (must call before importing web-ai-node)
-   */
-  private installFetchCache(): void {
-    const cacheDir = this.getModelCacheDir();
-    if (!existsSync(cacheDir)) {
-      mkdirSync(cacheDir, { recursive: true });
-    }
-
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const nodeFetchModule = require("node-fetch");
-    const originalFetch = nodeFetchModule.default || nodeFetchModule;
-
-    // Skip if already patched
-    if ((originalFetch as { __cached?: boolean }).__cached) return;
-
-    const self = this;
-    const cachedFetch = async function (url: string, init?: RequestInit) {
-      // Only cache model files
-      if (!url.includes("web-ai-models.org") && !url.includes(".onnx")) {
-        return originalFetch(url, init);
-      }
-
-      const urlHash = createHash("md5").update(url).digest("hex").slice(0, 8);
-      const fileName = `${urlHash}-${basename(url)}`;
-      const cachePath = join(self.getModelCacheDir(), fileName);
-
-      if (existsSync(cachePath)) {
-        console.error(`[knowledge] Using cached model: ${fileName}`);
-        const data = readFileSync(cachePath);
-        // Return a mock response with arrayBuffer method
-        return {
-          ok: true,
-          status: 200,
-          arrayBuffer: async () => data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength),
-        };
-      }
-
-      console.error(`[knowledge] Downloading model: ${basename(url)}`);
-      const response = await originalFetch(url, init);
-      if (!response.ok) {
-        return response;
-      }
-
-      const arrayBuffer = await response.arrayBuffer();
-      const buffer = Buffer.from(arrayBuffer);
-      writeFileSync(cachePath, buffer);
-      console.error(`[knowledge] Cached model: ${fileName} (${(buffer.length / 1024 / 1024).toFixed(1)}MB)`);
-
-      // Return a mock response since we consumed the original
-      return {
-        ok: true,
-        status: 200,
-        arrayBuffer: async () => arrayBuffer,
-      };
-    };
-
-    (cachedFetch as { __cached?: boolean }).__cached = true;
-
-    // Patch the module's default export
-    if (nodeFetchModule.default) {
-      nodeFetchModule.default = cachedFetch;
-    }
-    // Also patch require.cache
-    const cacheKey = require.resolve("node-fetch");
-    if (require.cache[cacheKey]) {
-      require.cache[cacheKey]!.exports = cachedFetch;
-      require.cache[cacheKey]!.exports.default = cachedFetch;
-    }
-  }
-
-  /**
-   * Lazy-load embedding model with local caching
+   * Lazy-load embedding model
+   * Note: web-ai-node handles its own model caching
    */
   async getModel(): Promise<unknown> {
     if (this.model) return this.model;
@@ -197,9 +115,6 @@ export class KnowledgeService {
     this.ensureDir();
     console.error("[knowledge] Loading embedding model...");
     const startTime = Date.now();
-
-    // Install caching before importing the library
-    this.installFetchCache();
 
     const { TextModel } = await import("@visheratin/web-ai-node/text");
     const modelResult = await TextModel.create("gtr-t5-quant");
