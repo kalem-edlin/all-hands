@@ -1,0 +1,11 @@
+name: e2e-test-planner
+flow: E2E_TEST_PLAN_BUILDING.md
+prompt_scoped: false
+message_template: |
+  Planning folder: ${PLANNING_FOLDER}
+  Spec path: ${SPEC_PATH}
+  Output: ${OUTPUT_PATH}
+template_vars:
+  - PLANNING_FOLDER
+  - SPEC_PATH
+  - OUTPUT_PATH
