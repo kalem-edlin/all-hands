@@ -1,70 +1,68 @@
-NOTES:
-* This is close to where it needs to be, but it needs to be refined to follow the FLOW rules. 
-* This MUST be able to deduce if the codebase is brownfield and requires a full intensity documentation effort, or if the documentation has good covereage and therefor only requires documentation of the new feature / changes. 
-* Im pretty sure there are already two flows to assist with this in this doc, but they need to be obvious as to what practice should be used / works from teh START of this document. 
-
 <goal>
-Analyze codebase, design doc structure, delegate writers, finalize with READMEs. View code as products, not paths.
+Analyze codebase, design documentation structure, delegate writers, and finalize with READMEs. Per **Context is Precious**, view code as products with purpose, not paths to document.
 </goal>
 
-## Naming
-- Name by PURPOSE: "all-hands-cli", "content-engine" ✓
-- NOT by path: "src-lib", "packages-api" ✗
+<constraints>
+- MUST name docs by PURPOSE ("all-hands-cli") NOT path ("src-lib")
+- MUST create directories BEFORE delegating to writers
+- MUST determine mode (Init vs Adjust) before any documentation work
+- NEVER document excluded paths (node_modules, dist, build, .next, .expo, .git, *.generated.ts, vendor)
+- NEVER assign more than 15 writer agents per run
+</constraints>
 
 ## Mode Decision
-├─ No existing docs? → Init Mode
-└─ Updating existing? → Adjust Mode (use `ah git diff-base-files` to scope)
+
+Determine documentation intensity before proceeding:
+
+```
+├─ Run `ls docs/` - no docs directory, empty, or lacking based on top level scan of codebase? → Init Mode (brownfield)
+└─ Existing docs with coverage? → Adjust Mode (incremental)
+```
+
+If Init Mode - read **Init Mode** section below
+If Adjust Mode - skip to **Adjust Mode** section below
 
 ---
 
 ## Init Mode
 
-### 1. Detect Workspaces
-```bash
-ls pnpm-workspace.yaml lerna.json package.json 2>/dev/null
-cat pnpm-workspace.yaml  # parse packages: array
-```
-- Each workspace member = candidate main domain
+Full documentation effort for brownfield codebases.
 
-### 2. Analyze Each Domain
-```bash
-ah docs tree <domain_path> --depth 3
-ah docs complexity <domain_path>
-ah knowledge docs search "<domain>" --metadata-only
-```
+### Detect Workspaces
+- Run `ls pnpm-workspace.yaml lerna.json package.json 2>/dev/null`
+- Parse workspace members as candidate main domains
 
-### 3. Classify
+### Analyze Each Domain
+- Run `ah docs tree <domain_path> --depth 3`
+- Run `ah docs complexity <domain_path>`
+- Run `ah knowledge docs search "<domain>" --metadata-only`
+
+### Classify Complexity
+
 | Type | Lines | Areas | Agents | Target Files |
 |------|-------|-------|--------|--------------|
 | Simple | <2k | few | 1 | 3-10 |
 | Medium | 2-10k | 2-4 | 1-2 | 10-30 |
 | Complex | >10k | 5+ | 2-3 | 30-60 |
 
-### 4. Identify Subdomains
-Candidate if:
+### Identify Subdomains
+Candidate subdomain if:
 - 5+ source files in directory
 - High complexity score
 - Distinct responsibility
 
-### 5. Flag Critical Tech
-Check `package.json`. Flag if:
-- Imported in 10+ files
-- Defines architecture (routing, state, rendering)
-- Platform-specific (native, hardware)
-- Non-obvious choice needing explanation
+### Flag Critical Tech
+Check `package.json`. Flag if imported in 10+ files, defines architecture, is platform-specific, or is non-obvious choice.
 
-### 6. Create Structure
-```bash
-mkdir -p docs/<domain>/<subdomain>
-```
-- MUST create dirs BEFORE delegating
+### Create Structure
+- Run `mkdir -p docs/<domain>/<subdomain>`
 
-### 7. Delegate Writers
+### Delegate Writers
 - Spawn subtask per assignment
-- Tell each subtask to read `.allhands/flows/DOCUMENTATION_WRITING.md`
-- Max 15 agents per run - track `uncovered_domains` if exceeded
+- Instruct each to read `.allhands/flows/shared/DOCUMENTATION_WRITING.md`
+- Track `uncovered_domains` if exceeding 15 agents
 
-Assignment to provide:
+Provide each writer:
 ```yaml
 domain: "<product-name>"
 doc_directory: "docs/<domain>/<subdomain>/"
@@ -74,45 +72,34 @@ target_file_count: 3-6
 notes: "<what knowledge to capture>"
 ```
 
-### 8. Wait & Finalize
+### Finalize
 After all writers complete:
-1. Read all produced docs
-2. Write README.md per main domain:
-   - Overview (2-3 sentences)
-   - Mermaid diagram of subdomain relationships
-   - Navigation table linking key docs
-   - Entry points for readers
+- Read all produced docs
+- Write README.md per main domain with overview, mermaid diagram, navigation table, and entry points
 
 ---
 
 ## Adjust Mode
 
-### 1. Scope Changes
-```bash
-ah git diff-base-files
-ah docs tree <affected-path> --depth 4
-ah docs complexity <affected-path>
-```
+Incremental documentation for changes only.
 
-### 2. Check Existing Coverage
-```bash
-ah knowledge docs search "<changed-feature>" --metadata-only
-```
+### Scope Changes
+- Run `ah git diff-base-files` to identify affected files
+- Run `ah docs tree <affected-path> --depth 4`
+- Run `ah docs complexity <affected-path>`
 
-### 3. Delegate
-- Same as Init but only for affected areas
+### Check Existing Coverage
+- Run `ah knowledge docs search "<changed-feature>" --metadata-only`
+
+### Delegate
+- Follow Init Mode delegation but only for affected areas
 
 ---
 
-## Exclusions
-| Never Document | Do Document |
-|----------------|-------------|
-| `node_modules/`, `dist/`, `build/` | `.github/workflows/` |
-| `.next/`, `.expo/`, `.git/` | Root config files |
-| `*.generated.ts`, `*.d.ts`, `vendor/` | DX artifacts |
+## Allowed vs Excluded
 
-## Constraints
-- Every source path MUST appear in an assignment
-- Writers produce 3-10 files per subdomain (not monoliths)
-- Only taxonomist writes README.md
-- Never assign excluded paths
+| Document | Never Document |
+|----------|----------------|
+| `.github/workflows/` | `node_modules/`, `dist/`, `build/` |
+| Root config files | `.next/`, `.expo/`, `.git/` |
+| DX artifacts | `*.generated.ts`, `*.d.ts`, `vendor/` |

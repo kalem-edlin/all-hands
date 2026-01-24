@@ -1,25 +1,38 @@
 <goal>
-Execute prompt tasks with full context, validate thoroughly, and document your work.
+Execute prompt tasks with full context, validate thoroughly, and document your work. Per **Prompt Files as Units of Work**, the prompt IS the task - complete it as a self-contained unit.
 </goal>
 
+<constraints>
+- MUST read prompt file and alignment doc before implementation
+- MUST pass validation before committing
+- MUST append summary to prompt file on completion
+- NEVER commit without passing validation review
+</constraints>
+
 ## Context Gathering
-- Read the prompt file which includes your tasks and acceptance criteria
-  - If FAILURE SUMMARY sections exist - adapt to its redirections / learnings
+
+- Read the prompt file for tasks and acceptance criteria
+  - If FAILURE SUMMARY sections exist, adapt to their redirections / learnings
 - Read the alignment doc for milestone context, prior prompt summaries, and key decisions
-  - Read any relevant prompt files (likely your dependencies)
-- Use `ah knowledge search <query>` for codebase information as needed
+  - Read any relevant dependency prompt files
+- Run `ah knowledge search <query>` for codebase information as needed
 
 ## Implementation
+
 - Follow tasks and break them down into Todos if necessary
-- After implementation, use validation tooling to acquire test data / information that meets acceptance criteria convincingly
+- After implementation, use validation tooling to acquire test data meeting acceptance criteria
 
 ## Validation
-- Spin up a sub task to read `.allhands/flows/PROMPT_VALIDATION_REVIEW.md` and follow its instructions
-  - Act on feedback until it passes
-  - If at prompt attempt > 2 with real limitations, communicate compromises to adjust perspective - it may still reject
+
+- Spawn subtask to read `.allhands/flows/shared/PROMPT_VALIDATION_REVIEW.md` and follow its instructions
+- Act on feedback until it passes
+- If at prompt attempt > 2 with real limitations, communicate compromises - reviewer may still reject
 
 ## Completion
-- Once passed validation, commit your work
-- Run `ah schema prompt` for the success/failure summary formats and append your entry to the prompt file and mark the file as "done" in the front matter.
-- Rename prompt file to include "-DONE" at the end of the filename.
+
+- Commit your work
+- Run `ah schema prompt` for summary format
+- Append success summary to prompt file
+- Set frontmatter `status: done`
+- Rename prompt file to include `-DONE` suffix
 - Stop

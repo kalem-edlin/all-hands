@@ -1,58 +1,104 @@
-NOTES:
-* Reads:
-  * alignment docs
-  * spec doc
-  * all prompt files
-  * commit message history
-* Focuses on:
-  * Design decisions given limitations, constraints, and codebase realities
-  * Recorded user decisions + user rejections + user frustrations
-  * Failed prompts and why they failed (multiple times)
-  * Patch prompts and why they were invoked by the user - was it conflicting with their expecations (bad ideation -> plan), or bug fixing / errors (bad prompt creation / execution)
-  * Emergent refinement prompts and why they were included / excluded give great signals into user intent / goals knowledge that can persist along side changes from this milestone.
-  * Review prompts and how many were needed (bad prompt creation / prompt creation review)
-* **Skills/Validation Tooling Feedback Analysis**:
-  * For each user-patch prompt, check its `patches_prompts` field
-  * Cross-reference those original prompts' `skills` and `validation_suites` frontmatter
-  * Identify which tooling files may be problematic (skills that led to bad guidance, validation suites that missed issues)
-  * Fix problematic tooling files directly when patterns are clear
-  * Document findings in compounding_summary.md
-* Harness Maintainance application of learnings (compounding!!):
-  * Some kind of Decision Tree:
-    * Were initial user ideas perpetuated, or were they forgotten? -> MILESTONE_PLANNING
-    * Did it take more prompts than expected to solve the ideation? -> PROMPT_TASK_CURATION
-  * Read `.allhands/flows/HARNESS_FUNCTIONALITY.md` to understand the harness and improving /tuning its funcitonality  execute `.allhands/flows/HARNESS_FLOWS.md` and  with all of your harness efficacy deductions from this milestone's resources being sure to ASK USER QUESTION before you make changes to the hanress itself - making sure to make adequate updates to the .allhands/flows/HARNESS_FUNCTIONALITY.md file itself upon core changes
-  * This shouldactually be like mini `./ideation_session.md` but for the harness itself where the initial ideas come from the refelctions done above - AND allowing the user to contribute some ideas / paintpoints they themselve realised throughout the harness use for this active branch via  interview style ideation of further hanress improvements than already proposed initially. Ensure questinos / concerns are asked with referneces / in regards to the `.allhands/principles.md` document to ensure everything aligns with the goals of the harness.
-* There will be a rule to write memories (things worth remembering as self contained brief descirptions of learnings / knowledge (1 - 3 sentences)).
-  * This is a temporary solution to memories (1 way - writing only for now, until we find a better way to store / retrieve them as needed). We are doing this now so as not to lose any valuable infromation regarding these potential memories 
-  * Write to the `.allhands/memories.md` file:
-    * A single line per memory:
-    * [Memory Name] | [Harness Domain: "planning", "validation", "implementation" or "harness-tooling", "ideation"] | [Source: "user-steering", "agent-infered"] [Memory Description (1 - 3 sentences)]
-* Must cleanup the current milestone spec file with all the relevant learnings from implementation / user planning / discussion, by ammending spec expecataions, documenting what changed based on necesssary and overall using it as a historical document of decisions made and epxecations outlined for a specific feature!:
-* **Compounding Summary Output**: At end of compounding, write `.planning/<milestone>/compounding_summary.md`:
-  ```markdown
-  # Compounding Summary
+<goal>
+Extract learnings from completed milestones to improve the harness, skills, and validation tooling. Per **Knowledge Compounding**, everything feeds forward - decisions, pivots, limitations, and realizations become persistent improvements.
+</goal>
 
-  ## Detected Issues
-  - [List patterns detected from user patches, failed prompts, user feedback]
+<constraints>
+- MUST ask the engineer before modifying harness files
+- MUST update `.allhands/flows/shared/HARNESS_FUNCTIONALITY.md` when making structural harness changes
+- MUST write compounding summary to `.planning/<milestone>/compounding_summary.md`
+- NEVER modify harness without first principle justification
+</constraints>
 
-  ## Tooling Fixes
-  - [Skill file changes made]
-  - [Validation suite changes made]
+## Context Gathering
 
-  ## Flow Updates
-  - [Any flow file adjustments]
+Read these milestone artifacts to understand what happened:
+- Read the alignment doc at `.planning/<milestone>/alignment.md`
+- Read the spec doc at `.planning/<milestone>/spec.md`
+- Read all prompt files in `.planning/<milestone>/prompts/`
+- Run `git log --oneline` to review commit history for this branch
 
-  ## Memories Added
-  - [References to new entries in .allhands/memories.md]
+## Signal Analysis
 
-  ## User Feedback Addressed
-  - [Specific user concerns that were resolved through compounding]
-  ```
-* This should be fairly idempotent. IE if the compounding is run again straght agter it was already run and the HARNESS MAINTAINED FILES have not changed, or the codebase  implementation has not changed either, then comopunding should have nothing to do. Not sure how to maintain this.
-* other misc notes:
-  - [ ] Compounding
-      - [ ] All contain user decisions, Agentic compromise, limitations and key learnings for future iteration to remember. For now place the MEMORY ASSETS in a simple file, line separated
-      - [ ] The rest get engrained into docs + completed spec file user intent touch ups / (reduction of code to file references? Is this worth it?)
-      - [ ] Also obviously running an audit on the harness itself with the perspective of these learnings + painpoints / extra prompt steps the user had to take to debug, adjust, and have refined for their workflow experience - all of this SHOUOD be tracked
+Identify patterns that indicate harness improvement opportunities:
 
+**Prompt Signals**:
+- Failed prompts (multiple attempts) → execution or planning issues
+- Patch prompts → check `patches_prompts` field to find root cause
+- Emergent refinement inclusions/exclusions → engineer intent signals
+- Review prompt count → planning or review quality issues
+
+**Tooling Signals**:
+- Cross-reference patch prompts with their `skills` and `validation_suites` frontmatter
+- Identify skills that led to bad guidance
+- Identify validation suites that missed issues
+
+**Decision Signals**:
+- Design decisions made given limitations
+- Engineer rejections and frustrations
+- Compromises between agentic suggestions and engineer preferences
+
+## Harness Improvement Decision Tree
+
+Per **Frontier Models are Capable**, apply learnings to improve the harness:
+
+| Signal Pattern | Improvement Target |
+|----------------|-------------------|
+| Initial ideas forgotten during implementation | `MILESTONE_PLANNING.md` |
+| More prompts than expected for ideation | `PROMPT_TASKS_CURATION.md` |
+| Skills led to bad guidance | Fix skill files directly |
+| Validation missed issues | Fix validation suite files |
+| Structural harness issues | Read `.allhands/flows/shared/HARNESS_FUNCTIONALITY.md` |
+
+Before modifying any harness file:
+- Read `.allhands/flows/shared/HARNESS_FLOWS.md` for flow writing rules
+- Cite first principle justification for changes
+- Ask the engineer for approval
+
+## Harness Ideation Interview
+
+Conduct a mini ideation session for harness improvements:
+- Present detected issues and proposed fixes
+- Ask the engineer about painpoints they experienced
+- Reference `.allhands/principles.md` to ensure alignment
+- Validate that proposed changes serve first principles
+
+## Memory Extraction
+
+Per **Knowledge Compounding**, capture learnings as memories:
+- Write to `.allhands/memories.md`
+- Format: `[Name] | [Domain] | [Source] | [Description]`
+  - Domains: `planning`, `validation`, `implementation`, `harness-tooling`, `ideation`
+  - Sources: `user-steering`, `agent-inferred`
+  - Description: 1-3 sentences of self-contained learning
+
+## Spec Finalization
+
+Update the milestone spec as a historical record:
+- Amend expectations based on implementation reality
+- Document decisions and their rationale
+- Capture what changed and why
+
+## Completion
+
+Write `.planning/<milestone>/compounding_summary.md`:
+```markdown
+# Compounding Summary
+
+## Detected Issues
+- [Patterns from patches, failures, feedback]
+
+## Tooling Fixes
+- [Skill file changes]
+- [Validation suite changes]
+
+## Flow Updates
+- [Flow file adjustments]
+
+## Memories Added
+- [References to .allhands/memories.md entries]
+
+## Engineer Feedback Addressed
+- [Specific concerns resolved]
+```
+
+This flow is idempotent - if run again without new changes, detect no work needed and stop.

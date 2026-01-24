@@ -1,13 +1,70 @@
-NOTES:
-* inputs: 
-  * Alignment doc path
-  * Spec doc path
-  * A specific domain to focus on of the implementation (eg react-native/expo, trpc/serverless, database/drizzle/supabase, web/tanstack/nextjs, dev tooling, CICD etc)
-* outputs: A crtitical review of whether the implementation is following best practices for the domain.
-* Uses git (diff to base) to read the relevant implementation files for that domain + identify the relevant prompts from the alignment doc (and will read those prompts)
-* This reviewer will be spun up per domain touched by the implementation.
-* It will extract relevant skills to the implementation using a sub tasks running `.allhands/flows/shared/SKILL_EXTRACTION.md`
-* IT will extract relevant knowledge from the codebase using `ah knowledge docs search "<query>"`
-* It will combine these learnings to ensure that this implemenation is following best practices for the domain that the codebase and skills have established.
-* Returns the review results, and what needs to be improved / changed to better follow best practices + a summary of exactly what implementation violates for that domain (this infomration will be picked up by the compounding agent to encode back into the harness based on what the user wants to honor about this review - therfor preventing this from happneing again, OR modifying the skills / documentation to be more clear / include the correct information). Ordered by priority for fixing.
-  
+<goal>
+Review implementation for domain best practices compliance. Per **Knowledge Compounding**, findings feed back to improve skills and documentation.
+</goal>
+
+<inputs>
+- Alignment doc path
+- Spec doc path
+- Specific domain to focus on (e.g., react-native/expo, trpc/serverless, database/drizzle/supabase, web/tanstack/nextjs, dev tooling, CICD)
+</inputs>
+
+<outputs>
+- Critical review of best practices compliance
+- Improvements needed, ordered by priority
+- Summary of violations (for compounding to encode back into harness)
+</outputs>
+
+<constraints>
+- MUST extract skills using SKILL_EXTRACTION.md subtask
+- MUST search codebase knowledge for established patterns
+- MUST order issues by priority for fixing
+</constraints>
+
+## Context Gathering
+
+- Read the alignment doc for prompt summaries
+- Run `ah git diff-base-files` to identify domain-relevant implementation files
+- Identify and read prompts that touched this domain
+
+## Best Practices Extraction
+
+Spawn subtask to read `.allhands/flows/shared/SKILL_EXTRACTION.md`:
+- Provide the domain files as input
+- Extract patterns, preferences, and pitfalls for this domain
+
+Search codebase knowledge:
+- Run `ah knowledge docs search "<domain> best practices"` for established patterns
+- Run `ah knowledge docs search "<domain> architecture"` for design decisions
+
+## Review Process
+
+Compare implementation against extracted best practices:
+
+| Check | Question |
+|-------|----------|
+| Patterns | Does implementation follow established code patterns? |
+| Preferences | Are library/approach preferences honored? |
+| Pitfalls | Does implementation avoid known pitfalls? |
+| Consistency | Is style consistent with codebase conventions? |
+
+## Output Format
+
+Return findings ordered by priority:
+
+```
+## Domain: <domain-name>
+
+### P1 (Blocking)
+- [Issue]: [What violates] -> [How to fix]
+
+### P2 (Important)
+- [Issue]: [What violates] -> [How to fix]
+
+### P3 (Minor)
+- [Issue]: [What violates] -> [How to fix]
+
+## Compounding Notes
+- [What should be encoded into skills/docs to prevent recurrence]
+```
+
+Compounding agent will use this to update harness based on engineer decisions.

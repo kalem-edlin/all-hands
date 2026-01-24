@@ -1,22 +1,37 @@
 <goal>
-Pick the right research tool for the need. All return JSON - parse results accordingly. 
+Pick the right research tool for the need. Per **Context is Precious**, use targeted tools to gather external knowledge efficiently.
 </goal>
 
-- Use multiple tools in combination when unsure about the best tools, and remember which gives the best results for your use case.
+<constraints>
+- MUST parse JSON results from all research tools
+- MUST use `gh` CLI for GitHub content, not research tools
+- NEVER use a single tool when combination would give better results
+</constraints>
 
 ## Decision Tree
-├─ Broad synthesis, deep research / solution discovery with citations but not concerned / worried about who it is currently working well for? → `ah perplexity research "<query>"`
-├─ Same as perplexity but with X/Twitter community insights challenging the findings? → `ah perplexity research "<query>" --grok-challenge`
-├─ Developer opinions, community sentiment, alternatives? → `ah grok search "<query>"`
+
+```
+├─ Broad synthesis, deep research with citations? → `ah perplexity research "<query>"`
+├─ Same + X/Twitter community insights? → `ah perplexity research "<query>" --grok-challenge`
+├─ Developer opinions, sentiment, alternatives? → `ah grok search "<query>"`
 ├─ Find sources, discover URLs? → `ah tavily search "<query>"`
 ├─ Full content from known URL? → `ah tavily extract "<url1>" "<url2>"`
-└─ GitHub content? → Use `gh` CLI directly, not research tools
+└─ GitHub content? → Use `gh` CLI directly
+```
 
 ## When to Use What
+
 | Need | Tool | Why |
 |------|------|-----|
-| "Find all of the best ways to solve X?" | perplexity | Synthesizes multiple sources |
-| "Find all of the best ways to solve X that works for Agentic Developers?" | perplexity --grok-challenge | Synthesizes multiple sources and challenges the findings with X/Twitter community insights |
-| "What do Agentic Developers think of X?" | grok | Real-time social signals |
-| "Find articles about X that are relevant to this query" | tavily search | Returns URLs to explore |
+| "Best ways to solve X?" | perplexity | Synthesizes multiple sources |
+| "Best ways to solve X for agentic developers?" | perplexity --grok-challenge | Synthesis + X/Twitter community challenge |
+| "What do agentic developers think of X?" | grok | Real-time social signals |
+| "Find articles about X" | tavily search | Returns URLs to explore |
 | "Get content from this doc" | tavily extract | Full page content |
+
+## Combination Strategy
+
+When unsure which tool is best:
+- Use multiple tools in parallel
+- Compare result quality for your use case
+- Remember which gives best results for similar future queries

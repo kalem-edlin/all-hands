@@ -1,83 +1,71 @@
 <goal>
-Find and extract domain expertise from skills to embed in prompt instructions. This flow teaches agents how to discover relevant skills and integrate their knowledge into task guidance.
+Find and extract domain expertise from skills to embed in prompt instructions. Per **Knowledge Compounding**, skills are "how to do it right" - expertise that compounds across prompts.
 </goal>
 
 <inputs>
 - Files/domains involved in the implementation task
-- The nature of the changes (UI, native code, deployment, etc.)
+- Nature of the changes (UI, native code, deployment, etc.)
 </inputs>
 
-<motivations>
-- Skills are "how to do it right" - domain expertise that should guide implementation
-- Knowledge should be embedded in prompt instructions, not discovered during execution
-- Executors already have enough cognitive load; baked-in guidance is more effective
-- Fallback: Executors can still read skill files if stuck (referenced in frontmatter)
-</motivations>
+<outputs>
+- Extracted knowledge distilled for prompt embedding
+- Sources consulted (skill file paths)
+</outputs>
+
+<constraints>
+- MUST run `ah skills list` to discover available skills
+- MUST match skills via both glob patterns AND description inference
+- MUST extract task-relevant knowledge, not copy entire skill files
+- MUST list sources consulted in output
+</constraints>
 
 ## Step 1: Discover Available Skills
 
-Run the list command to see all skills:
-```bash
-ah skills list
-```
-
-This returns JSON with each skill's:
-- `name`: Skill identifier
-- `description`: Use case (when/why to use)
-- `globs`: File patterns it applies to
-- `file`: Path to the full skill documentation
+- Run `ah skills list`
+- Returns JSON with: `name`, `description`, `globs`, `file` path
 
 ## Step 2: Identify Relevant Skills
 
-Match skills to your task using two approaches:
+Match skills using two approaches:
 
-**A. Glob pattern matching** (programmatic hint):
+**Glob pattern matching** (programmatic):
 - Compare files you're touching against each skill's `globs`
 - Skills with matching patterns are likely relevant
 
-**B. Description inference** (semantic understanding):
+**Description inference** (semantic):
 - Read skill descriptions
-- Match against the nature of your task (UI changes, deployment, native modules, etc.)
+- Match against task nature (UI, deployment, native modules, etc.)
 
-Select all skills that apply to your implementation scope.
+Select all skills that apply to implementation scope.
 
 ## Step 3: Read Skill Documentation
 
 For each relevant skill, read the full file:
-```bash
-# Path from the list output
-cat .allhands/skills/<skill-name>/SKILL.md
-```
+- Run `cat .allhands/skills/<skill-name>/SKILL.md`
 
 Extract:
 - **Key patterns**: Code patterns, library preferences, common pitfalls
 - **Best practices**: Guidelines specific to this domain
-- **References**: Sub-documents within the skill folder for deeper context
+- **References**: Sub-documents within the skill folder
 
 ## Step 4: Extract Knowledge for Prompt
 
 Synthesize skill content into actionable prompt guidance:
-
-1. **Distill key instructions** - Extract the most important patterns and rules
-2. **Include specific examples** - Use code snippets from skills where relevant
-3. **Reference sources** - Note which skill files informed the guidance
-4. **Avoid duplication** - Don't copy entire skill files; extract what's task-relevant
+- Distill key instructions
+- Include specific examples where relevant
+- Reference sources
+- Avoid duplication - extract what's task-relevant
 
 ## Step 5: Output with Sources
 
-When completing this flow, output:
+Provide:
 
-1. **Extracted knowledge**: The distilled guidance to embed in the prompt
-2. **Sources consulted**: List of skill file paths that informed the extraction
-
-Example output:
 ```
 ## Skill-Derived Guidance
 
 ### From building-expo-ui:
 - Use `<Link.Preview>` for context menus
 - Prefer `contentInsetAdjustmentBehavior="automatic"` over SafeAreaView
-- Use inline styles, not StyleSheet.create
 
 ### From react-native-best-practices:
 - Profile with React DevTools before optimizing
@@ -90,7 +78,7 @@ Example output:
 
 ## For Prompt Curation
 
-When using this flow during prompt creation (via PROMPT_TASKS_CURATION):
-- Add matched skill file paths to the prompt's `skills` frontmatter
-- Embed extracted guidance directly in the prompt's Tasks section
-- This makes the domain expertise explicit and immediately available to executors
+When used via PROMPT_TASKS_CURATION:
+- Add skill file paths to prompt's `skills` frontmatter
+- Embed extracted guidance in prompt's Tasks section
+- Makes domain expertise explicit and immediately available to executors

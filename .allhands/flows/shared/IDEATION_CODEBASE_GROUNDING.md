@@ -1,17 +1,49 @@
 <goal>
-Ground the ideation in state-of-the-world codebase reality understanding what is implemented and also what is planned for implementation.
+Ground ideation in state-of-the-world codebase reality. Per **Ideation First**, understand both what is implemented AND what is planned for implementation to inform the ideation interview.
 </goal>
 
 <inputs>
-* A collection of seed information / queries that the ideation agent needs roadmap / codebase context for
+- Collection of seed information/queries from engineer's initial ideation prompt
 </inputs>
 
-* You will be provided with queries about the codebase and roadmap infered from the user's intial ideation prompt.
-* Use `ah knowledge roadmap search "<query>"` to get planned work that has yet to be implemented. This search will give you enough information to infer what the ideation will build on top of, and therefor depend on being complete. You must do any number of these queries in parallel first in order to overlay potential codebase implementation findings that would be invalid by the time these potential milestone dependencies are implemented.
-* Use `ah knowledge docs search "<query>"` to understand existing codebase patterns, implementation, solutions, and engineer reasoning. Extract what is most relevant to the ideation input question, use LSP to navigate any relevant referenced symbols FIRST and if LSP is not possible, read referenced files. Use these to cover multiple queries in parallel to cover sufficient ground of undertanding view your inputs
-
 <outputs>
-* Relevant codebase files and their most relevant details / use case / engineering knowledge that must be considered by the ideation agent to faciliate an ideation interview based on the initial ideation prompt.
-* A list of the milestone dependencies by name.
-* For each milestone dependency, key features they will implement that the new ideation agent must ASSUME EXISTS and if approaches as open decisions for further planning, what the ideation agent must ASSUME AT LEAST ONE OF EXISTS
+- Relevant codebase files with details, use cases, and engineering knowledge
+- List of milestone dependencies by name
+- Per dependency: key features to ASSUME EXISTS, or open decisions to ASSUME AT LEAST ONE OF EXISTS
 </outputs>
+
+<constraints>
+- MUST search roadmap first to identify planned dependencies
+- MUST overlay codebase findings against roadmap to account for future changes
+- MUST use LSP before file reads for referenced symbols
+</constraints>
+
+## Roadmap Search
+
+Run roadmap queries in parallel first:
+- Run `ah knowledge roadmap search "<query>"` for each input query
+- Identify planned work that ideation will build on top of
+- These become milestone dependencies
+
+## Codebase Search
+
+For existing implementation understanding:
+- Run `ah knowledge docs search "<query>"` for each input query (parallel)
+- Extract patterns, solutions, and engineer reasoning
+- Use LSP to navigate referenced symbols FIRST
+- Only read files if LSP not possible
+
+## Synthesis
+
+Combine roadmap and codebase findings:
+- Account for codebase patterns that may change when dependencies are implemented
+- Identify which current patterns will remain vs. be superseded
+
+## Output Formatting
+
+Provide:
+- Codebase files with most relevant details for ideation interview
+- Milestone dependencies by name
+- Per dependency:
+  - Features to ASSUME EXISTS (definite implementations)
+  - Features to ASSUME AT LEAST ONE OF EXISTS (open approach decisions)

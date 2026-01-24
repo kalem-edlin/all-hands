@@ -1,53 +1,47 @@
 <goal>
-Find and apply existing validation tooling to build strong acceptance criteria. This flow teaches agents how to discover relevant suites and integrate them into their validation approach.
+Find and apply existing validation tooling to build strong acceptance criteria. Per **Agentic Validation Tooling**, matching the right suite to the task ensures programmatic validation without engineer intervention.
 </goal>
 
 <inputs>
 - Files/domains involved in the implementation task
-- The nature of the changes (UI, backend, database, etc.)
+- Nature of the changes (UI, backend, database, etc.)
 </inputs>
 
-<motivations>
-- Validation tooling is only valuable when it's actually used
-- Agents must know what tools exist before they can validate effectively
-- Matching the right suite to the task ensures acceptance criteria are achievable
-- Gaps discovered here should feed back to CREATE_VALIDATION_TOOLING
-</motivations>
+<outputs>
+- Matched suite file paths for `validation_suites` frontmatter
+- Acceptance criteria derived from suite commands
+</outputs>
+
+<constraints>
+- MUST run `ah validation-tools list` to discover available suites
+- MUST match suites via both glob patterns AND description inference
+- MUST document gaps for CREATE_VALIDATION_TOOLING follow-up
+- MUST order validation progressively (compiles → unit tests → integration → E2E)
+</constraints>
 
 ## Step 1: Discover Available Suites
 
-Run the list command to see all validation tooling:
-```bash
-ah validation-tools list
-```
-
-This returns JSON with each suite's:
-- `name`: Suite identifier
-- `description`: Use case (when/why to use)
-- `globs`: File patterns it validates
-- `file`: Path to the full suite documentation
+- Run `ah validation-tools list`
+- Returns JSON with: `name`, `description`, `globs`, `file` path
 
 ## Step 2: Identify Relevant Suites
 
-Match suites to your task using two approaches:
+Match suites using two approaches:
 
-**A. Glob pattern matching** (programmatic hint):
+**Glob pattern matching** (programmatic):
 - Compare files you're touching against each suite's `globs`
 - Suites with matching patterns are likely relevant
 
-**B. Description inference** (semantic understanding):
+**Description inference** (semantic):
 - Read suite descriptions
-- Match against the nature of your task (UI changes, DB migrations, API endpoints, etc.)
+- Match against task nature (UI, DB migrations, API endpoints, etc.)
 
-Select all suites that apply to your implementation scope.
+Select all suites that apply to implementation scope.
 
 ## Step 3: Read Suite Documentation
 
-For each relevant suite, read the full file:
-```bash
-# Path from the list output
-cat .allhands/validation/<suite-name>.md
-```
+For each relevant suite:
+- Run `cat .allhands/validation/<suite-name>.md`
 
 Understand:
 - **Purpose**: What quality aspects it validates
@@ -57,13 +51,12 @@ Understand:
 
 ## Step 4: Integrate into Acceptance Criteria
 
-When writing or reviewing acceptance criteria:
+When writing acceptance criteria:
+- Reference specific commands from "Validation Commands" section
+- Define success conditions based on "Interpreting Results"
+- Order validation progressively
 
-1. **Reference specific commands** from the suite's "Validation Commands" section
-2. **Define success conditions** based on "Interpreting Results"
-3. **Order validation** progressively (compiles → unit tests → integration → E2E)
-
-Example acceptance criteria integration:
+Example:
 ```markdown
 ## Acceptance Criteria
 - [ ] Code compiles without errors
@@ -74,15 +67,15 @@ Example acceptance criteria integration:
 
 ## Step 5: Note Gaps
 
-If you identify validation needs with no matching suite:
-- Document the gap explicitly in your work
-- Flag for potential CREATE_VALIDATION_TOOLING follow-up
+If validation needs have no matching suite:
+- Document the gap explicitly
+- Flag for CREATE_VALIDATION_TOOLING follow-up
 - Proceed with available validation (compiles, type checks, basic tests)
 
 ## For Prompt Curation
 
-When using this flow during prompt creation (via PROMPT_TASKS_CURATION):
-- Add matched suite file paths to the prompt's `validation_suites` frontmatter
-- Use the `file` field from `ah validation-tools list` output (e.g., `.allhands/validation/typescript-typecheck.md`)
-- This makes the validation approach explicit and reviewable
-- Executors can read the referenced suite files directly
+When used via PROMPT_TASKS_CURATION:
+- Add suite file paths to prompt's `validation_suites` frontmatter
+- Use the `file` field from list output (e.g., `.allhands/validation/typescript-typecheck.md`)
+- Makes validation approach explicit and reviewable
+- Executors can read referenced suite files directly

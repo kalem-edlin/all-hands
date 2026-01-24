@@ -1,11 +1,76 @@
-NOTES:
-* Inputs: alginment doc path, prompts file directory
-* reads into the prompts that were specifically emergent refinement prompts
-* Breaks down each by their hyopthesis, their approach to solving the outcome and their effectiveness in doing so by focusing on their validation results and hwo they proved their contributions pushed towards the goal of the alignment doc. 
-* Will help with the rules / ccriteria for a good emergent refinement when compared to the rest of the emergent refinements
-* Gives holistic perspective on which should be kept, which should be improved and what can be done to improve them / why they arent "should be kept" and what itll take to get them there, and which had hyopthesis that do not have enough potential to support the goal in a positive way
-* Prsent these findings to the user. Allow them to decide which existing emergent refinement propts should be changed based on the suggestions of the agent / any custom suggests by the user as user-patch prompts. The user can also decide to eliminate these prompt tasks, in which this flow will also create user-patch prompts to revert / undo the changes brought about by the emergent refinement prompt.
-* This skill would have otpimally idetnified all of the files change via the incldued git hashes of each prompt in order to use these as file references and change impelmentation steps for improvements / elimination user patch prompts
-* Will yuse the `.allhands/flows/shared/PROMPT_TASKS_CURATION.md` file as a guide to create user-patch prompts to make these extra work units.
-* esnures that user deicsions and rationale as to the removal / adjustments of these emergent refinement prompts are documented in the alignment doc and the prompts files themselves.
-        
+<goal>
+Analyze emergent refinement prompts to determine which should be kept, improved, or eliminated. Per **Quality Engineering**, present options to the engineer for variant selection.
+</goal>
+
+<inputs>
+- Alignment doc path
+- Prompts file directory
+</inputs>
+
+<outputs>
+- User-patch prompts for improvements/eliminations
+- Updated alignment doc with engineer decisions
+</outputs>
+
+<constraints>
+- MUST analyze all prompts with `type: emergent` frontmatter
+- MUST document engineer decisions in alignment doc and prompt files
+- MUST use git hashes from prompts to identify file changes for reversion
+</constraints>
+
+## Context Gathering
+
+- Read the alignment doc for milestone goal and context
+- Read all prompts in the directory with `type: emergent` frontmatter
+- Extract git hashes from each prompt to identify affected files
+
+## Prompt Analysis
+
+For each emergent refinement prompt, evaluate:
+
+| Criterion | Question |
+|-----------|----------|
+| Hypothesis | What did it propose to accomplish? |
+| Approach | How did it attempt to solve the outcome? |
+| Effectiveness | Did validation results prove goal contribution? |
+| Alignment | Does it push toward alignment doc goals? |
+
+## Classification
+
+Categorize each emergent prompt:
+
+| Category | Criteria | Action |
+|----------|----------|--------|
+| **Keep** | Strong hypothesis, effective, aligned | No action needed |
+| **Improve** | Good hypothesis, but execution gaps | Create improvement patch prompt |
+| **Eliminate** | Hypothesis doesn't support goal | Create reversion patch prompt |
+
+For "Improve" prompts, document:
+- Why they aren't "Keep" status
+- What changes would elevate them
+
+## Engineer Decision
+
+Present findings holistically:
+- Compare emergent refinements against each other
+- Highlight patterns of effective vs ineffective hypotheses
+- Offer recommendations per prompt
+
+Allow engineer to:
+- Accept suggestions as-is
+- Provide custom adjustments
+- Decide eliminations
+
+## Prompt Creation
+
+For accepted changes:
+- Read `.allhands/flows/shared/PROMPT_TASKS_CURATION.md` for guidance
+- Create `type: user-patch` prompts for improvements
+- Create `type: user-patch` prompts for eliminations (include reversion steps using git hash file references)
+
+## Decision Documentation
+
+Per **Knowledge Compounding**, document engineer decisions:
+- Add rationale to alignment doc
+- Amend individual prompt files with engineer steering
+- Capture why prompts were kept/improved/eliminated

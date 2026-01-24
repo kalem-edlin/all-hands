@@ -1,7 +1,52 @@
-NOTES:
-* Inputs: an unorganized list of review options from multiple comments / perspectices / areas of the codebase / implementation to address
-  * The path to the alignment doc if you are unware of its contents
-  * The prompt path file to see planned or completed implmatation summaires for you to add to your context as needed for deciding breakdown improtance / ranking
-* Deeply consider each presented todo from review feedback, understand how they relate to eachother - you should combin and may choose to elevate duplicate concerns as they prove urgency - udnerstand their imrpotance in the wider context / initiatives / desires of the user from the spec doc if you are familiar with its contents
-* PRsent the review options to the user ranked by important (P1, P2, P3) order by least imporant to most important in your summary test, then ask the user which ones they want to implement and which ones they dont want always allowing the user to explain why.
-* OUTPUTS: their choices, as what they choose not to do, should be added to the alignment doc SOMEWHERE? im not sure where in that schema we should track something like this, but a user opting out of certain review options for implementation is important to remember somehwere - look at schema files and identify where this could be tracked.
+<goal>
+Organize unstructured review feedback into ranked, actionable options for engineer decision. Per **Knowledge Compounding**, both accepted and declined items must be documented.
+</goal>
+
+<inputs>
+- Unorganized list of review options from multiple sources/perspectives
+- Alignment doc path (if unfamiliar with contents)
+- Prompt path file for planned/completed implementation summaries
+</inputs>
+
+<outputs>
+- Engineer's choices (accept/decline per item)
+- Updated alignment doc with declined items documented
+</outputs>
+
+<constraints>
+- MUST present options ranked P1, P2, P3 (most to least important)
+- MUST allow engineer to explain why they decline items
+- MUST document declined items in alignment doc
+</constraints>
+
+## Analysis
+
+For each review item:
+- Understand relationship to other items
+- Combine duplicates and elevate repeated concerns (proves urgency)
+- Consider importance in context of spec doc goals and engineer desires
+
+## Priority Ranking
+
+| Priority | Criteria |
+|----------|----------|
+| P1 | Blocking issues, security concerns, core functionality |
+| P2 | Important improvements, consistency issues, best practices |
+| P3 | Nice-to-haves, polish, minor optimizations |
+
+## Engineer Presentation
+
+Present ranked options:
+- Order from most important (P1) to least important (P3)
+- For each: describe the issue, explain importance, suggest implementation
+- Ask engineer which to accept and which to decline
+- Always allow engineer to explain their reasoning
+
+## Decision Documentation
+
+Run `ah schema alignment` to identify where to track declined items.
+
+Document in alignment doc:
+- Which items were accepted (will become prompts)
+- Which items were declined AND engineer's reasoning
+- Per **Knowledge Compounding**, this prevents future re-suggestion of rejected approaches

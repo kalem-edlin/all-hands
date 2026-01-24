@@ -1,13 +1,62 @@
-NOTES:
-* inputs: 
-  * a prompt file path
-  * Results from validation tooling and checks for veritication of implementation validity
-  * Validation methods used (inlcude validations-suite file paths)
-  * work done to account for and fix any previously failed validation attemps,.
-* Check the git diff of the currently uncommited work done
-* review the work done for any immeidealy noticable issues.
-* Be critical of the validation tooling. Was it built to validate actual product efficacy and stability, or was the validation curated to this prompt specifically to make it LOOK like it is working / passing testing? EG mock tests that do not actually test real implementation? 
-* If work done to account for any previous validation failures is inclued, take that into account. It doesnt mean an immediate pass, but you should be aware that you could be failing the caller just for the sake fo failing them and being overly strict. Be aware of this. The name of the game is speed to production, but limiting to the best of our ability bad validation methods that are redundant, so that your feedback compounds into the harness preventing missuse of validation and bad implementation styles in the future 
-* Outputs:
-  * A veridct of pass | fail
-  * What it will take for the implementation agent to pass? Issues with impementation that need resolving? Issues with the validation tooling that needs readjustment / more convincing results / less redundancy in testing methods / more testing validation to be convinginc? Give strong implementation examples.
+<goal>
+Review prompt implementation for validation pass/fail. Per **Agentic Validation Tooling**, be critical of validation quality while balancing speed to production.
+</goal>
+
+<inputs>
+- Prompt file path
+- Validation tooling results and checks
+- Validation methods used (include validation-suite file paths)
+- Work done to account for any previous validation failures
+</inputs>
+
+<outputs>
+- Verdict: PASS | FAIL
+- What it will take to pass (if fail): implementation issues, validation tooling adjustments, or additional convincing results needed
+</outputs>
+
+<constraints>
+- MUST check git diff of uncommitted work
+- MUST be critical of validation quality, not just results
+- MUST consider prior failure attempts when evaluating
+- NEVER fail for being overly strict when iteration shows genuine progress
+</constraints>
+
+## Review Process
+
+### Diff Analysis
+- Run `git diff` to review uncommitted work
+- Look for immediately noticeable issues
+
+### Validation Quality Critique
+
+Per **Knowledge Compounding**, bad validation methods should not persist:
+
+| Check | Red Flag |
+|-------|----------|
+| Mock tests | Do they test real implementation or just pass? |
+| Test scope | Is validation curated to this prompt to LOOK like it passes? |
+| Product efficacy | Does validation prove actual product stability? |
+| Redundancy | Are tests duplicative without adding confidence? |
+
+### Prior Failure Context
+
+If previous failures are documented:
+- Consider work done to address them
+- Recognize genuine progress vs. superficial fixes
+- Being overly strict wastes cycles - balance rigor with velocity
+
+## Verdict
+
+### PASS Criteria
+- Implementation meets acceptance criteria
+- Validation proves product efficacy (not just test passing)
+- No immediately noticeable issues in diff
+
+### FAIL Response
+Provide actionable feedback:
+- Implementation issues needing resolution
+- Validation tooling adjustments needed
+- Additional convincing results required
+- Strong implementation examples where helpful
+
+Per **Knowledge Compounding**, feedback should compound - prevent misuse of validation and bad implementation patterns in future prompts.

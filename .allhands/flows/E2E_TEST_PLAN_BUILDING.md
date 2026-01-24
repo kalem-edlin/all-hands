@@ -1,22 +1,51 @@
-NOTES:
-* this needs refinement. Also does this fit with the test plan logic of the harness implementation in src?
-
 <goal>
-Engineers need to be convinced of milestone implemention efficacy - and because they are excluded from prompt-by-prompt validation, one big E2E test plan is needed to ensure the milestone is working as expected.
+Build an E2E test plan that convinces the engineer of milestone implementation efficacy. Per **Agentic Validation Tooling**, because engineers are excluded from prompt-by-prompt validation, one comprehensive E2E test plan demonstrates the milestone works as expected.
 </goal>
 
-## Context Gathering
-- Read the alignment doc file which includes the top level goal + objectives and acceptance criteria as well as summaries of all prior prompt executions
-  - Run `ah git diff-base-files` or `ah git diff-base` if you want ot see ALL context (be carefuly with this incase of information overload)
-- Investigate the core validation tooling testing methods used to verify work done in prompts and the consequences on the actual E2E product flows / business logic
-- Deeply understand how to test the full suite of changes acrsos all implementation 
+<inputs>
+- Alignment doc path
+- E2E test plan output path
+</inputs>
 
-## E2E Test Plan Doc
-- Break down the most product focused, end user experience enlightening, and core E2E test flow that targets the areas of the product that may have regressed with the changes, or where the changes are focused, the will elicit edgecase behaviour within the context of the actual product's functionaltiy
-  - This is the core of the test plan and should be the most improtant part
-- Suppliment the main test flow / checklist with additional secondary valdiation methods that can show what the agents had seen during their implementation:
-  - These are not as important as the main test flow.
-  - These can be specific tests, specific args for CLI invocations, profiling tool usage etc - leveraging the main validation tools of the harness
-    - Run `ah validation-tools list` to see all available validation suites
-    - Read `.allhands/flows/shared/UTILIZE_VALIDATION_TOOLING.md` for guidance on selecting and applying suites to the E2E test plan
-- Create the E2E test plan at the E2E Test Plan Output Path
+<outputs>
+- E2E test plan document at specified output path
+</outputs>
+
+<constraints>
+- MUST prioritize product-focused, end-user experience tests over internal validation
+- MUST reference existing validation suites where applicable
+- NEVER create a test plan without reading the alignment doc first
+</constraints>
+
+## Context Gathering
+
+- Read the alignment doc for top-level goal, objectives, acceptance criteria, and prompt execution summaries
+- Run `ah git diff-base-files` to see changed files (use `ah git diff-base` for full diff if needed - careful with information overload)
+- Run `ah validation-tools list` to see available validation suites
+- Investigate validation tooling methods used in prompts and their consequences on E2E product flows
+
+## E2E Test Plan Structure
+
+### Primary Test Flow (Core)
+
+Design the most critical test flow:
+- Target end-user experience and product-focused scenarios
+- Cover areas where changes are focused
+- Include regression paths that may have been affected
+- Surface edge-case behavior within actual product functionality
+
+This is the most important section - the engineer's confidence depends on it.
+
+### Secondary Validation (Supplementary)
+
+Supplement the main flow with secondary methods from prompt-level validation:
+- Specific test invocations agents ran during implementation
+- CLI args for targeted validation
+- Profiling tool usage
+- Read `.allhands/flows/shared/UTILIZE_VALIDATION_TOOLING.md` for suite selection guidance
+
+These demonstrate what agents verified but are less critical than the primary flow.
+
+## Completion
+
+Write the E2E test plan to the E2E Test Plan Output Path.
