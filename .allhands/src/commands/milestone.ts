@@ -127,7 +127,8 @@ export function register(program: Command): void {
     .command('list')
     .description('List all milestones grouped by domain')
     .option('--json', 'Output as JSON')
-    .action(async (options: { json?: boolean }) => {
+    .option('--domains-only', 'Only list domain names')
+    .action(async (options: { json?: boolean; domainsOnly?: boolean }) => {
       const specs = loadAllSpecs();
 
       // Group by domain_name
@@ -138,6 +139,23 @@ export function register(program: Command): void {
           byDomain[domain] = [];
         }
         byDomain[domain].push(spec);
+      }
+
+      const domains = Object.keys(byDomain).sort();
+
+      if (options.domainsOnly) {
+        if (options.json) {
+          console.log(JSON.stringify({
+            success: true,
+            count: domains.length,
+            domains,
+          }, null, 2));
+        } else {
+          for (const domain of domains) {
+            console.log(domain);
+          }
+        }
+        return;
       }
 
       if (options.json) {
@@ -151,7 +169,6 @@ export function register(program: Command): void {
 
       console.log(`Found ${specs.length} milestone(s):\n`);
 
-      const domains = Object.keys(byDomain).sort();
       for (const domain of domains) {
         console.log(`## ${domain}`);
         const domainSpecs = byDomain[domain].sort((a, b) => a.name.localeCompare(b.name));
