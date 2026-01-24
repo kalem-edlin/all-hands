@@ -21,6 +21,7 @@ Transform the milestone spec into executable prompts with validated approaches. 
 - Read the alignment doc for existing prompts that may impact planning
 - Read the milestone spec doc (high-level engineer intent)
 - Read codebase files referenced in spec for initial grounding
+- Search documented solutions with `ah solutions search "<keywords>"` for relevant past learnings in this domain
 
 ## Deep Research
 
