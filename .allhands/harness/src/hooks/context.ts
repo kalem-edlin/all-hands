@@ -550,13 +550,28 @@ function importValidator(input: HookInput): void {
 async function editNotify(input: HookInput): Promise<void> {
   const projectDir = getProjectDir();
 
-  if (!isTldrInstalled() || !isTldrDaemonRunning(projectDir)) {
-    allowTool();
+  if (!isTldrInstalled()) {
+    return allowTool();
+  }
+
+  // Start daemon if not running (ensures dirty tracking works)
+  if (!isTldrDaemonRunning(projectDir)) {
+    try {
+      const { execSync } = await import('child_process');
+      execSync(`tldr daemon start --project "${projectDir}"`, {
+        stdio: 'ignore',
+        timeout: 5000,
+      });
+      // Give daemon a moment to start accepting connections
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    } catch {
+      // Best effort - continue even if daemon start fails
+    }
   }
 
   const filePath = (input.tool_input?.file_path as string) || '';
   if (!filePath) {
-    allowTool();
+    return allowTool();
   }
 
   // Fire and forget - don't block on notification

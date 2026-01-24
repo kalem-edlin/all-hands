@@ -10,6 +10,7 @@
 import { execSync, spawnSync } from 'child_process';
 import { existsSync } from 'fs';
 import { createHash } from 'crypto';
+import { join } from 'path';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -136,6 +137,101 @@ export function getTldrSocketPath(projectDir: string): string {
 export function isTldrDaemonRunning(projectDir: string): boolean {
   const socketPath = getTldrSocketPath(projectDir);
   return existsSync(socketPath);
+}
+
+/**
+ * Check if semantic index exists for a project.
+ */
+export function hasSemanticIndex(projectDir: string): boolean {
+  const indexPath = join(projectDir, '.tldr', 'cache', 'semantic', 'index.faiss');
+  return existsSync(indexPath);
+}
+
+/**
+ * Build semantic index for a project.
+ * This can take a while for large projects - runs synchronously with progress output.
+ * Returns true if index was built successfully.
+ */
+export function buildSemanticIndex(
+  projectDir: string,
+  lang: string = 'typescript'
+): boolean {
+  if (!isTldrInstalled()) {
+    return false;
+  }
+
+  try {
+    execSync(`tldr semantic index "${projectDir}" --lang ${lang}`, {
+      stdio: 'inherit', // Show progress to user
+      timeout: 300000, // 5 min timeout for large projects
+    });
+    // Track the branch that was indexed
+    trackIndexedBranch(projectDir);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Get the path to the branch tracking file.
+ */
+function getBranchTrackingPath(projectDir: string): string {
+  return join(projectDir, '.tldr', 'cache', 'semantic', 'indexed_branch');
+}
+
+/**
+ * Track which branch the semantic index was built for.
+ */
+export function trackIndexedBranch(projectDir: string): void {
+  try {
+    const branch = execSync('git rev-parse --abbrev-ref HEAD', {
+      cwd: projectDir,
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'ignore'],
+    }).trim();
+    const trackingPath = getBranchTrackingPath(projectDir);
+    const { writeFileSync, mkdirSync } = require('fs');
+    const { dirname } = require('path');
+    mkdirSync(dirname(trackingPath), { recursive: true });
+    writeFileSync(trackingPath, branch);
+  } catch {
+    // Ignore errors - best effort tracking
+  }
+}
+
+/**
+ * Get the branch the semantic index was last built for.
+ */
+export function getIndexedBranch(projectDir: string): string | null {
+  try {
+    const trackingPath = getBranchTrackingPath(projectDir);
+    const { readFileSync } = require('fs');
+    return readFileSync(trackingPath, 'utf-8').trim();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Check if semantic index needs rebuild due to branch switch.
+ */
+export function needsSemanticRebuild(projectDir: string): boolean {
+  if (!hasSemanticIndex(projectDir)) {
+    return true;
+  }
+
+  try {
+    const currentBranch = execSync('git rev-parse --abbrev-ref HEAD', {
+      cwd: projectDir,
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'ignore'],
+    }).trim();
+    const indexedBranch = getIndexedBranch(projectDir);
+    return indexedBranch !== null && indexedBranch !== currentBranch;
+  } catch {
+    return false;
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -295,7 +391,8 @@ export function diagnosticsDaemon(file: string, projectDir: string): Diagnostics
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Warm the TLDR index for a project (async, non-blocking).
+ * Warm the TLDR index for a project.
+ * Starts the daemon and builds semantic index if missing.
  * Returns true if warming was initiated, false if unavailable.
  */
 export async function warmIndex(projectDir: string): Promise<boolean> {
@@ -304,11 +401,20 @@ export async function warmIndex(projectDir: string): Promise<boolean> {
   }
 
   try {
-    // Start daemon/warm asynchronously
-    execSync(`tldr daemon start "${projectDir}" &`, {
+    // Start daemon in background
+    execSync(`tldr daemon start --project "${projectDir}" &`, {
       stdio: 'ignore',
       timeout: 2000,
     });
+
+    // Build semantic index if missing (run in background)
+    if (!hasSemanticIndex(projectDir)) {
+      execSync(`tldr semantic index "${projectDir}" --lang typescript &`, {
+        stdio: 'ignore',
+        timeout: 2000,
+      });
+    }
+
     return true;
   } catch {
     return false;
@@ -324,6 +430,7 @@ export async function notifyFileChanged(
 ): Promise<DaemonResponse | null> {
   return queryDaemon({ cmd: 'notify', file: filePath, event: 'change' }, projectDir);
 }
+
 
 /**
  * Initialize TLDR on milestone start.
