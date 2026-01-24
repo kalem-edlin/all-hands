@@ -8,6 +8,10 @@ Core harness integration for all agents. Per **Context is Precious**, this flow 
 - NEVER repeat instructions found in sub-flows; reference them instead
 </constraints>
 
+## Git Base Branch
+ 
+For git commands, you can reference the base branch with `$BASE_BRANCH`
+
 ## Semantic Search
 
 Per **Context is Precious**, use the semantic index before file exploration:

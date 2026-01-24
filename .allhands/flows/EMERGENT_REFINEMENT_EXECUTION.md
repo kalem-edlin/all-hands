@@ -15,7 +15,7 @@ Create a hypothesis of implementation that iteratively solves, improves, or conv
 - Verify hypothesis doesn't conflict with prior work:
   - Read relevant prompt files
   - Run `ah knowledge search <query>` for documented features
-  - Run `ah git diff-base-files` for recently changed files on this branch
+  - Check recently changed files on this branch
 
 ## Implementation
 

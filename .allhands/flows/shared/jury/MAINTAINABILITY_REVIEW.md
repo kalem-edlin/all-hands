@@ -22,7 +22,7 @@ Review implementation for maintainability, code simplicity, and agentic anti-pat
 
 ## Context Gathering
 
-- Run `ah git diff-base` to review all implementation changes
+- Review all implementation changes from base branch
 - Run `ah knowledge docs search "architecture"` for established patterns
 - Run `ah knowledge docs search "conventions"` for codebase standards
 

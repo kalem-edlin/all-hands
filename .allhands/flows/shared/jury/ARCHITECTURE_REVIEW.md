@@ -22,7 +22,7 @@ Review implementation for architectural compliance and system design quality. Pe
 
 ## Context Gathering
 
-- Run `ah git diff-base` to review all implementation changes
+- Review all implementation changes from base branch
 - Run `ah knowledge docs search "architecture"` for established patterns
 - Read alignment doc for architectural decisions made during planning
 
