@@ -116,7 +116,7 @@ async function handleAction(
   data?: Record<string, unknown>
 ): Promise<void> {
   // Check tmux for spawn actions
-  const spawnActions = ['ideation', 'coordinator', 'planner', 'review-jury', 'address-pr'];
+  const spawnActions = ['ideation', 'coordinator', 'planner', 'e2e-test-planner', 'review-jury', 'address-pr'];
   if (spawnActions.includes(action) && !isTmuxInstalled()) {
     tui.log('Error: tmux is required for agent spawning');
     return;
@@ -181,6 +181,29 @@ async function handleAction(
           promptScoped: false,
         }, branch);
         tui.log(`Spawned planner in ${result.sessionName}:${result.windowName}`);
+        updateRunningAgents(tui, branch);
+      } catch (e) {
+        tui.log(`Error: ${e instanceof Error ? e.message : String(e)}`);
+      }
+      break;
+    }
+
+    case 'e2e-test-planner': {
+      if (!status?.milestone) {
+        tui.log('Error: No milestone initialized. Use Switch Milestone first.');
+        return;
+      }
+      tui.log('Spawning E2E test planner...');
+      try {
+        const result = spawnAgent({
+          name: 'e2e-test-planner',
+          agentType: 'e2e-test-planner',
+          flowPath: join(flowsDir, 'E2E_TEST_PLAN_BUILDING.md'),
+          preamble: 'Build E2E test plan for the milestone.',
+          milestoneName: status.milestone,
+          promptScoped: false,
+        }, branch);
+        tui.log(`Spawned e2e-test-planner in ${result.sessionName}:${result.windowName}`);
         updateRunningAgents(tui, branch);
       } catch (e) {
         tui.log(`Error: ${e instanceof Error ? e.message : String(e)}`);

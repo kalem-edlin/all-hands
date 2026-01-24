@@ -2,10 +2,9 @@ name: emergent
 flow: EMERGENT_REFINEMENT.md
 prompt_scoped: true
 message_template: |
+  DO NOT ask for any user input for this task.
   Alignment doc: ${ALIGNMENT_PATH}
-  Status: ${STATUS_PATH}
-  Iteration: ${ITERATION}
+  Your prompt number: ${PROMPT_NUMBER}
 template_vars:
   - ALIGNMENT_PATH
-  - STATUS_PATH
-  - ITERATION
+  - PROMPT_NUMBER

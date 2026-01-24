@@ -13,7 +13,7 @@
 import { existsSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { getCurrentBranch, updateGreptileStatus, readStatus } from './planning.js';
-import { listWindows, SESSION_NAME, sessionExists, getCurrentSession } from './tmux.js';
+import { listWindows, SESSION_NAME, sessionExists, getCurrentSession, getSpawnedAgentRegistry, unregisterSpawnedAgent } from './tmux.js';
 import { pickNextPrompt, markPromptInProgress, type PromptFile } from './prompts.js';
 import { shutdownDaemon } from './mcp-client.js';
 import {
@@ -242,6 +242,9 @@ export class EventLoop {
 
   /**
    * Check for changes in agent windows
+   *
+   * Only tracks agents that were spawned by ALL HANDS (in the registry)
+   * and still exist in tmux. This prevents picking up unrelated tmux windows.
    */
   private async checkAgentWindows(): Promise<void> {
     try {
@@ -253,6 +256,10 @@ export class EventLoop {
         // Session gone - cleanup all agent daemons
         if (this.state.activeAgents.length > 0) {
           await this.cleanupAgentDaemons(this.state.activeAgents);
+          // Also clear the registry since session is gone
+          for (const name of this.state.activeAgents) {
+            unregisterSpawnedAgent(name);
+          }
           this.state.activeAgents = [];
           this.callbacks.onAgentsChange?.([]);
         }
@@ -260,9 +267,14 @@ export class EventLoop {
       }
 
       const windows = listWindows(sessionName);
-      // Filter out the TUI/hub window by index and name
+      const registry = getSpawnedAgentRegistry();
+
+      // Only include windows that:
+      // 1. Are in our spawned registry (were created by ALL HANDS)
+      // 2. Still exist in tmux
+      // 3. Are not the TUI/hub window
       const agentWindows = windows
-        .filter((w) => w.index > 0 && w.name !== 'hub')
+        .filter((w) => w.index > 0 && w.name !== 'hub' && registry.has(w.name))
         .map((w) => w.name);
 
       // Check if agents have changed
@@ -277,6 +289,10 @@ export class EventLoop {
 
         if (disappeared.length > 0) {
           await this.cleanupAgentDaemons(disappeared);
+          // Unregister disappeared agents
+          for (const name of disappeared) {
+            unregisterSpawnedAgent(name);
+          }
         }
 
         this.state.activeAgents = agentWindows;

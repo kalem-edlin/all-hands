@@ -1,5 +1,5 @@
-name: documentor
-flow: DOCUMENTATION.md
+name: compounder
+flow: COMPOUNDING.md
 prompt_scoped: false
 message_template: |
   Milestone spec path: ${SPEC_PATH}

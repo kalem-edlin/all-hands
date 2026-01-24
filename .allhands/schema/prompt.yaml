@@ -12,8 +12,22 @@ frontmatter:
     required: true
     description: "Human-readable task name"
 
+  type:
+    type: enum
+    required: true
+    values: [planned, emergent, user-patch, review-fix ]
+    default: planned
+    description: "Type of prompt (planned, emergent, user-patch, review-fix)"
+
+  planning_session:
+    type: integer
+    required: true
+    default: 1
+    description: "The planning session number (1, 2, etc.) this prompt was created in"
+    
   status:
     type: enum
+    required: true
     values: [pending, in_progress, done]
     default: pending
     description: "Current execution state"
@@ -35,6 +49,12 @@ frontmatter:
     default: []
     description: "Git commit hashes for work done on this prompt (chronological order, includes failed attempts)"
 
+  validation_suites:
+    type: array
+    items: string
+    default: []
+    description: "Paths to validation suite files elected for this prompt (e.g., .allhands/validation-tooling/typescript-typecheck.md)"
+
 body:
   description: "Markdown task instructions for the executing agent"
   sections:
@@ -47,12 +67,15 @@ body:
       description: "Validation requirements for completion"
 
     - append_success_format: |
+        SUCCESS SUMMARY:
         **Summary**: Brief explanation
         **Limitations**: List of key limitations discovered that hindered implementation
         **Decisions**: List of key decisions made that were open to make, or required to make in order to achieve the acceptance criteria
         **Files**: List of key files affected
+        **Validation**: List of validation techniques that were used to achieve the acceptance criteria with detail on tests run, how they were run, and their results
 
     - append_failure_format: |
+        FAILURE SUMMARY:
         **Verdict**: Why the previous attempt was cleared for a blank slate, OR why the previous attempt was commited and expected to be built on top of
         **Learnings**: What was learned in the attempt that failed
         **Left to do**: Infered tips on how to keep going after failure

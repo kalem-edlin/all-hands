@@ -20,5 +20,6 @@ Execute prompt tasks with full context, validate thoroughly, and document your w
 
 ## Completion
 - Once passed validation, commit your work
-- Run `ah schema prompt body` for the success/failure summary formats and append your entry to the prompt file
+- Run `ah schema prompt` for the success/failure summary formats and append your entry to the prompt file and mark the file as "done" in the front matter.
+- Rename prompt file to include "-DONE" at the end of the filename.
 - Stop

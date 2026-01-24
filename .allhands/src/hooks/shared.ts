@@ -86,13 +86,15 @@ export async function readHookInput(): Promise<HookInput> {
 /**
  * Deny a tool use with a reason.
  * Outputs JSON to stdout and exits with 0 (success for hooks).
+ * The reason is shown to Claude via permissionDecisionReason.
  */
 export function denyTool(reason: string): never {
-  const output: PreToolUseOutput = {
+  const output = {
     hookSpecificOutput: {
+      hookEventName: 'PreToolUse',
       permissionDecision: 'deny',
+      permissionDecisionReason: reason,
     },
-    systemMessage: reason,
   };
   console.log(JSON.stringify(output));
   process.exit(0);
@@ -114,6 +116,19 @@ export function outputContext(context: string): never {
   const output: PostToolUseOutput = {
     continue: true,
     systemMessage: context,
+  };
+  console.log(JSON.stringify(output));
+  process.exit(0);
+}
+
+/**
+ * Block a PostToolUse action with a message.
+ * The file change will be rejected and the message shown.
+ */
+export function blockTool(message: string): never {
+  const output: PostToolUseOutput = {
+    continue: false,
+    systemMessage: message,
   };
   console.log(JSON.stringify(output));
   process.exit(0);

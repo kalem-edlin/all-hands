@@ -1,10 +1,10 @@
 /**
- * Status Pane - Right area showing milestone, active agents, and log stream
+ * Status Pane - Right area showing view buttons, active agents, and log stream
  *
  * Layout:
  * ┌─ Status ─────────────────────┐
- * │ Milestone: tui-redesign      │  <- Current milestone
- * │ Branch: feat/tui-redesign    │  <- Current branch
+ * │ [View Milestone] [Alignment] │  <- View buttons
+ * │ [E2E Test Plan]              │
  * │ ─────────────────────────────│
  * │  ┌────────┐  ┌────────┐      │  <- Agent grid
  * │  │ coord  │  │ planner│      │
@@ -26,11 +26,25 @@ export interface AgentInfo {
   isRunning: boolean;
 }
 
+export interface FileStates {
+  spec: boolean;
+  alignment: boolean;
+  e2eTestPlan: boolean;
+}
+
+export interface StatusPaneOptions {
+  onViewSpec?: () => void;
+  onViewAlignment?: () => void;
+  onViewE2ETestPlan?: () => void;
+}
+
 export interface StatusPaneData {
   milestone?: string;
   branch?: string;
   agents: AgentInfo[];
   logEntries?: string[];
+  fileStates?: FileStates;
+  options?: StatusPaneOptions;
 }
 
 const ACTIONS_WIDTH = 24;
@@ -42,7 +56,9 @@ export function createStatusPane(
   selectedIndex?: number,
   milestone?: string,
   branch?: string,
-  logEntries: string[] = []
+  logEntries: string[] = [],
+  fileStates?: FileStates,
+  options?: StatusPaneOptions
 ): blessed.Widgets.BoxElement {
   const pane = blessed.box({
     parent: screen,
@@ -64,28 +80,90 @@ export function createStatusPane(
 
   let currentY = 0;
 
-  // Milestone header
-  const milestoneText = milestone || '{gray-fg}No milestone{/gray-fg}';
-  blessed.text({
-    parent: pane,
-    top: currentY,
-    left: 1,
-    content: `{bold}Milestone:{/bold} ${milestoneText}`,
-    tags: true,
-  });
-  currentY += 1;
+  // View buttons row (only show if milestone is selected)
+  if (milestone) {
+    let buttonX = 1;
 
-  // Branch info
-  if (branch) {
+    // View Milestone button (if spec exists)
+    if (fileStates?.spec && options?.onViewSpec) {
+      const specButton = blessed.button({
+        parent: pane,
+        top: currentY,
+        left: buttonX,
+        width: truncate(`[View ${milestone}]`, 18).length,
+        height: 1,
+        content: `{cyan-fg}[View ${truncate(milestone, 12)}]{/cyan-fg}`,
+        tags: true,
+        mouse: true,
+        style: {
+          fg: 'cyan',
+          hover: {
+            fg: 'yellow',
+          },
+        },
+      });
+      specButton.on('click', () => options.onViewSpec?.());
+      buttonX += specButton.width as number + 1;
+    }
+
+    // View Alignment button (if alignment.md exists)
+    if (fileStates?.alignment && options?.onViewAlignment) {
+      const alignButton = blessed.button({
+        parent: pane,
+        top: currentY,
+        left: buttonX,
+        width: 13,
+        height: 1,
+        content: '{cyan-fg}[Alignment]{/cyan-fg}',
+        tags: true,
+        mouse: true,
+        style: {
+          fg: 'cyan',
+          hover: {
+            fg: 'yellow',
+          },
+        },
+      });
+      alignButton.on('click', () => options.onViewAlignment?.());
+      buttonX += 14;
+    }
+
+    currentY += 1;
+
+    // Second row for E2E Test Plan button
+    if (fileStates?.e2eTestPlan && options?.onViewE2ETestPlan) {
+      const e2eButton = blessed.button({
+        parent: pane,
+        top: currentY,
+        left: 1,
+        width: 16,
+        height: 1,
+        content: '{cyan-fg}[E2E Test Plan]{/cyan-fg}',
+        tags: true,
+        mouse: true,
+        style: {
+          fg: 'cyan',
+          hover: {
+            fg: 'yellow',
+          },
+        },
+      });
+      e2eButton.on('click', () => options.onViewE2ETestPlan?.());
+      currentY += 1;
+    }
+  } else {
+    // No milestone selected
     blessed.text({
       parent: pane,
       top: currentY,
       left: 1,
-      content: `{gray-fg}Branch: ${branch}{/gray-fg}`,
+      content: '{gray-fg}No milestone selected{/gray-fg}',
       tags: true,
     });
+    currentY += 1;
   }
-  currentY += 2;
+
+  currentY += 1;
 
   // Separator
   blessed.text({
@@ -97,7 +175,7 @@ export function createStatusPane(
   });
   currentY += 1;
 
-  // Agent grid
+  // Agent list (vertical)
   if (agents.length === 0) {
     blessed.text({
       parent: pane,
@@ -108,17 +186,11 @@ export function createStatusPane(
     });
     currentY += 2;
   } else {
-    const boxWidth = 12;
     const boxHeight = 4;
     const padding = 1;
-    const boxesPerRow = 2;
 
     agents.forEach((agent, index) => {
-      const row = Math.floor(index / boxesPerRow);
-      const col = index % boxesPerRow;
-
-      const top = currentY + row * (boxHeight + padding);
-      const left = col * (boxWidth + padding) + 1;
+      const top = currentY + index * (boxHeight + padding);
 
       const isSelected = selectedIndex === index;
       const boxStyle = isSelected
@@ -128,8 +200,8 @@ export function createStatusPane(
       const agentBox = blessed.box({
         parent: pane,
         top,
-        left,
-        width: boxWidth,
+        left: 1,
+        right: 1,
         height: boxHeight,
         border: {
           type: 'line',
@@ -138,12 +210,12 @@ export function createStatusPane(
         style: boxStyle,
       });
 
-      const displayName = truncate(agent.name, boxWidth - 4);
+      // Agent name on the left, status indicator on the right
+      const displayName = truncate(agent.name, 20);
       blessed.text({
         parent: agentBox,
         top: 0,
         left: 0,
-        width: boxWidth - 2,
         content: displayName,
         tags: true,
       });
@@ -153,15 +225,12 @@ export function createStatusPane(
         parent: agentBox,
         top: 1,
         left: 0,
-        width: boxWidth - 2,
         content: statusLine,
         tags: true,
       });
     });
 
-    // Calculate how many rows of agents
-    const agentRows = Math.ceil(agents.length / boxesPerRow);
-    currentY += agentRows * (boxHeight + padding) + 1;
+    currentY += agents.length * (boxHeight + padding) + 1;
   }
 
   // Log stream section (bottom half)

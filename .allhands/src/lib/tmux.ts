@@ -76,6 +76,40 @@ export interface SessionSetupResult {
 export const SESSION_NAME = 'ah-hub';
 
 /**
+ * In-memory registry of agents spawned by ALL HANDS.
+ * This prevents the TUI from picking up unrelated tmux windows.
+ */
+const spawnedAgentRegistry = new Set<string>();
+
+/**
+ * Register an agent as spawned by ALL HANDS
+ */
+export function registerSpawnedAgent(windowName: string): void {
+  spawnedAgentRegistry.add(windowName);
+}
+
+/**
+ * Unregister an agent (called when window is destroyed)
+ */
+export function unregisterSpawnedAgent(windowName: string): void {
+  spawnedAgentRegistry.delete(windowName);
+}
+
+/**
+ * Check if an agent was spawned by ALL HANDS
+ */
+export function isSpawnedAgent(windowName: string): boolean {
+  return spawnedAgentRegistry.has(windowName);
+}
+
+/**
+ * Get all registered spawned agents
+ */
+export function getSpawnedAgentRegistry(): Set<string> {
+  return new Set(spawnedAgentRegistry);
+}
+
+/**
  * Get current tmux context (are we in tmux, which session, how many windows)
  */
 export function getTmuxContext(): SessionContext {
@@ -334,6 +368,8 @@ export function createWindow(
 export function killWindow(sessionName: string, windowName: string): boolean {
   try {
     execSync(`tmux kill-window -t "${sessionName}:${windowName}"`, { stdio: 'pipe' });
+    // Unregister from ALL HANDS tracking
+    unregisterSpawnedAgent(windowName);
     return true;
   } catch {
     return false;
@@ -474,6 +510,9 @@ export function spawnAgent(
   // Create new window (detached - don't switch focus yet)
   createWindow(sessionName, windowName, cwd, true);
 
+  // Register this agent as spawned by ALL HANDS
+  registerSpawnedAgent(windowName);
+
   // Build environment as inline vars (VAR=value VAR2=value command)
   // Pass windowName so AGENT_ID is set correctly
   const env = buildAgentEnv(config, currentBranch, windowName);
@@ -499,8 +538,8 @@ export function spawnAgent(
   // Quote the prompt properly for shell
   const escapedPrompt = prompt.replace(/'/g, "'\\''");
 
-  // Build command: VAR=value VAR2=value claude --dangerously-skip-permissions 'prompt'
-  const fullCommand = `${envPrefix} claude --dangerously-skip-permissions '${escapedPrompt}'`;
+  // Build command: VAR=value VAR2=value claude --settings ... --dangerously-skip-permissions 'prompt'
+  const fullCommand = `${envPrefix} claude --settings .allhands/claude-settings.json --dangerously-skip-permissions '${escapedPrompt}'`;
   sendKeys(sessionName, windowName, fullCommand);
 
   // Switch focus to the new window if requested (default for TUI actions)
@@ -527,6 +566,9 @@ export function attachSession(sessionName: string): void {
 
 /**
  * Get info about all running agents
+ *
+ * Only returns agents that were spawned by ALL HANDS (tracked in registry)
+ * AND still exist in tmux.
  */
 export function getRunningAgents(branch?: string): Array<{
   windowName: string;
@@ -541,10 +583,14 @@ export function getRunningAgents(branch?: string): Array<{
   }
 
   const windows = listWindows(sessionName);
+  const registry = getSpawnedAgentRegistry();
 
-  // Filter to agent windows (exclude TUI/hub window by name and index 0)
+  // Filter to agent windows that:
+  // 1. Are in our spawned registry (were created by ALL HANDS)
+  // 2. Still exist in tmux
+  // 3. Are not the TUI/hub window
   return windows
-    .filter((w) => w.index > 0 && w.name !== 'hub')
+    .filter((w) => w.index > 0 && w.name !== 'hub' && registry.has(w.name))
     .map((w) => ({
       windowName: w.name,
       agentType: inferAgentType(w.name),

@@ -1,0 +1,3 @@
+NOTES:
+* Used like the `./RESEARCH_GUIDANCE.md` flow, except for the use of either `ah context7` or `btca` command to figure out explicit documentation for external dependency technologies / using their core inner workings as inspiration to implementaiton
+* Most cases allow this process to use BOTH tools in parallel as both can give decent well rounded perspective . Some cases however may only need valid docuemntation references (context7), or to disect an open source library for implementation inspiration (btca)

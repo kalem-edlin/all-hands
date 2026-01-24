@@ -13,7 +13,7 @@ import { existsSync, readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import type { Command } from 'commander';
 import { parse as parseYaml } from 'yaml';
-import { HookInput, outputContext, allowTool, readHookInput, getProjectDir } from './shared.js';
+import { HookInput, outputContext, allowTool, blockTool, denyTool, readHookInput, getProjectDir } from './shared.js';
 import { minimatch } from 'minimatch';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -197,7 +197,7 @@ const __dirname = dirname(__filename);
 
 interface SchemaPattern {
   pattern: string;
-  schemaType: 'prompt' | 'alignment' | 'spec' | 'documentation';
+  schemaType: 'prompt' | 'alignment' | 'spec' | 'documentation' | 'validation-suite';
 }
 
 const SCHEMA_PATTERNS: SchemaPattern[] = [
@@ -206,6 +206,7 @@ const SCHEMA_PATTERNS: SchemaPattern[] = [
   { pattern: 'specs/**/*.spec.md', schemaType: 'spec' },
   { pattern: 'specs/roadmap/**/*.spec.md', schemaType: 'spec' },
   { pattern: 'docs/**/*.md', schemaType: 'documentation' },
+  { pattern: '.allhands/validation-tooling/*.md', schemaType: 'validation-suite' },
 ];
 
 interface SchemaDefinition {
@@ -235,7 +236,7 @@ interface ValidationError {
 /**
  * Detect which schema applies to a file path
  */
-function detectSchemaType(filePath: string): 'prompt' | 'alignment' | 'spec' | 'documentation' | null {
+function detectSchemaType(filePath: string): 'prompt' | 'alignment' | 'spec' | 'documentation' | 'validation-suite' | null {
   const projectDir = getProjectDir();
   // Make path relative to project
   const relativePath = filePath.startsWith(projectDir)
@@ -390,6 +391,37 @@ function runSchemaValidation(filePath: string): ValidationError[] | null {
 }
 
 /**
+ * Run schema validation on content (for PreToolUse before file is written).
+ * Returns validation errors or null if valid/not schema-managed.
+ */
+function runSchemaValidationOnContent(filePath: string, content: string): ValidationError[] | null {
+  // Detect schema type
+  const schemaType = detectSchemaType(filePath);
+  if (!schemaType) {
+    // Not a schema-managed file
+    return null;
+  }
+
+  // Load schema
+  const schema = loadSchema(schemaType);
+  if (!schema) {
+    return null;
+  }
+
+  // Parse frontmatter from content
+  const frontmatter = parseFrontmatter(content);
+  if (!frontmatter) {
+    return [{
+      field: 'frontmatter',
+      message: 'File is missing valid YAML frontmatter (---...---)',
+    }];
+  }
+
+  // Validate
+  return validateFrontmatter(frontmatter, schema);
+}
+
+/**
  * Format validation errors as context string
  */
 function formatSchemaErrors(errors: ValidationError[], schemaType: string): string {
@@ -414,11 +446,11 @@ function formatSchemaErrors(errors: ValidationError[], schemaType: string): stri
 export function register(parent: Command): void {
   const validation = parent
     .command('validation')
-    .description('Validation hooks (PostToolUse)');
+    .description('Validation hooks');
 
   validation
     .command('diagnostics')
-    .description('Run diagnostics on edited files')
+    .description('Run diagnostics on edited files (PostToolUse)')
     .action(async () => {
       try {
         const input = await readHookInput();
@@ -430,7 +462,7 @@ export function register(parent: Command): void {
 
   validation
     .command('schema')
-    .description('Validate schema-managed markdown files')
+    .description('Validate schema-managed markdown files (PostToolUse)')
     .action(async () => {
       try {
         const input = await readHookInput();
@@ -445,7 +477,72 @@ export function register(parent: Command): void {
         if (errors && errors.length > 0) {
           const schemaType = detectSchemaType(filePath!) || 'unknown';
           const context = formatSchemaErrors(errors, schemaType);
-          outputContext(context);
+          blockTool(context);
+        }
+
+        allowTool();
+      } catch {
+        allowTool();
+      }
+    });
+
+  validation
+    .command('schema-pre')
+    .description('Validate schema-managed markdown files before write/edit (PreToolUse)')
+    .action(async () => {
+      try {
+        const input = await readHookInput();
+        const toolName = input.tool_name as string | undefined;
+        const filePath = input.tool_input?.file_path as string | undefined;
+
+        if (!filePath) {
+          allowTool();
+          return;
+        }
+
+        let contentToValidate: string | undefined;
+
+        if (toolName === 'Write') {
+          // Write tool provides content directly
+          contentToValidate = input.tool_input?.content as string | undefined;
+        } else if (toolName === 'Edit') {
+          // Edit tool provides old_string and new_string - we need to compute the result
+          const oldString = input.tool_input?.old_string as string | undefined;
+          const newString = input.tool_input?.new_string as string | undefined;
+          const replaceAll = input.tool_input?.replace_all as boolean | undefined;
+
+          if (oldString === undefined || newString === undefined) {
+            allowTool();
+            return;
+          }
+
+          // Read current file content
+          if (!existsSync(filePath)) {
+            allowTool();
+            return;
+          }
+
+          const currentContent = readFileSync(filePath, 'utf-8');
+
+          // Apply the edit to get the resulting content
+          if (replaceAll) {
+            contentToValidate = currentContent.split(oldString).join(newString);
+          } else {
+            contentToValidate = currentContent.replace(oldString, newString);
+          }
+        }
+
+        if (!contentToValidate) {
+          allowTool();
+          return;
+        }
+
+        const errors = runSchemaValidationOnContent(filePath, contentToValidate);
+
+        if (errors && errors.length > 0) {
+          const schemaType = detectSchemaType(filePath) || 'unknown';
+          const context = formatSchemaErrors(errors, schemaType);
+          denyTool(context);
         }
 
         allowTool();
