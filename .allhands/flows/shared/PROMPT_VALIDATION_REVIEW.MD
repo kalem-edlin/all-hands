@@ -60,6 +60,21 @@ Per **Knowledge Compounding**, bad validation methods should not persist:
 | Product efficacy | Does validation prove actual product stability? |
 | Redundancy | Are tests duplicative without adding confidence? |
 
+### Scenario Exploration
+
+Consider edge cases and failure scenarios:
+
+| Scenario | Check |
+|----------|-------|
+| Happy Path | Normal operation with valid inputs |
+| Invalid Inputs | Null, empty, malformed data handling |
+| Boundary Conditions | Min/max values, empty collections |
+| Concurrent Access | Race conditions, deadlocks |
+| Network Issues | Timeouts, partial failures |
+| Error Recovery | Graceful degradation, retry logic |
+
+Focus on scenarios that could cause data corruption, security issues, or user-facing failures.
+
 ### Prior Failure Context
 
 If previous failures are documented:
