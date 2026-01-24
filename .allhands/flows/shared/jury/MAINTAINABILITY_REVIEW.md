@@ -32,6 +32,7 @@ Review implementation for maintainability, composability, and software design qu
 | **Miscommunication** | Prompt A establishes pattern, Prompt B ignores it |
 | **Inconsistency** | Different approaches for same problem in different files |
 | **Over-abstraction** | Unnecessary wrappers, premature generalization |
+| **Orphaned Artifacts** | Files created but never imported or connected |
 
 ## Design Quality Checks
 

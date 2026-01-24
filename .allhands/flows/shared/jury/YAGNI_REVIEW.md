@@ -39,6 +39,9 @@ Look for code that:
 | Feature Flags | Configuration for features not requested |
 | Error Handling | Catching impossible error conditions |
 | Premature Optimization | Performance work without proven need |
+| Orphaned Artifacts | Files created but not wired into the system |
+| Dead Exports | Functions exported but never imported |
+| Defensive Overkill | Validation for scenarios that can't happen in internal code |
 
 ## Decision Source Tracking
 

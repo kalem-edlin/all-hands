@@ -51,6 +51,9 @@ Compare implementation against expectations:
 | Concerns | Were engineer's concerns addressed? |
 | Decisions | Are planning decisions honored? |
 | Scope | Does implementation match agreed scope? |
+| Goal Achievement | Does implementation achieve goals or just complete tasks? |
+
+Per **Quality Engineering**, task completion ≠ goal achievement. Verify implementation is substantive and connected, not placeholder-heavy.
 
 ## Output Format
 

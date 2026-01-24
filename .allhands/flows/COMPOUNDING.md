@@ -26,6 +26,7 @@ Identify patterns that indicate harness improvement opportunities:
 - Patch prompts → check `patches_prompts` field to find root cause
 - Emergent refinement inclusions/exclusions → engineer intent signals
 - Review prompt count → planning or review quality issues
+- Blocker learnings in summaries → planning gaps that required engineer steering
 
 **Tooling Signals**:
 - Cross-reference patch prompts with their `skills` and `validation_suites` frontmatter

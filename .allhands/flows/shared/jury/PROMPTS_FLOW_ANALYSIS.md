@@ -42,6 +42,7 @@ Think like a tech lead engineer:
 | Stability | Which prompts prove core architecture works? |
 | Blockers | Which prompts unblock the most other work? |
 | Confidence | Which prompts give earliest signal on success? |
+| Wiring | Do prompts plan how components connect, not just create artifacts? |
 
 Order prompts to derisk:
 - Most important/revealing work first

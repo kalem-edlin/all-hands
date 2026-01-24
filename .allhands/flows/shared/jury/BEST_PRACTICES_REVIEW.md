@@ -46,6 +46,8 @@ Compare implementation against extracted best practices:
 | Preferences | Are library/approach preferences honored? |
 | Pitfalls | Does implementation avoid known pitfalls? |
 | Consistency | Is style consistent with codebase conventions? |
+| Wiring | Are components properly connected (imports, API calls, state flow)? |
+| Completeness | Is implementation substantive or placeholder-heavy? |
 
 ## Output Format
 

@@ -25,6 +25,12 @@ Create a hypothesis of implementation that iteratively solves, improves, or conv
 - Follow tasks and break into Todos if necessary
 - Use validation tooling to acquire test data meeting acceptance criteria
 
+### Deviation Handling
+
+Handle deviations automatically:
+- Bugs, missing critical functionality, blocking issues → Fix and document in summary
+- Architectural changes → Stop, document blocker in prompt, set `status: blocked`
+
 ## Validation
 
 - Spawn subtask to read `.allhands/flows/shared/PROMPT_VALIDATION_REVIEW.md` and follow its instructions
@@ -36,6 +42,8 @@ Create a hypothesis of implementation that iteratively solves, improves, or conv
 - Commit your work
 - Run `ah schema prompt` for success/failure summary format
 - Append summary to prompt file
+  - Include deviations handled during implementation
+  - If blockers required engineer steering, document as learnings to prevent recurrence
 - Set frontmatter `status: done`
 - Rename prompt file to include `-DONE` suffix
 - Stop

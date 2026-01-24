@@ -22,6 +22,19 @@ Execute prompt tasks with full context, validate thoroughly, and document your w
 - Follow tasks and break them down into Todos if necessary
 - After implementation, use validation tooling to acquire test data meeting acceptance criteria
 
+### Deviation Handling
+
+Per **Frontier Models are Capable**, handle deviations automatically without engineer steering:
+
+| Deviation Type | Action |
+|----------------|--------|
+| Bugs/errors | Fix immediately, document in summary |
+| Missing critical functionality (validation, error handling, security) | Add immediately, document in summary |
+| Blocking issues (missing deps, broken imports, config errors) | Fix to unblock, document in summary |
+| Architectural changes (new DB tables, major schema changes, new services) | Stop and document in prompt - requires planning |
+
+If architectural deviation is needed, document the blocker and set `status: blocked` rather than proceeding.
+
 ## Validation
 
 - Spawn subtask to read `.allhands/flows/shared/PROMPT_VALIDATION_REVIEW.md` and follow its instructions
@@ -33,6 +46,8 @@ Execute prompt tasks with full context, validate thoroughly, and document your w
 - Commit your work
 - Run `ah schema prompt` for summary format
 - Append success summary to prompt file
+  - Include any deviations handled during implementation
+  - If blockers required engineer steering, document as learnings to prevent recurrence
 - Set frontmatter `status: done`
 - Rename prompt file to include `-DONE` suffix
 - Stop

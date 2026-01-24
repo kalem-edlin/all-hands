@@ -95,6 +95,7 @@ Per **Context is Precious**, agents degrade with context. Hard limits:
 - Each prompt ends with meaningful validation checkpoint
 - Order tasks to derisk critical paths first
 - Compound refinement: each prompt builds on prior validated work
+- **Plan wiring, not just artifacts** - ensure tasks connect components (API calls, imports, state flow), not just create files in isolation
 
 ## Writing the Prompt File
 

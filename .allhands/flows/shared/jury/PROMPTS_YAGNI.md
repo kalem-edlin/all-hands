@@ -28,13 +28,14 @@ Review planning artifacts for YAGNI (You Ain't Gonna Need It) violations. Per **
 
 Look for:
 
-| Pattern | Description |
-|---------|-------------|
-| Premature Abstraction | Generalization before proven need |
-| Future-Proofing | Building for hypothetical requirements |
-| Over-Configuration | Making things configurable that won't change |
-| Defensive Complexity | Error handling for impossible scenarios |
-| Feature Creep | Scope beyond stated goals |
+| Pattern | Description | Example |
+|---------|-------------|---------|
+| Premature Abstraction | Generalization before proven need | Helper class for one-time operation |
+| Future-Proofing | Building for hypothetical requirements | Config for thing that won't change |
+| Over-Configuration | Making unchanging things configurable | ENV var for hardcoded value |
+| Defensive Complexity | Error handling for impossible scenarios | Null check on required param |
+| Feature Creep | Scope beyond stated goals | "While we're here, let's add..." |
+| Scope Bloat | 10+ files or 7+ tasks in single prompt | Split needed |
 
 ## Priority Weighting
 

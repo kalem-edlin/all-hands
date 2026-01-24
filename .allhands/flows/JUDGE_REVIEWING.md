@@ -50,6 +50,14 @@ After all jury subtasks complete:
 - Break down findings into actionable options for the engineer
 - Present options with tradeoffs, not mandates
 
+### Issue Severity Classification
+
+| Severity | Description |
+|----------|-------------|
+| Blocking | Prevents goal achievement - missing wiring, broken functionality |
+| Recommended | Should fix - best practice violations, potential issues |
+| Optional | Nice to have - style improvements, minor enhancements |
+
 ## Engineer Decision
 
 Present synthesized feedback to engineer:

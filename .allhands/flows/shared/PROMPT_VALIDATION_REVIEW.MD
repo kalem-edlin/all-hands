@@ -27,6 +27,28 @@ Review prompt implementation for validation pass/fail. Per **Agentic Validation 
 - Run `git diff` to review uncommitted work
 - Look for immediately noticeable issues
 
+### Goal-Backward Verification
+
+Per **Quality Engineering**, task completion ≠ goal achievement. Verify work is substantive:
+
+| Level | Check |
+|-------|-------|
+| Existence | Files were created/modified |
+| Substantive | Implementation is real, not placeholder |
+| Wired | Components are connected (API calls, imports, state rendering) |
+
+### Stub Detection
+
+Scan for placeholder patterns that indicate incomplete work:
+
+| Pattern | Red Flags |
+|---------|-----------|
+| Placeholder content | `TODO`, `FIXME`, `placeholder`, `coming soon`, `will be here` |
+| Empty implementations | `return null`, `return {}`, `return []`, `=> {}` |
+| Stub handlers | `onClick={() => {}}`, `onSubmit={(e) => e.preventDefault()}` only |
+| Orphaned code | Files created but not imported/used anywhere |
+| Unconnected APIs | API calls exist but responses not used |
+
 ### Validation Quality Critique
 
 Per **Knowledge Compounding**, bad validation methods should not persist:
