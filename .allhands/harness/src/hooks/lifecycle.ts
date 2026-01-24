@@ -12,7 +12,7 @@ import type { Command } from 'commander';
 import { HookInput, outputStopHook, outputPreCompact, readHookInput } from './shared.js';
 import { parseTranscript, buildCompactionMessage } from './transcript-parser.js';
 import { sendNotification } from '../lib/notification.js';
-import { killWindow, SESSION_NAME, windowExists } from '../lib/tmux.js';
+import { killWindow, SESSION_NAME, windowExists } from '../lib/tmux.js'; // killWindow used in compact
 import { getPromptByNumber } from '../lib/prompts.js';
 import { ask } from '../lib/llm.js';
 
@@ -24,7 +24,7 @@ import { ask } from '../lib/llm.js';
  * Handle agent stop lifecycle event.
  *
  * - Sends desktop notification
- * - Kills tmux window if AGENT_ID is set (spawned agent)
+ * - Approves the stop (window closes naturally via exec in spawn)
  *
  * Triggered by: Stop matcher "*"
  */
@@ -42,16 +42,8 @@ export function handleAgentStop(_input: HookInput): void {
     type: 'banner',
   });
 
-  // Kill tmux window if spawned agent
-  if (agentId && windowExists(SESSION_NAME, agentId)) {
-    try {
-      killWindow(SESSION_NAME, agentId);
-    } catch {
-      // Ignore errors - window might already be closed
-    }
-  }
-
-  // Approve stop - allow agent to stop
+  // Approve stop - window closes naturally when claude exits
+  // (spawn uses exec so there's no orphan shell keeping the window open)
   outputStopHook('approve');
 }
 

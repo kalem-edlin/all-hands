@@ -7,17 +7,17 @@
  * - Monitoring loop progress and agent activity
  * - Managing milestones and PR workflows
  *
- * Usage: ah tui [--branch <branch>]
+ * Usage: ah [--branch <branch>]
  */
 
 import { Command } from 'commander';
-import { join, dirname, basename } from 'path';
-import { fileURLToPath } from 'url';
-import { existsSync, readFileSync, mkdirSync } from 'fs';
+import { join, basename } from 'path';
+import { existsSync, readFileSync, mkdirSync, renameSync } from 'fs';
 import { execSync } from 'child_process';
 import { TUI } from '../tui/index.js';
 import type { TUIState, PRActionState, PromptItem, AgentInfo } from '../tui/index.js';
 import { readStatus, getCurrentBranch, updateStatus, initializeStatus } from '../lib/planning.js';
+import { getBaseBranch } from '../lib/git.js';
 import { loadAllPrompts } from '../lib/prompts.js';
 import {
   isTmuxInstalled,
@@ -30,77 +30,87 @@ import { getProfilesByTuiAction } from '../lib/opencode/index.js';
 import { suggestBranchName, buildPR } from '../lib/oracle.js';
 import type { PromptFile } from '../lib/prompts.js';
 import { findSpecById } from '../lib/specs.js';
+import { isTldrInstalled, hasSemanticIndex, buildSemanticIndex, needsSemanticRebuild } from '../lib/tldr.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+/**
+ * Launch the TUI - can be called directly or via command
+ */
+export async function launchTUI(options: { branch?: string } = {}): Promise<void> {
+  const branch = options.branch || getCurrentBranch();
+  const cwd = process.cwd();
 
-export function register(program: Command): void {
-  program
-    .command('tui')
-    .description('Launch the terminal user interface')
-    .option('--branch <branch>', 'Branch to use (defaults to current)')
-    .action(async (options: { branch?: string }) => {
-      const branch = options.branch || getCurrentBranch();
+  // Build semantic index if missing or stale (branch switch)
+  if (isTldrInstalled()) {
+    if (!hasSemanticIndex(cwd)) {
+      console.log('Building semantic index for first run...');
+      buildSemanticIndex(cwd, 'typescript');
+    } else if (needsSemanticRebuild(cwd)) {
+      console.log('Rebuilding semantic index (branch changed)...');
+      buildSemanticIndex(cwd, 'typescript');
+    }
+  }
 
-      // Load initial state
-      const status = readStatus(branch);
-      const prompts = loadAllPrompts(branch);
+  // Load initial state
+  const status = readStatus(branch);
+  const prompts = loadAllPrompts(branch);
 
-      // Convert prompts to PromptItem format
-      const promptItems: PromptItem[] = prompts.map((p) => ({
-        number: p.frontmatter.number,
-        title: p.frontmatter.title,
-        status: p.frontmatter.status as 'pending' | 'in_progress' | 'done',
-      }));
+  // Convert prompts to PromptItem format
+  const promptItems: PromptItem[] = prompts.map((p) => ({
+    number: p.frontmatter.number,
+    title: p.frontmatter.title,
+    status: p.frontmatter.status as 'pending' | 'in_progress' | 'done',
+  }));
 
-      // Get active agents from tmux
-      const runningAgents = getRunningAgents(branch);
-      const activeAgents: AgentInfo[] = runningAgents.map((a) => ({
-        name: a.windowName,
-        agentType: a.agentType || 'unknown',
-        isRunning: true,
-      }));
+  // Get active agents from tmux
+  const runningAgents = getRunningAgents(branch);
+  const activeAgents: AgentInfo[] = runningAgents.map((a) => ({
+    name: a.windowName,
+    agentType: a.agentType || 'unknown',
+    isRunning: true,
+  }));
 
-      const initialState: Partial<TUIState> = {
-        loopEnabled: status?.loop.enabled ?? false,
-        emergentEnabled: status?.loop.emergent ?? false,
-        prompts: promptItems,
-        activeAgents,
-        milestone: status?.milestone,
-        branch,
-        prActionState: 'create-pr' as PRActionState,
-      };
+  const initialState: Partial<TUIState> = {
+    loopEnabled: status?.loop.enabled ?? false,
+    emergentEnabled: status?.loop.emergent ?? false,
+    prompts: promptItems,
+    activeAgents,
+    milestone: status?.milestone,
+    branch,
+    prActionState: 'create-pr' as PRActionState,
+    compoundRun: status?.compound_run ?? false,
+  };
 
-      // Rename current tmux window to 'hub'
-      renameCurrentWindow('hub');
+  // Rename current tmux window to 'hub'
+  renameCurrentWindow('hub');
 
-      const tui = new TUI({
-        onAction: (action: string, data) => {
-          handleAction(tui, action, branch, data);
-        },
-        onExit: () => {
-          console.log('\nExiting All Hands TUI...');
-          process.exit(0);
-        },
-        onSpawnExecutor: (prompt, executorBranch) => {
-          spawnExecutorForPrompt(tui, prompt, executorBranch);
-        },
-        cwd: process.cwd(),
-      });
+  const tui = new TUI({
+    onAction: (action: string, data) => {
+      handleAction(tui, action, branch, data);
+    },
+    onExit: () => {
+      console.log('\nExiting All Hands TUI...');
+      process.exit(0);
+    },
+    onSpawnExecutor: (prompt, executorBranch) => {
+      spawnExecutorForPrompt(tui, prompt, executorBranch);
+    },
+    cwd: process.cwd(),
+  });
 
-      // Set initial state
-      tui.updateState(initialState);
-      tui.log(`Loaded branch: ${branch}`);
-      if (status) {
-        tui.log(`Milestone: ${status.milestone} (${status.stage})`);
-      } else {
-        tui.log('No active milestone. Use Switch Milestone to begin.');
-      }
+  // Set initial state
+  tui.updateState(initialState);
+  tui.log(`Loaded branch: ${branch}`);
+  if (status) {
+    tui.log(`Milestone: ${status.milestone} (${status.stage})`);
+  } else {
+    tui.log('No active milestone. Use Switch Milestone to begin.');
+  }
 
-      // Start TUI
-      tui.start();
-    });
+  // Start TUI
+  tui.start();
 }
+
+// No register function - TUI is launched directly from CLI when no command is given
 
 /**
  * Spawn agents for a TUI action using profile definitions
@@ -166,6 +176,12 @@ async function spawnAgentsForAction(
     }
   }
 
+  // Track compound_run in status when compound action is triggered
+  if (action === 'compound' && status) {
+    updateStatus({ compound_run: true }, branch, cwd);
+    tui.updateState({ compoundRun: true });
+  }
+
   updateRunningAgents(tui, branch);
   return true;
 }
@@ -205,6 +221,56 @@ async function handleAction(
           tui.log(`Error: ${result.body}`);
           tui.log('You may need to push your branch first or check gh auth status.');
         }
+      } catch (e) {
+        tui.log(`Error: ${e instanceof Error ? e.message : String(e)}`);
+      }
+      break;
+    }
+
+    case 'mark-completed': {
+      if (!status?.milestone) {
+        tui.log('Error: No milestone initialized. Use Switch Milestone first.');
+        return;
+      }
+
+      tui.log(`Marking milestone as completed: ${status.milestone}`);
+
+      try {
+        // Find the current spec file
+        const spec = findSpecById(status.milestone, cwd);
+        if (!spec) {
+          tui.log(`Error: Spec file not found: ${status.milestone}`);
+          break;
+        }
+
+        // Move spec from roadmap to completed
+        const completedDir = join(cwd, 'specs', 'completed');
+        if (!existsSync(completedDir)) {
+          mkdirSync(completedDir, { recursive: true });
+        }
+
+        const destPath = join(completedDir, spec.filename);
+        if (existsSync(destPath)) {
+          tui.log(`Error: Destination already exists: ${destPath}`);
+          break;
+        }
+
+        renameSync(spec.path, destPath);
+        tui.log(`Moved spec to: specs/completed/${spec.filename}`);
+
+        // Checkout base branch
+        const baseBranch = getBaseBranch();
+        tui.log(`Checking out base branch: ${baseBranch}`);
+        execSync(`git checkout ${baseBranch}`, { stdio: 'pipe', cwd });
+
+        // Update TUI state
+        tui.updateState({
+          milestone: undefined,
+          branch: baseBranch,
+          prompts: [],
+        });
+
+        tui.log(`Milestone completed. Now on branch: ${baseBranch}`);
       } catch (e) {
         tui.log(`Error: ${e instanceof Error ? e.message : String(e)}`);
       }
@@ -324,6 +390,43 @@ async function handleAction(
       if (prompt) {
         tui.log(`Selected prompt: ${prompt.number}. ${prompt.title}`);
         // TODO: Could show prompt details or offer to edit
+      }
+      break;
+    }
+
+    case 'branch-changed': {
+      // Reload state for the new branch
+      const newBranch = data?.branch as string;
+      if (!newBranch) break;
+
+      tui.log(`Reloading state for branch: ${newBranch}`);
+
+      try {
+        const newStatus = readStatus(newBranch, cwd);
+        const newPrompts = loadAllPrompts(newBranch);
+
+        const promptItems: PromptItem[] = newPrompts.map((p) => ({
+          number: p.frontmatter.number,
+          title: p.frontmatter.title,
+          status: p.frontmatter.status as 'pending' | 'in_progress' | 'done',
+        }));
+
+        tui.updateState({
+          milestone: newStatus?.milestone,
+          branch: newBranch,
+          prompts: promptItems,
+          loopEnabled: newStatus?.loop.enabled ?? false,
+          emergentEnabled: newStatus?.loop.emergent ?? false,
+          compoundRun: newStatus?.compound_run ?? false,
+        });
+
+        if (newStatus?.milestone) {
+          tui.log(`Milestone: ${newStatus.milestone} (${newStatus.stage})`);
+        } else {
+          tui.log('No milestone on this branch.');
+        }
+      } catch (e) {
+        tui.log(`Error reloading state: ${e instanceof Error ? e.message : String(e)}`);
       }
       break;
     }

@@ -21,8 +21,10 @@ import { createStatusPane, AgentInfo, FileStates, StatusPaneOptions } from './st
 import { createModal, Modal } from './modal.js';
 import { createFileViewer, FileViewer, getPlanningFilePath, getSpecFilePath } from './file-viewer-modal.js';
 import { EventLoop } from '../lib/event-loop.js';
+import { killWindow, listWindows, getCurrentSession } from '../lib/tmux.js';
 import { KnowledgeService } from '../lib/knowledge.js';
 import { validateDocs } from '../lib/docs-validation.js';
+import { loadAllProfiles } from '../lib/opencode/index.js';
 import type { PromptFile } from '../lib/prompts.js';
 import { loadAllSpecs, specsToModalItems } from '../lib/specs.js';
 import { join } from 'path';
@@ -46,6 +48,7 @@ export interface TUIState {
   milestone?: string;
   branch?: string;
   prActionState: PRActionState;
+  compoundRun: boolean;
 }
 
 export class TUI {
@@ -78,6 +81,12 @@ export class TUI {
   // Event loop daemon
   private eventLoop: EventLoop | null = null;
 
+  // Original output functions for restoration on destroy
+  private originalStdoutWrite: typeof process.stdout.write | null = null;
+  private originalStderrWrite: typeof process.stderr.write | null = null;
+  private originalConsoleLog: typeof console.log | null = null;
+  private originalConsoleError: typeof console.error | null = null;
+
   constructor(options: TUIOptions) {
     this.options = options;
     this.state = {
@@ -86,13 +95,72 @@ export class TUI {
       prompts: [],
       activeAgents: [],
       prActionState: 'create-pr',
+      compoundRun: false,
     };
 
-    // Create screen
+    // Suppress terminal capability errors (e.g., xterm-ghostty.Setulc) during screen creation
+    // These errors come from blessed parsing terminfo and can go to stdout/stderr/console
+    const originalStdoutWrite = process.stdout.write.bind(process.stdout);
+    const originalStderrWrite = process.stderr.write.bind(process.stderr);
+    const originalConsoleLog = console.log.bind(console);
+    const originalConsoleError = console.error.bind(console);
+
+    const isTerminfoNoise = (str: string): boolean => {
+      return (
+        str.includes('Setulc') ||
+        str.includes('Error on xterm') ||
+        str.includes('stack.push') ||
+        str.includes('out.push') ||
+        str.includes('stack.pop') ||
+        str.includes('stack = []') ||
+        str.includes('var v,') ||
+        str.includes('return out.join') ||
+        /^"\s*\\u001b\[/.test(str) ||
+        /^\s*out = \[/.test(str)
+      );
+    };
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (process.stdout as any).write = (chunk: string | Uint8Array, ...args: unknown[]): boolean => {
+      const str = typeof chunk === 'string' ? chunk : chunk.toString();
+      if (isTerminfoNoise(str)) return true;
+      return originalStdoutWrite(chunk, ...(args as [BufferEncoding?, ((err?: Error | null) => void)?]));
+    };
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (process.stderr as any).write = (chunk: string | Uint8Array, ...args: unknown[]): boolean => {
+      const str = typeof chunk === 'string' ? chunk : chunk.toString();
+      if (isTerminfoNoise(str)) return true;
+      return originalStderrWrite(chunk, ...(args as [BufferEncoding?, ((err?: Error | null) => void)?]));
+    };
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    console.log = (...args: any[]): void => {
+      const str = args.map(a => String(a)).join(' ');
+      if (isTerminfoNoise(str)) return;
+      originalConsoleLog(...args);
+    };
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    console.error = (...args: any[]): void => {
+      const str = args.map(a => String(a)).join(' ');
+      if (isTerminfoNoise(str)) return;
+      originalConsoleError(...args);
+    };
+
+    // Create screen with terminal compatibility options
     this.screen = blessed.screen({
       smartCSR: true,
       title: 'All Hands - Agentic Harness',
+      fullUnicode: true,
+      warnings: false, // Suppress terminal capability warnings
     });
+
+    // Store originals for restore on destroy
+    this.originalStdoutWrite = originalStdoutWrite;
+    this.originalStderrWrite = originalStderrWrite;
+    this.originalConsoleLog = originalConsoleLog;
+    this.originalConsoleError = originalConsoleError;
 
     // Create header
     this.header = this.createHeader();
@@ -173,6 +241,24 @@ export class TUI {
     this.render();
 
     try {
+      // Validate agent profiles first
+      this.log('Validating agent profiles...');
+      this.render();
+      const { profiles, errors: profileErrors } = loadAllProfiles();
+      if (profileErrors.length > 0) {
+        for (const err of profileErrors) {
+          for (const e of err.errors) {
+            this.log(`⚠ Agent ${err.name}: ${e}`);
+          }
+          for (const w of err.warnings) {
+            this.log(`⚠ Agent ${err.name}: ${w}`);
+          }
+        }
+      } else {
+        this.log(`${profiles.length} agent profiles valid ✓`);
+      }
+      this.render();
+
       const service = new KnowledgeService(this.options.cwd, { quiet: true });
 
       // Reindex roadmap
@@ -185,7 +271,7 @@ export class TUI {
       this.render();
       await service.reindexAll('docs');
 
-      // Run validation
+      // Run docs validation
       this.log('Validating documentation...');
       this.render();
       const docsPath = join(this.options.cwd, 'docs');
@@ -233,26 +319,44 @@ export class TUI {
   }
 
   private getToggleState(): ToggleState {
+    // Check if any prompts are completed
+    const hasCompletedPrompts = this.state.prompts.some(p => p.status === 'done');
+
     return {
       loopEnabled: this.state.loopEnabled,
       emergentEnabled: this.state.emergentEnabled,
       prActionState: this.state.prActionState,
+      hasMilestone: !!this.state.milestone,
+      hasCompletedPrompts,
+      compoundRun: this.state.compoundRun,
     };
   }
 
   private buildActionItems(): void {
+    const hasMilestone = !!this.state.milestone;
+    const hasCompletedPrompts = this.state.prompts.some(p => p.status === 'done');
+    const prDisabled = this.state.prActionState === 'greptile-reviewing';
+
+    // Dynamic label for switch/choose milestone
+    const milestoneLabel = hasMilestone ? 'Switch Milestone' : 'Choose Milestone';
+
     this.actionItems = [
+      // Agent spawners - coordinator and ideation always available
       { id: 'coordinator', label: 'Coordinator', key: '1', type: 'action' },
       { id: 'ideation', label: 'Ideation', key: '2', type: 'action' },
-      { id: 'planner', label: 'Planner', key: '3', type: 'action' },
-      { id: 'e2e-test-planner', label: 'Build E2E Test', key: '4', type: 'action' },
-      { id: 'review-jury', label: 'Review Jury', key: '5', type: 'action' },
-      { id: 'pr-action', label: this.getPRActionLabel(), key: '6', type: 'action',
-        disabled: this.state.prActionState === 'greptile-reviewing' },
-      { id: 'compound', label: 'Compound', key: '7', type: 'action' },
-      { id: 'switch-milestone', label: 'Switch Milestone', key: '8', type: 'action' },
+      // Planner requires milestone
+      { id: 'planner', label: 'Planner', key: '3', type: 'action', disabled: !hasMilestone },
+      // These require at least 1 completed prompt
+      { id: 'e2e-test-planner', label: 'Build E2E Test', key: '4', type: 'action', hidden: !hasCompletedPrompts },
+      { id: 'review-jury', label: 'Review Jury', key: '5', type: 'action', hidden: !hasCompletedPrompts },
+      { id: 'pr-action', label: this.getPRActionLabel(), key: '6', type: 'action', disabled: prDisabled, hidden: !hasCompletedPrompts },
+      { id: 'compound', label: 'Compound', key: '7', type: 'action', hidden: !hasCompletedPrompts },
+      // Mark completed - only visible if compound has been run
+      { id: 'mark-completed', label: 'Mark Completed', key: '8', type: 'action', hidden: !this.state.compoundRun },
+      // Switch/Choose milestone - always visible, label changes
+      { id: 'switch-milestone', label: milestoneLabel, key: '9', type: 'action' },
       { id: 'separator-toggles', label: '─ Toggles ─', type: 'separator' },
-      { id: 'toggle-loop', label: 'Loop', key: 'L', type: 'toggle', checked: this.state.loopEnabled },
+      { id: 'toggle-loop', label: 'Loop', key: 'O', type: 'toggle', checked: this.state.loopEnabled },
       { id: 'toggle-emergent', label: 'Emergent', key: 'E', type: 'toggle', checked: this.state.emergentEnabled },
       { id: 'separator-bottom', label: '─────────', type: 'separator' },
       { id: 'quit', label: 'Quit', key: 'Q', type: 'action' },
@@ -270,7 +374,7 @@ export class TUI {
 
   private getSelectableActionItems(): ActionItem[] {
     return this.actionItems.filter(item =>
-      item.type !== 'separator' && !item.disabled
+      item.type !== 'separator' && !item.disabled && !item.hidden
     );
   }
 
@@ -334,7 +438,7 @@ export class TUI {
     });
 
     // Number hotkeys for actions (work globally, not just in actions pane)
-    const hotkeys = ['1', '2', '3', '4', '5', '6', '7', '8'];
+    const hotkeys = ['1', '2', '3', '4', '5', '6', '7', '8', '9'];
     hotkeys.forEach((key, index) => {
       this.screen.key([key], () => {
         if (!this.activeModal && !this.activeFileViewer) {
@@ -432,8 +536,8 @@ export class TUI {
   private handleAction(actionId: string): void {
     switch (actionId) {
       case 'quit':
+        this.destroy();  // Kill spawned agents and cleanup first
         this.options.onExit();
-        this.destroy();
         break;
       case 'refresh':
         this.render();
@@ -668,7 +772,39 @@ export class TUI {
     if (this.eventLoop) {
       this.eventLoop.stop();
     }
-    this.screen.destroy();
+
+    // Kill all agent windows (non-hub windows in the current session)
+    const currentSession = getCurrentSession();
+    if (currentSession) {
+      const windows = listWindows(currentSession);
+      for (const window of windows) {
+        // Skip the hub window (TUI itself)
+        if (window.name === 'hub') continue;
+        try {
+          killWindow(currentSession, window.name);
+        } catch {
+          // Ignore errors - window might already be closed
+        }
+      }
+    }
+
+    try {
+      this.screen.destroy();
+    } finally {
+      // Restore original output functions after cleanup
+      // Delay restoration to catch any deferred terminal output
+      const savedStdout = this.originalStdoutWrite;
+      const savedStderr = this.originalStderrWrite;
+      const savedConsoleLog = this.originalConsoleLog;
+      const savedConsoleError = this.originalConsoleError;
+
+      setTimeout(() => {
+        if (savedStdout) process.stdout.write = savedStdout;
+        if (savedStderr) process.stderr.write = savedStderr;
+        if (savedConsoleLog) console.log = savedConsoleLog;
+        if (savedConsoleError) console.error = savedConsoleError;
+      }, 100);
+    }
   }
 
   public start(): void {

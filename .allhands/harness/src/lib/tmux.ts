@@ -24,7 +24,8 @@
  */
 
 import { execSync, spawn } from 'child_process';
-import { existsSync, readFileSync } from 'fs';
+import { existsSync, readFileSync, mkdirSync, writeFileSync } from 'fs';
+import { join } from 'path';
 import {
   buildAgentInvocation,
   listAgentProfiles,
@@ -517,34 +518,62 @@ export function spawnAgent(
   // Register this agent as spawned by ALL HANDS
   registerSpawnedAgent(windowName);
 
-  // Build environment as inline vars (VAR=value VAR2=value command)
-  // Pass windowName so AGENT_ID is set correctly
+  // Build environment variables for the agent
   const env = buildAgentEnv(config, currentBranch, windowName);
-  const envPrefix = Object.entries(env)
-    .map(([k, v]) => `${k}='${v}'`)
-    .join(' ');
 
-  // Build the prompt
-  const parts: string[] = [];
-
-  // Add preamble if provided
-  if (config.preamble) {
-    parts.push(config.preamble);
-  }
-
-  // Add flow reference
+  // Read the flow file content directly instead of referencing it
+  let flowContent = '';
   if (existsSync(config.flowPath)) {
-    parts.push(`Read and follow the instructions in: ${config.flowPath}`);
+    flowContent = readFileSync(config.flowPath, 'utf-8');
   }
 
-  const prompt = parts.join('\n\n');
+  // Write a launcher script to avoid all shell escaping issues
+  const tempDir = join(cwd || process.cwd(), '.allhands', 'harness', '.cache', 'launchers');
+  mkdirSync(tempDir, { recursive: true });
 
-  // Quote the prompt properly for shell
-  const escapedPrompt = prompt.replace(/'/g, "'\\''");
+  const launcherScript = join(tempDir, `${windowName}-launcher.sh`);
+  const promptFile = join(tempDir, `${windowName}-prompt.txt`);
+  const systemPromptFile = join(tempDir, `${windowName}-system.txt`);
 
-  // Build command: VAR=value VAR2=value claude --settings ... --dangerously-skip-permissions 'prompt'
-  const fullCommand = `${envPrefix} claude --settings .allhands/harness/src/platforms/claude/settings.json --dangerously-skip-permissions '${escapedPrompt}'`;
-  sendKeys(sessionName, windowName, fullCommand);
+  // Write flow content as the main prompt
+  if (flowContent) {
+    writeFileSync(promptFile, flowContent, 'utf-8');
+  }
+
+  // Write system prompt if provided
+  if (config.preamble && config.preamble.trim()) {
+    writeFileSync(systemPromptFile, config.preamble, 'utf-8');
+  }
+
+  // Build the launcher script
+  const scriptLines: string[] = ['#!/bin/bash', ''];
+
+  // Export environment variables
+  for (const [key, value] of Object.entries(env)) {
+    scriptLines.push(`export ${key}="${value}"`);
+  }
+  scriptLines.push('');
+
+  // Build claude command
+  const cmdParts: string[] = ['claude'];
+  cmdParts.push('--settings .allhands/harness/src/platforms/claude/settings.json');
+  cmdParts.push('--dangerously-skip-permissions');
+
+  if (config.preamble && config.preamble.trim()) {
+    cmdParts.push(`--system-prompt "$(cat '${systemPromptFile}')"`);
+  }
+
+  if (flowContent) {
+    cmdParts.push(`"$(cat '${promptFile}')"`);
+  }
+
+  scriptLines.push(cmdParts.join(' \\\n  '));
+
+  writeFileSync(launcherScript, scriptLines.join('\n'), { mode: 0o755 });
+
+  // Execute the launcher script with exec so it replaces the shell.
+  // This ensures the window closes when claude exits (no orphan shell).
+  sendKeys(sessionName, windowName, `exec bash '${launcherScript}'`);
 
   // Switch focus to the new window if requested (default for TUI actions)
   if (shouldFocus) {
