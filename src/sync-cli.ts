@@ -37,10 +37,16 @@ async function main() {
             type: 'boolean',
             describe: 'Skip confirmation prompts',
             default: false,
+          })
+          .option('full-replace', {
+            alias: 'f',
+            type: 'boolean',
+            describe: 'Replace entire .allhands directory (backup created)',
+            default: false,
           });
       },
       async (argv) => {
-        const code = await cmdInit(argv.target as string, argv.yes as boolean);
+        const code = await cmdInit(argv.target as string, argv.yes as boolean, argv.fullReplace as boolean);
         process.exit(code);
       }
     )
@@ -48,15 +54,22 @@ async function main() {
       'update',
       'Pull latest from allhands',
       (yargs) => {
-        return yargs.option('yes', {
-          alias: 'y',
-          type: 'boolean',
-          describe: 'Skip confirmation prompts',
-          default: false,
-        });
+        return yargs
+          .option('yes', {
+            alias: 'y',
+            type: 'boolean',
+            describe: 'Skip confirmation prompts',
+            default: false,
+          })
+          .option('full-replace', {
+            alias: 'f',
+            type: 'boolean',
+            describe: 'Replace entire .allhands directory (backup created)',
+            default: false,
+          });
       },
       async (argv) => {
-        const code = await cmdUpdate(argv.yes as boolean);
+        const code = await cmdUpdate(argv.yes as boolean, argv.fullReplace as boolean);
         process.exit(code);
       }
     )
