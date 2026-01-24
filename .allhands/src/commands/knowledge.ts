@@ -19,7 +19,7 @@ import {
   AgentRunner,
   type AggregatorOutput,
   type SearchResult,
-} from "../lib/agents/index.js";
+} from "../lib/opencode/index.js";
 import {
   INDEX_CONFIGS,
   KnowledgeService,

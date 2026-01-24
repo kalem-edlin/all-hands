@@ -18,7 +18,7 @@ import {
   listSchemas,
   formatErrors,
 } from '../lib/schema.js';
-import { loadAllProfiles } from '../lib/agents.js';
+import { loadAllProfiles } from '../lib/opencode/index.js';
 import { TEMPLATE_VAR_NAMES } from '../lib/schemas/template-vars.js';
 
 const __filename = fileURLToPath(import.meta.url);

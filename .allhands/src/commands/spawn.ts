@@ -9,7 +9,7 @@ import { Command } from "commander";
 import { readFileSync } from "fs";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
-import { AgentRunner } from "../lib/agents/index.js";
+import { AgentRunner } from "../lib/opencode/index.js";
 import { logWarn } from "../lib/observability.js";
 import { BaseCommand, type CommandResult } from "../lib/base-command.js";
 

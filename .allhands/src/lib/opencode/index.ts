@@ -1,7 +1,13 @@
 /**
- * Sub-agent infrastructure for All Hands.
- * Uses OpenCode SDK to spawn agents for specialized tasks.
+ * OpenCode SDK integration for All Hands.
+ *
+ * This module provides:
+ * - Agent profiles: YAML-defined configurations for TUI-spawned agents
+ * - Agent runner: OpenCode SDK wrapper for sub-agent execution
  */
+
+// Re-export profile management
+export * from './profiles.js';
 
 // MCP server configuration (matches opencode SDK McpLocalConfig)
 export interface McpServerConfig {

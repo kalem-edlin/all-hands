@@ -26,7 +26,7 @@ import {
   getRunningAgents,
   renameCurrentWindow,
 } from '../lib/tmux.js';
-import { getProfilesByTuiAction } from '../lib/agents.js';
+import { getProfilesByTuiAction } from '../lib/opencode/index.js';
 import { suggestBranchName, buildPR } from '../lib/oracle.js';
 import type { PromptFile } from '../lib/prompts.js';
 import { findSpecById } from '../lib/specs.js';

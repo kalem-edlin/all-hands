@@ -33,7 +33,7 @@ import {
   buildAgentInvocation,
   type AgentProfile,
   type TemplateContext,
-} from './agents.js';
+} from './opencode/index.js';
 
 /**
  * Agent type = agent profile name.

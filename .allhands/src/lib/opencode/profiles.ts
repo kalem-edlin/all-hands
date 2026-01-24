@@ -19,12 +19,12 @@ import {
   normalizeProfile,
   validateProfileSemantics,
   type AgentProfile,
-} from './schemas/agent-profile.js';
+} from '../schemas/agent-profile.js';
 import {
   validateContext,
   type TemplateContext,
   type TemplateVarName,
-} from './schemas/template-vars.js';
+} from '../schemas/template-vars.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -58,16 +58,18 @@ export const STOCK_ENV_VARS = [
 
 /**
  * Get the agents directory path
+ * Path: src/lib/opencode/ -> src/lib/ -> src/ -> .allhands/ -> agents/
  */
 function getAgentsDir(): string {
-  return join(__dirname, '..', '..', 'agents');
+  return join(__dirname, '..', '..', '..', 'agents');
 }
 
 /**
  * Get the flows directory path
+ * Path: src/lib/opencode/ -> src/lib/ -> src/ -> .allhands/ -> flows/
  */
 function getFlowsDir(): string {
-  return join(__dirname, '..', '..', 'flows');
+  return join(__dirname, '..', '..', '..', 'flows');
 }
 
 /**
@@ -291,5 +293,5 @@ export function loadAllProfiles(): {
 }
 
 // Re-export types
-export type { AgentProfile } from './schemas/agent-profile.js';
-export type { TemplateContext, TemplateVarName } from './schemas/template-vars.js';
+export type { AgentProfile } from '../schemas/agent-profile.js';
+export type { TemplateContext, TemplateVarName } from '../schemas/template-vars.js';
