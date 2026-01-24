@@ -12,7 +12,7 @@
 
 import { existsSync, mkdirSync } from 'fs';
 import { join } from 'path';
-import { getCurrentBranch, updateGreptileStatus, readStatus } from './planning.js';
+import { getCurrentBranch, updateGreptileStatus, readStatus, isLockedBranch } from './planning.js';
 import { listWindows, SESSION_NAME, sessionExists, getCurrentSession, getSpawnedAgentRegistry, unregisterSpawnedAgent } from './tmux.js';
 import { pickNextPrompt, markPromptInProgress, type PromptFile } from './prompts.js';
 import { shutdownDaemon } from './mcp-client.js';
@@ -42,19 +42,7 @@ export interface EventLoopCallbacks {
   onLoopStatus?: (message: string) => void;
 }
 
-// Protected branches that should not trigger auto .planning/ init
-const PROTECTED_BRANCHES = [
-  'main',
-  'master',
-  'stage',
-  'staging',
-  'develop',
-  'development',
-  'prod',
-  'production',
-];
-
-const PROTECTED_PREFIXES = ['wt-'];
+// Note: Use isLockedBranch() from planning.ts for consistent branch checks
 
 export class EventLoop {
   private intervalId: NodeJS.Timeout | null = null;
@@ -361,21 +349,10 @@ export class EventLoop {
 
   /**
    * Check if a branch is protected (should not auto-init .planning/)
+   * Uses centralized isLockedBranch() from planning.ts
    */
   private isProtectedBranch(branch: string): boolean {
-    const lowerBranch = branch.toLowerCase();
-
-    if (PROTECTED_BRANCHES.includes(lowerBranch)) {
-      return true;
-    }
-
-    for (const prefix of PROTECTED_PREFIXES) {
-      if (lowerBranch.startsWith(prefix)) {
-        return true;
-      }
-    }
-
-    return false;
+    return isLockedBranch(branch);
   }
 
   /**

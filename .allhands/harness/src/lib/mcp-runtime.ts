@@ -14,9 +14,9 @@ import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-// Path: harness/src/lib/ -> harness/src/ -> harness/ -> .allhands/
-const ALLHANDS_ROOT = join(__dirname, '..', '..', '..');
-const CACHE_DIR = join(ALLHANDS_ROOT, '.cache', 'mcp');
+// Path: harness/src/lib/ -> harness/src/ -> harness/
+const HARNESS_ROOT = join(__dirname, '..', '..');
+const CACHE_DIR = join(HARNESS_ROOT, '.cache', 'mcp');
 
 /**
  * MCP server configuration - one per server wrapper file.

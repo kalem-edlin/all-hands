@@ -98,8 +98,8 @@ export class KnowledgeService {
   constructor(projectRoot: string, options?: { quiet?: boolean }) {
     this.projectRoot = projectRoot;
     this.quiet = options?.quiet ?? false;
-    // Store knowledge index in .allhands/.knowledge
-    this.knowledgeDir = join(projectRoot, ".allhands", ".knowledge");
+    // Store knowledge index in .allhands/harness/.knowledge
+    this.knowledgeDir = join(projectRoot, ".allhands", "harness", ".knowledge");
   }
 
   private log(message: string): void {

@@ -129,8 +129,20 @@ export function register(program: Command): void {
     .option('--json', 'Output as JSON')
     .option('--domains-only', 'Only list domain names')
     .option('--domain <name>', 'Filter to a specific domain')
-    .action(async (options: { json?: boolean; domainsOnly?: boolean; domain?: string }) => {
-      const allSpecs = loadAllSpecs();
+    .option('--roadmap', 'Only show specs in the roadmap (not completed)')
+    .option('--completed', 'Only show completed specs')
+    .option('--in-progress', 'Only show in-progress specs')
+    .action(async (options: { json?: boolean; domainsOnly?: boolean; domain?: string; roadmap?: boolean; completed?: boolean; inProgress?: boolean }) => {
+      let allSpecs = loadAllSpecs();
+
+      // Apply status filters
+      if (options.roadmap) {
+        allSpecs = allSpecs.filter((s) => s.status === 'roadmap');
+      } else if (options.completed) {
+        allSpecs = allSpecs.filter((s) => s.status === 'completed');
+      } else if (options.inProgress) {
+        allSpecs = allSpecs.filter((s) => s.status === 'in_progress');
+      }
 
       // Group by domain_name
       const byDomain: Record<string, SpecInfo[]> = {};

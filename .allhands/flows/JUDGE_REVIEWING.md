@@ -5,3 +5,6 @@ NOTES:
   * `.allhands/flows/EXPECTATIONS_FIT_REVIEW.md` (ensures the alignment doc + prompts reflect /document user decisions and implementation that combines to fit their original spec expectations)
   * `.allhands/flows/SECURITY_REVIEW.md` (ensures the implementation is secure and does not introduce any security risks)
   * `.allhands/flows/YAGNI_REVIEW.md` (ensures the implementation is performant and does not introduce any performance issues)
+* Use the `.allhands/flows/shared/REVIEW_OPTIONS_BREAKDOWN.md` file to break down the feedback into actionable options for the user to choose from.
+* Use the `.allhands/flows/shared/PROMPT_TASKS_CURATION.md` file to create new "review-fix" prompts for all of the accepted ideas from the user
+* Im probably missing a bunch of stuff here - but this is the core of the workflow - not too difficult.

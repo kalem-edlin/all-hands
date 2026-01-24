@@ -85,7 +85,7 @@ Get user confirmation before proceeding to creation.
 ah schema validation-suite
 ```
 
-2. Write the suite file to `.allhands/validation-tooling/<suite-name>.md`
+2. Write the suite file to `.allhands/validation/<suite-name>.md`
 
 Required frontmatter:
 - `name`: Unique identifier (matches filename)

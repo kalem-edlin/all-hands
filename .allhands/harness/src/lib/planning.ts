@@ -11,6 +11,66 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync } from 
 import { join } from 'path';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import { execSync } from 'child_process';
+import { getBaseBranch } from './git.js';
+
+/**
+ * Locked branch patterns - branches that should never have planning dirs.
+ * Includes BASE_BRANCH, common protected branches, and worktree/quick prefixes.
+ */
+const LOCKED_BRANCH_NAMES = new Set([
+  'main',
+  'master',
+  'develop',
+  'dev',
+  'stage',
+  'staging',
+  'prod',
+  'production',
+]);
+
+const LOCKED_BRANCH_PREFIXES = ['wt-', 'quick/'];
+
+/**
+ * Check if a branch is a "locked" branch that should not have planning.
+ * Locked branches: BASE_BRANCH, main, develop, dev, stage, staging, prod, production, wt-*, quick/*
+ */
+export function isLockedBranch(branch: string): boolean {
+  // Check if it's the configured base branch
+  const baseBranch = getBaseBranch();
+  if (branch === baseBranch) {
+    return true;
+  }
+
+  // Check against known locked names
+  if (LOCKED_BRANCH_NAMES.has(branch)) {
+    return true;
+  }
+
+  // Check prefixes
+  for (const prefix of LOCKED_BRANCH_PREFIXES) {
+    if (branch.startsWith(prefix)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Check if the current branch has a valid planning directory.
+ * Returns false for locked branches even if a .planning dir exists.
+ */
+export function hasPlanningForBranch(branch?: string, cwd?: string): boolean {
+  const currentBranch = branch || getCurrentBranch(cwd);
+
+  // Locked branches never have planning
+  if (isLockedBranch(currentBranch)) {
+    return false;
+  }
+
+  // Check if planning dir exists
+  return planningDirExists(currentBranch, cwd);
+}
 
 export interface LoopConfig {
   enabled: boolean;

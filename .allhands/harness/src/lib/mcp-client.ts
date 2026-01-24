@@ -6,7 +6,7 @@
  *
  * For stateless servers, uses direct one-shot connections.
  *
- * Daemon socket path: .allhands/.cache/sessions/{AGENT_ID}.sock
+ * Daemon socket path: .allhands/harness/.cache/sessions/{AGENT_ID}.sock
  *
  * Session Lifecycle (stateful servers):
  * - Sessions are auto-started on first tool call.
@@ -26,9 +26,9 @@ import type { McpServerConfig, McpToolSchema } from './mcp-runtime.js';
 import { resolveEnvVars } from './mcp-runtime.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-// Path: harness/src/lib/ -> harness/src/ -> harness/ -> .allhands/
-const ALLHANDS_ROOT = join(__dirname, '..', '..', '..');
-const SESSIONS_DIR = join(ALLHANDS_ROOT, '.cache', 'sessions');
+// Path: harness/src/lib/ -> harness/src/ -> harness/
+const HARNESS_ROOT = join(__dirname, '..', '..');
+const SESSIONS_DIR = join(HARNESS_ROOT, '.cache', 'sessions');
 const DAEMON_SCRIPT = join(__dirname, 'mcp-daemon.ts');
 
 /**
@@ -91,7 +91,7 @@ export function startDaemon(agentId?: string): void {
 
   // Spawn daemon as detached process
   const child = spawn('npx', ['tsx', DAEMON_SCRIPT, aid], {
-    cwd: ALLHANDS_ROOT,
+    cwd: HARNESS_ROOT,
     detached: true,
     stdio: 'ignore',
     env: { ...process.env, AGENT_ID: aid },

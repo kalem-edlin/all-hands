@@ -58,31 +58,11 @@ export function isDirectModeBranch(branch: string): boolean {
 }
 
 /**
- * Auto-detect base branch using merge-base.
- * Respects BASE_BRANCH env variable if set.
+ * Get base branch from environment or default to main.
+ * Set BASE_BRANCH in .env.ai to configure.
  */
 export function getBaseBranch(): string {
-  const envBase = process.env.BASE_BRANCH;
-  if (envBase) {
-    return envBase;
-  }
-
-  const candidates = ["main", "master", "develop", "staging", "production"];
-
-  for (const base of candidates) {
-    try {
-      const result = spawnSync("git", ["merge-base", base, "HEAD"], {
-        encoding: "utf-8",
-      });
-      if (result.status === 0) {
-        return base;
-      }
-    } catch {
-      continue;
-    }
-  }
-
-  return "main";
+  return process.env.BASE_BRANCH || "main";
 }
 
 /**

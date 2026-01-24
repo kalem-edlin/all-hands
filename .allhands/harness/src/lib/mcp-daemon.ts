@@ -6,7 +6,7 @@
  *
  * Each AGENT_ID gets its own daemon instance, enabling parallel sessions.
  *
- * Socket path: .allhands/.cache/sessions/{AGENT_ID}.sock
+ * Socket path: .allhands/harness/.cache/sessions/{AGENT_ID}.sock
  *
  * Commands:
  * - { cmd: "call", server: string, tool: string, params: object, config: McpServerConfig }
@@ -42,9 +42,9 @@ import type { McpServerConfig, McpToolSchema } from './mcp-runtime.js';
 import { resolveEnvVars, DAEMON_DEFAULT_MCP_TIMEOUT } from './mcp-runtime.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-// Path: harness/src/lib/ -> harness/src/ -> harness/ -> .allhands/
-const ALLHANDS_ROOT = join(__dirname, '..', '..', '..');
-const SESSIONS_DIR = join(ALLHANDS_ROOT, '.cache', 'sessions');
+// Path: harness/src/lib/ -> harness/src/ -> harness/
+const HARNESS_ROOT = join(__dirname, '..', '..');
+const SESSIONS_DIR = join(HARNESS_ROOT, '.cache', 'sessions');
 
 /**
  * How often to check for session timeouts (30 seconds).

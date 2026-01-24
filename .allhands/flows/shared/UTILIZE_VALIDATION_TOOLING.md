@@ -46,7 +46,7 @@ Select all suites that apply to your implementation scope.
 For each relevant suite, read the full file:
 ```bash
 # Path from the list output
-cat .allhands/validation-tooling/<suite-name>.md
+cat .allhands/validation/<suite-name>.md
 ```
 
 Understand:
@@ -83,6 +83,6 @@ If you identify validation needs with no matching suite:
 
 When using this flow during prompt creation (via PROMPT_TASKS_CURATION):
 - Add matched suite file paths to the prompt's `validation_suites` frontmatter
-- Use the `file` field from `ah validation-tools list` output (e.g., `.allhands/validation-tooling/typescript-typecheck.md`)
+- Use the `file` field from `ah validation-tools list` output (e.g., `.allhands/validation/typescript-typecheck.md`)
 - This makes the validation approach explicit and reviewable
 - Executors can read the referenced suite files directly

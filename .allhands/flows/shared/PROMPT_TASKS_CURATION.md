@@ -79,5 +79,5 @@ If no suite matches the prompt's domain:
 - Use the prompts directory path to write the prompt file to
 - Naming convention: `<two_digit_number>-<prompt_type>-<title>["-DONE"].prompt.md`
 - Include `skills: [.allhands/skills/skill-1/SKILL.md, .allhands/skills/skill-2/SKILL.md]` in frontmatter
-- Include `validation_suites: [.allhands/validation-tooling/suite-1.md, .allhands/validation-tooling/suite-2.md]` in frontmatter
+- Include `validation_suites: [.allhands/validation/suite-1.md, .allhands/validation/suite-2.md]` in frontmatter
 - For user-patch prompts, include `patches_prompts: [X, Y]` referencing which prompts this patch addresses

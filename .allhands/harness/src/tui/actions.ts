@@ -9,7 +9,8 @@
  * [5] Review Jury
  * [6] Create PR / Greptile Reviewing / Address PR Review
  * [7] Compound
- * [8] Switch Milestone
+ * [8] Mark Completed
+ * [9] Switch Milestone
  * ─ Toggles ─
  * [ ] Loop
  * [ ] Emergent
@@ -28,6 +29,7 @@ export interface ActionItem {
   type: 'action' | 'toggle' | 'separator';
   highlight?: boolean;
   disabled?: boolean;
+  hidden?: boolean;
   checked?: boolean;
 }
 
@@ -35,6 +37,9 @@ export interface ToggleState {
   loopEnabled: boolean;
   emergentEnabled: boolean;
   prActionState: PRActionState;
+  hasMilestone: boolean;
+  hasCompletedPrompts: boolean;
+  compoundRun: boolean;
 }
 
 const PANE_WIDTH = 24;
@@ -68,6 +73,11 @@ export function createActionsPane(
   let selectableIndex = 0;
 
   for (const item of items) {
+    // Skip hidden items entirely
+    if (item.hidden) {
+      continue;
+    }
+
     if (item.type === 'separator') {
       // Separator line
       blessed.text({
@@ -80,8 +90,9 @@ export function createActionsPane(
       });
       y += 1;
     } else {
-      // Selectable item
-      const isSelected = selectedIndex === selectableIndex;
+      // Selectable item - only count non-disabled items for selection index
+      const isSelectable = !item.disabled;
+      const isSelected = isSelectable && selectedIndex === selectableIndex;
       const content = formatItemContent(item, isSelected);
 
       blessed.text({
@@ -94,7 +105,10 @@ export function createActionsPane(
       });
 
       y += 1;
-      selectableIndex++;
+      // Only increment selectableIndex for non-disabled items
+      if (isSelectable) {
+        selectableIndex++;
+      }
     }
   }
 
@@ -121,16 +135,26 @@ function buildActionItems(toggleState: ToggleState): ActionItem[] {
   const prLabel = getPRActionLabel(toggleState.prActionState);
   const prDisabled = toggleState.prActionState === 'greptile-reviewing';
 
+  const { hasMilestone, hasCompletedPrompts, compoundRun } = toggleState;
+
+  // Dynamic label for switch/choose milestone
+  const milestoneLabel = hasMilestone ? 'Switch Milestone' : 'Choose Milestone';
+
   return [
-    // Agent spawners
+    // Agent spawners - coordinator and ideation always available
     { id: 'coordinator', label: 'Coordinator', key: '1', type: 'action' },
     { id: 'ideation', label: 'Ideation', key: '2', type: 'action' },
-    { id: 'planner', label: 'Planner', key: '3', type: 'action' },
-    { id: 'e2e-test-planner', label: 'Build E2E Test', key: '4', type: 'action' },
-    { id: 'review-jury', label: 'Review Jury', key: '5', type: 'action' },
-    { id: 'pr-action', label: prLabel, key: '6', type: 'action', disabled: prDisabled },
-    { id: 'compound', label: 'Compound', key: '7', type: 'action' },
-    { id: 'switch-milestone', label: 'Switch Milestone', key: '8', type: 'action' },
+    // Planner requires milestone
+    { id: 'planner', label: 'Planner', key: '3', type: 'action', disabled: !hasMilestone },
+    // These require at least 1 completed prompt
+    { id: 'e2e-test-planner', label: 'Build E2E Test', key: '4', type: 'action', hidden: !hasCompletedPrompts },
+    { id: 'review-jury', label: 'Review Jury', key: '5', type: 'action', hidden: !hasCompletedPrompts },
+    { id: 'pr-action', label: prLabel, key: '6', type: 'action', disabled: prDisabled, hidden: !hasCompletedPrompts },
+    { id: 'compound', label: 'Compound', key: '7', type: 'action', hidden: !hasCompletedPrompts },
+    // Mark completed - only visible if compound has been run
+    { id: 'mark-completed', label: 'Mark Completed', key: '8', type: 'action', hidden: !compoundRun },
+    // Switch/Choose milestone - always visible, label changes
+    { id: 'switch-milestone', label: milestoneLabel, key: '9', type: 'action' },
     // Spacing before toggles
     { id: 'spacer-1', label: '', type: 'separator' },
     { id: 'separator-toggles', label: '─── Toggles ───', type: 'separator' },
@@ -185,6 +209,6 @@ function formatItemContent(item: ActionItem, isSelected: boolean): string {
 
 export function getSelectableItems(toggleState: ToggleState): ActionItem[] {
   return buildActionItems(toggleState).filter(
-    (item) => item.type !== 'separator' && !item.disabled
+    (item) => item.type !== 'separator' && !item.disabled && !item.hidden
   );
 }

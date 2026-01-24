@@ -131,6 +131,17 @@
         ]
       }
     ],
+    "SessionEnd": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "ah hooks lifecycle agent-stop"
+          }
+        ]
+      }
+    ],
     "PreCompact": [
       {
         "matcher": "*",

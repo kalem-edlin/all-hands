@@ -43,7 +43,7 @@ const getAggregatorPrompt = (): string => {
 const DEFAULT_TOKEN_THRESHOLD = 3500;
 
 /**
- * Get base branch for git operations
+ * Get base branch from environment or default to main.
  */
 function getBaseBranch(): string {
   return process.env.BASE_BRANCH || "main";

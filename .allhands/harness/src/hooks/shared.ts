@@ -172,12 +172,12 @@ export function getProjectDir(): string {
 }
 
 /**
- * Get the cache directory (.allhands/.cache/).
+ * Get the cache directory (.allhands/harness/.cache/).
  * Creates the directory if it doesn't exist.
  */
 export function getCacheDir(): string {
   const projectDir = getProjectDir();
-  const cacheDir = join(projectDir, '.allhands', '.cache');
+  const cacheDir = join(projectDir, '.allhands', 'harness', '.cache');
 
   if (!existsSync(cacheDir)) {
     mkdirSync(cacheDir, { recursive: true });

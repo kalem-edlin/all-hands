@@ -1,3 +1,8 @@
+NOTES:
+* Documentation writing MUST be able to be run in any way the documentation taxonomist spawning agent wants them to run. 
+* It must provide INPUTS and OUTPUTS xml, because these agents are always going to be run as sub tasks!
+* Everything here is already configured well for its purposes, it just needs to be ensured to follow FLOW rules - understanding this is a NOT a core flow.
+
 <goal>
 Write knowledge-base docs - capture decisions, rationale, patterns. Zero inline code. Multiple focused files per subdomain.
 </goal>

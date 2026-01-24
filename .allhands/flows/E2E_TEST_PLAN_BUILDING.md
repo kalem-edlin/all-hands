@@ -19,4 +19,4 @@ Engineers need to be convinced of milestone implemention efficacy - and because 
   - These can be specific tests, specific args for CLI invocations, profiling tool usage etc - leveraging the main validation tools of the harness
     - Run `ah validation-tools list` to see all available validation suites
     - Read `.allhands/flows/shared/UTILIZE_VALIDATION_TOOLING.md` for guidance on selecting and applying suites to the E2E test plan
-- Create the E2E test plan doc alongside the alignment doc as `e2e_test_plan.md`
+- Create the E2E test plan at the E2E Test Plan Output Path

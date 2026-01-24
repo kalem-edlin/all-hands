@@ -5,7 +5,5 @@ tui_action: coordinator
 tui_label: Coordinator
 tui_requires_milestone: false
 non_coding: true
-message_template: |
-  Coordinating milestone: ${MILESTONE_NAME}
-template_vars:
-  - MILESTONE_NAME
+message_template: ""
+template_vars: []

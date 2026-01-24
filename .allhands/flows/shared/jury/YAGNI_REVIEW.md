@@ -1,0 +1,6 @@
+NOTES:
+* YAGNI = You Ain't Gonna Need It
+* Reviews all of the implementation using git (diff to base) as to implementation that was done outside of the realm of necessity serving as a defense for overengineeing and pushing code that is too complicated / not necessary for the tasks and communcation of the user
+* Must try not to go up against specific user wishes, but if they figure out somthing the user has clarifified / decision via prompts summaries / patch prompts / emergent prompts / communications that would have manifested AFTER the planning phase reviews (becauase there is a YAGNI for the initial prompts + inital alignment doc that has already been run) - it MUST object where it sees fit as to what is not needed
+* (eg makes challnges of human decisions less of a priority to fix because the human is already specifically aware of it, and may get annoyed if the highest priority suggestions are all things theyve already clarified, but still offering them the opporunriyy to consider this YAGNI perspective)
+* Returns the review results, and a summary of exactly what implementation violates the YANGI principles ordered by priority for fixing. 

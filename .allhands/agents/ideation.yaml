@@ -5,7 +5,5 @@ tui_action: ideation
 tui_label: Ideation
 tui_requires_milestone: false
 non_coding: false
-message_template: |
-  Exploring ideas for: ${MILESTONE_NAME}
-template_vars:
-  - MILESTONE_NAME
+message_template: ""
+template_vars: []

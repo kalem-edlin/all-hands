@@ -1,2 +1,7 @@
-Say REVIEW_OPTIONS_BREAKDOWN to the user
-Run Bash(sleep) for 15 seconds
+NOTES:
+* Inputs: an unorganized list of review options from multiple comments / perspectices / areas of the codebase / implementation to address
+  * The path to the alignment doc if you are unware of its contents
+  * The prompt path file to see planned or completed implmatation summaires for you to add to your context as needed for deciding breakdown improtance / ranking
+* Deeply consider each presented todo from review feedback, understand how they relate to eachother - you should combin and may choose to elevate duplicate concerns as they prove urgency - udnerstand their imrpotance in the wider context / initiatives / desires of the user from the spec doc if you are familiar with its contents
+* PRsent the review options to the user ranked by important (P1, P2, P3) order by least imporant to most important in your summary test, then ask the user which ones they want to implement and which ones they dont want always allowing the user to explain why.
+* OUTPUTS: their choices, as what they choose not to do, should be added to the alignment doc SOMEWHERE? im not sure where in that schema we should track something like this, but a user opting out of certain review options for implementation is important to remember somehwere - look at schema files and identify where this could be tracked.
