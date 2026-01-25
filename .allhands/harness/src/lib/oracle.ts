@@ -192,6 +192,7 @@ function getGitDiffFromBase(cwd?: string, maxLines: number = 300): string {
     const diffStat = execSync(`git diff ${baseBranch}...HEAD --stat`, {
       encoding: 'utf-8',
       cwd: workingDir,
+      stdio: ['pipe', 'pipe', 'pipe'],
     }).trim();
 
     // Get actual diff (truncated)
@@ -199,6 +200,7 @@ function getGitDiffFromBase(cwd?: string, maxLines: number = 300): string {
       encoding: 'utf-8',
       cwd: workingDir,
       maxBuffer: 1024 * 1024 * 10,
+      stdio: ['pipe', 'pipe', 'pipe'],
     });
 
     const lines = diff.split('\n');

@@ -126,6 +126,7 @@ export function getCurrentBranch(cwd?: string): string {
     const branch = execSync('git rev-parse --abbrev-ref HEAD', {
       cwd: cwd || process.cwd(),
       encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'pipe'],
     }).trim();
     return branch;
   } catch {
@@ -141,6 +142,7 @@ export function getGitRoot(cwd?: string): string {
     const root = execSync('git rev-parse --show-toplevel', {
       cwd: cwd || process.cwd(),
       encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'pipe'],
     }).trim();
     return root;
   } catch {

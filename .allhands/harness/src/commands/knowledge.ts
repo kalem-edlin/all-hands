@@ -63,6 +63,7 @@ function getChangesFromGit(indexName: IndexName): FileChange[] {
   const mergeBaseResult = spawnSync("git", ["merge-base", baseBranch, "HEAD"], {
     encoding: "utf-8",
     cwd,
+    stdio: ['pipe', 'pipe', 'pipe'],
   });
 
   if (mergeBaseResult.status !== 0) {
@@ -75,7 +76,7 @@ function getChangesFromGit(indexName: IndexName): FileChange[] {
   const diffResult = spawnSync(
     "git",
     ["diff", "--name-status", `${mergeBase}..HEAD`, "--", ...config.paths],
-    { encoding: "utf-8", cwd }
+    { encoding: "utf-8", cwd, stdio: ['pipe', 'pipe', 'pipe'] }
   );
 
   if (diffResult.status !== 0 || !diffResult.stdout.trim()) {

@@ -53,11 +53,13 @@ export function getGitDiffSummary(cwd?: string): string {
     const staged = execSync('git diff --cached --stat', {
       encoding: 'utf-8',
       cwd: workingDir,
+      stdio: ['pipe', 'pipe', 'pipe'],
     }).trim();
 
     const unstaged = execSync('git diff --stat', {
       encoding: 'utf-8',
       cwd: workingDir,
+      stdio: ['pipe', 'pipe', 'pipe'],
     }).trim();
 
     const parts: string[] = [];
@@ -89,6 +91,7 @@ export function getGitDiffFull(cwd?: string, maxLines: number = 500): string {
       encoding: 'utf-8',
       cwd: workingDir,
       maxBuffer: 1024 * 1024 * 10, // 10MB buffer
+      stdio: ['pipe', 'pipe', 'pipe'],
     });
 
     // Truncate if too long
@@ -269,12 +272,14 @@ export async function executeRecommendation(
       execSync('git add -A', {
         cwd: workingDir,
         encoding: 'utf-8',
+        stdio: ['pipe', 'pipe', 'pipe'],
       });
 
       // Check if there are staged changes
       const status = execSync('git status --porcelain', {
         cwd: workingDir,
         encoding: 'utf-8',
+        stdio: ['pipe', 'pipe', 'pipe'],
       });
 
       if (status.trim()) {
@@ -282,6 +287,7 @@ export async function executeRecommendation(
         execSync(`git commit -m "${commitMessage.replace(/"/g, '\\"')}"`, {
           cwd: workingDir,
           encoding: 'utf-8',
+          stdio: ['pipe', 'pipe', 'pipe'],
         });
         return true;
       }
@@ -300,6 +306,7 @@ export async function executeRecommendation(
             execSync(`git stash push -m "preserve-${file}" -- "${file}"`, {
               cwd: workingDir,
               encoding: 'utf-8',
+              stdio: ['pipe', 'pipe', 'pipe'],
             });
           } catch {
             // File might not have changes
@@ -311,12 +318,14 @@ export async function executeRecommendation(
       execSync('git checkout .', {
         cwd: workingDir,
         encoding: 'utf-8',
+        stdio: ['pipe', 'pipe', 'pipe'],
       });
 
       // Clean untracked files (except .planning/)
       execSync('git clean -fd --exclude=.planning', {
         cwd: workingDir,
         encoding: 'utf-8',
+        stdio: ['pipe', 'pipe', 'pipe'],
       });
 
       // Restore preserved files
@@ -326,6 +335,7 @@ export async function executeRecommendation(
             execSync('git stash pop', {
               cwd: workingDir,
               encoding: 'utf-8',
+              stdio: ['pipe', 'pipe', 'pipe'],
             });
           } catch {
             // Stash might be empty

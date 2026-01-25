@@ -101,6 +101,7 @@ export function getProjectRoot(): string {
     const result = execSync("git rev-parse --show-toplevel", {
       encoding: "utf-8",
       cwd,
+      stdio: ['pipe', 'pipe', 'pipe'],
     });
     return result.trim();
   } catch {
