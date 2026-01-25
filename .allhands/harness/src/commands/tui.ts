@@ -29,7 +29,7 @@ import {
   ensurePlanningDir,
 } from '../lib/planning.js';
 import { findSpecForPath, extractSpecNameFromFile } from '../lib/planning-utils.js';
-import { getBaseBranch, hasUncommittedChanges, checkoutBranch, getBranch } from '../lib/git.js';
+import { getBaseBranch } from '../lib/git.js';
 import { loadAllPrompts } from '../lib/prompts.js';
 import {
   isTmuxInstalled,
@@ -169,29 +169,6 @@ async function spawnAgentsForAction(
   if (requiresSpec && !spec) {
     tui.log('Error: No spec initialized. Use Switch Spec first.');
     return true; // Handled, but with error
-  }
-
-  // Ideation requires being on base branch (specs are committed to main)
-  if (action === 'ideation') {
-    const baseBranch = getBaseBranch();
-    const currentBranch = getBranch();
-
-    if (currentBranch !== baseBranch) {
-      // Check if we can safely checkout base branch
-      if (hasUncommittedChanges(cwd)) {
-        tui.log(`Error: Cannot ideate - uncommitted changes on ${currentBranch}.`);
-        tui.log(`Please commit or stash your changes, then try again.`);
-        return true;
-      }
-
-      // Auto-checkout base branch
-      tui.log(`Switching to ${baseBranch} for ideation...`);
-      if (!checkoutBranch(baseBranch, cwd)) {
-        tui.log(`Error: Failed to checkout ${baseBranch}.`);
-        return true;
-      }
-      tui.updateState({ branch: baseBranch });
-    }
   }
 
   // Check tmux availability
