@@ -7,7 +7,10 @@
  * - Monitoring loop progress and agent activity
  * - Managing specs and PR workflows
  *
- * Usage: ah [--spec <spec>]
+ * In the branch-keyed model:
+ * - Current git branch determines the active spec
+ * - Switching specs means checking out the spec's branch
+ * - Planning directories are keyed by sanitized branch name
  */
 
 import { Command } from 'commander';
@@ -21,12 +24,10 @@ import {
   getCurrentBranch,
   updateStatus,
   initializeStatus,
-  getActiveSpec,
-  setActiveSpec,
-  clearActiveSpec,
-  updateLastKnownBranch,
   getPlanningPaths,
   ensurePlanningDir,
+  sanitizeBranchForDir,
+  planningDirExists,
 } from '../lib/planning.js';
 import { findSpecForPath, extractSpecNameFromFile } from '../lib/planning-utils.js';
 import { getBaseBranch } from '../lib/git.js';
@@ -43,9 +44,9 @@ import { setHubWindowId, clearTuiSession } from '../lib/session.js';
 import { getProfilesByTuiAction } from '../lib/opencode/index.js';
 import { buildPR } from '../lib/oracle.js';
 import type { PromptFile } from '../lib/prompts.js';
-import { findSpecById } from '../lib/specs.js';
+import { findSpecById, findSpecByBranch, type SpecFile } from '../lib/specs.js';
 import { isTldrInstalled, hasSemanticIndex, buildSemanticIndex, needsSemanticRebuild } from '../lib/tldr.js';
-import { logTuiError } from '../lib/trace-store.js';
+import { logTuiError, logTuiAction, logTuiLifecycle } from '../lib/trace-store.js';
 
 /**
  * Launch the TUI - can be called directly or via command
@@ -61,9 +62,10 @@ export async function launchTUI(options: { spec?: string } = {}): Promise<void> 
   }
 
   const branch = getCurrentBranch(cwd);
+  const planningKey = sanitizeBranchForDir(branch);
 
-  // Determine active spec (from option or .active file)
-  const activeSpecName = options.spec || getActiveSpec(cwd);
+  // Find current spec from branch (branch-keyed model)
+  const currentSpec = findSpecByBranch(branch, cwd);
 
   // Build semantic index if missing or stale (branch switch)
   if (isTldrInstalled()) {
@@ -76,9 +78,9 @@ export async function launchTUI(options: { spec?: string } = {}): Promise<void> 
     }
   }
 
-  // Load initial state from active spec
-  const status = activeSpecName ? readStatus(activeSpecName, cwd) : null;
-  const prompts = activeSpecName ? loadAllPrompts(activeSpecName, cwd) : [];
+  // Load initial state from current branch's planning directory
+  const status = planningDirExists(planningKey, cwd) ? readStatus(planningKey, cwd) : null;
+  const prompts = status ? loadAllPrompts(planningKey, cwd) : [];
 
   // Convert prompts to PromptItem format
   const promptItems: PromptItem[] = prompts.map((p) => ({
@@ -102,7 +104,7 @@ export async function launchTUI(options: { spec?: string } = {}): Promise<void> 
     emergentEnabled: status?.loop.emergent ?? false,
     prompts: promptItems,
     activeAgents,
-    spec: activeSpecName ?? undefined,
+    spec: currentSpec?.id,
     branch,
     baseBranch,
     prActionState: 'create-pr' as PRActionState,
@@ -115,8 +117,11 @@ export async function launchTUI(options: { spec?: string } = {}): Promise<void> 
 
   const tui = new TUI({
     onAction: (action: string, data) => {
-      // Pass active spec for spec-based operations
-      handleAction(tui, action, activeSpecName, branch, data);
+      // Get current branch/spec from TUI state (not captured at init time)
+      const currentBranch = tui.getState().branch || getCurrentBranch(cwd);
+      const currentPlanningKey = sanitizeBranchForDir(currentBranch);
+      const spec = findSpecByBranch(currentBranch, cwd);
+      handleAction(tui, action, currentPlanningKey, spec, currentBranch, data);
     },
     onExit: () => {
       console.log('\nExiting All Hands TUI...');
@@ -131,11 +136,19 @@ export async function launchTUI(options: { spec?: string } = {}): Promise<void> 
   // Set initial state
   tui.updateState(initialState);
   tui.log(`Branch: ${branch}`);
-  if (activeSpecName && status) {
-    tui.log(`Active spec: ${status.name} (${status.stage})`);
+  if (currentSpec) {
+    tui.log(`Spec: ${currentSpec.id} (${status?.stage || 'no planning'})`);
   } else {
-    tui.log('No active spec. Use Switch Spec to select one.');
+    tui.log('No spec for this branch. Use Switch Spec to select one.');
   }
+
+  // Log TUI launch
+  logTuiLifecycle('tui.start', {
+    branch,
+    spec: currentSpec?.id,
+    promptCount: promptItems.length,
+    agentCount: activeAgents.length,
+  }, cwd);
 
   // Start TUI
   tui.start();
@@ -152,7 +165,8 @@ export async function launchTUI(options: { spec?: string } = {}): Promise<void> 
 async function spawnAgentsForAction(
   tui: TUI,
   action: string,
-  spec: string | null,
+  planningKey: string | null,
+  currentSpec: SpecFile | null,
   branch: string,
   status: ReturnType<typeof readStatus>,
   cwd?: string
@@ -166,8 +180,8 @@ async function spawnAgentsForAction(
 
   // Check if any profile requires spec
   const requiresSpec = profiles.some((p) => p.tuiRequiresSpec);
-  if (requiresSpec && !spec) {
-    tui.log('Error: No spec initialized. Use Switch Spec first.');
+  if (requiresSpec && !currentSpec) {
+    tui.log('Error: No spec for this branch. Checkout a spec branch first.');
     return true; // Handled, but with error
   }
 
@@ -179,7 +193,7 @@ async function spawnAgentsForAction(
 
   // Build template context once for all agents
   const context = buildTemplateContext(
-    spec || 'default', // Use spec for paths, fallback for when no spec
+    planningKey || 'default', // Use planning key for paths
     status?.name,
     undefined, // promptNumber - not applicable for TUI actions
     undefined, // promptPath - not applicable for TUI actions
@@ -209,15 +223,15 @@ async function spawnAgentsForAction(
       logTuiError('spawn-agent', e instanceof Error ? e : message, {
         action,
         profileName: profile.name,
-        spec,
+        spec: currentSpec?.id,
         branch,
       }, cwd);
     }
   }
 
   // Track compound_run in status when compound action is triggered
-  if (action === 'compound' && spec && status) {
-    updateStatus({ compound_run: true }, spec, cwd);
+  if (action === 'compound' && planningKey && status) {
+    updateStatus({ compound_run: true }, planningKey, cwd);
     tui.updateState({ compoundRun: true });
   }
 
@@ -228,16 +242,26 @@ async function spawnAgentsForAction(
 async function handleAction(
   tui: TUI,
   action: string,
-  spec: string | null,
+  planningKey: string | null,
+  currentSpec: SpecFile | null,
   branch: string,
   data?: Record<string, unknown>
 ): Promise<void> {
   const cwd = process.cwd();
-  // Read status from spec, not branch
-  const status = spec ? readStatus(spec, cwd) : null;
+
+  // Log TUI action
+  logTuiAction(action, {
+    spec: currentSpec?.id,
+    branch,
+    planningKey,
+    data,
+  }, cwd);
+
+  // Read status from planning directory
+  const status = planningKey ? readStatus(planningKey, cwd) : null;
 
   // Try to handle as a profile-based agent spawn
-  const handledByProfile = await spawnAgentsForAction(tui, action, spec, branch, status, cwd);
+  const handledByProfile = await spawnAgentsForAction(tui, action, planningKey, currentSpec, branch, status, cwd);
   if (handledByProfile) {
     return;
   }
@@ -245,16 +269,16 @@ async function handleAction(
   // Handle non-agent actions
   switch (action) {
     case 'create-pr': {
-      if (!spec || !status?.name) {
-        tui.log('Error: No spec initialized. Use Switch Spec first.');
+      if (!currentSpec || !planningKey) {
+        tui.log('Error: No spec for this branch. Checkout a spec branch first.');
         return;
       }
 
       tui.log('Creating PR via oracle...');
 
       try {
-        // buildPR uses spec for reading prompts/alignment
-        const result = await buildPR(spec, cwd);
+        // buildPR uses planning key for reading prompts/alignment
+        const result = await buildPR(planningKey, cwd);
 
         if (result.success && result.prUrl) {
           tui.log(`PR created: ${result.prUrl}`);
@@ -263,7 +287,7 @@ async function handleAction(
           tui.log(`Error: ${result.body}`);
           tui.log('You may need to push your branch first or check gh auth status.');
           logTuiError('create-pr', result.body || 'PR creation failed', {
-            spec,
+            spec: currentSpec.id,
             branch,
           }, cwd);
         }
@@ -271,7 +295,7 @@ async function handleAction(
         const message = e instanceof Error ? e.message : String(e);
         tui.log(`Error: ${message}`);
         logTuiError('create-pr', e instanceof Error ? e : message, {
-          spec,
+          spec: currentSpec?.id,
           branch,
         }, cwd);
       }
@@ -279,38 +303,28 @@ async function handleAction(
     }
 
     case 'mark-completed': {
-      if (!spec || !status?.name) {
-        tui.log('Error: No spec initialized. Use Switch Spec first.');
+      if (!currentSpec) {
+        tui.log('Error: No spec for this branch. Checkout a spec branch first.');
         return;
       }
 
-      tui.log(`Marking spec as completed: ${status.name}`);
+      tui.log(`Marking spec as completed: ${currentSpec.id}`);
 
       try {
-        // Find the current spec file
-        const specFile = findSpecById(status.name, cwd);
-        if (!specFile) {
-          tui.log(`Error: Spec file not found: ${status.name}`);
-          break;
-        }
-
         // Move spec from roadmap to completed
         const completedDir = join(cwd, 'specs', 'completed');
         if (!existsSync(completedDir)) {
           mkdirSync(completedDir, { recursive: true });
         }
 
-        const destPath = join(completedDir, specFile.filename);
+        const destPath = join(completedDir, currentSpec.filename);
         if (existsSync(destPath)) {
           tui.log(`Error: Destination already exists: ${destPath}`);
           break;
         }
 
-        renameSync(specFile.path, destPath);
-        tui.log(`Moved spec to: specs/completed/${specFile.filename}`);
-
-        // Clear active spec
-        clearActiveSpec(cwd);
+        renameSync(currentSpec.path, destPath);
+        tui.log(`Moved spec to: specs/completed/${currentSpec.filename}`);
 
         // Checkout base branch
         const baseBranch = getBaseBranch();
@@ -329,24 +343,10 @@ async function handleAction(
         const message = e instanceof Error ? e.message : String(e);
         tui.log(`Error: ${message}`);
         logTuiError('mark-completed', e instanceof Error ? e : message, {
-          spec,
+          spec: currentSpec?.id,
           branch,
         }, cwd);
       }
-      break;
-    }
-
-    case 'clear-spec': {
-      tui.log('Clearing active spec...');
-      clearActiveSpec(cwd);
-      tui.updateState({
-        spec: undefined,
-        prompts: [],
-        loopEnabled: false,
-        emergentEnabled: false,
-        compoundRun: false,
-      });
-      tui.log('Spec cleared');
       break;
     }
 
@@ -365,6 +365,13 @@ async function handleAction(
 
         if (!specFile) {
           tui.log(`Error: Spec file not found: ${specId}`);
+          break;
+        }
+
+        // Check if spec has a branch assigned
+        if (!specFile.branch) {
+          tui.log(`Error: Spec "${specId}" has no branch assigned.`);
+          tui.log('Use "ah specs persist <spec_path>" to assign a branch.');
           break;
         }
 
@@ -400,56 +407,60 @@ async function handleAction(
             tui.log(`Error resurrecting spec: ${message}`);
             logTuiError('resurrect-spec', resErr instanceof Error ? resErr : message, {
               specId,
-              spec,
+              spec: currentSpec?.id,
               branch,
             }, cwd);
             break;
           }
         }
 
-        const specPath = specFile.path;
-        const specName = extractSpecNameFromFile(specPath) || specFile.id;
+        // Checkout the spec's branch (we already validated it exists above)
+        const specBranch = specFile.branch!;
+        tui.log(`Checking out branch: ${specBranch}`);
 
-        // Check if this spec already has a planning directory
-        const existingSpec = findSpecForPath(specPath, cwd);
-
-        if (existingSpec) {
-          tui.log(`Found existing planning for spec: ${existingSpec}`);
-        } else {
-          // Create planning directory for this spec
-          tui.log(`Creating .planning/${specName}/`);
-          const paths = getPlanningPaths(specName, cwd);
-          ensurePlanningDir(specName, cwd);
-
-          // Initialize status with null branch (agent flows handle branching)
-          const gitRoot = dirname(specPath).replace(/\/specs\/.*$/, '');
-          const relativeSpecPath = specPath.replace(gitRoot + '/', '');
-          initializeStatus(specName, relativeSpecPath, null, cwd);
+        try {
+          execSync(`git checkout ${specBranch}`, { stdio: 'pipe', cwd });
+        } catch (gitErr) {
+          const message = gitErr instanceof Error ? gitErr.message : String(gitErr);
+          tui.log(`Error checking out branch: ${message}`);
+          logTuiError('checkout-branch', gitErr instanceof Error ? gitErr : message, {
+            specId,
+            specBranch,
+            branch,
+          }, cwd);
+          break;
         }
 
-        // Set as active spec
-        setActiveSpec(specName, cwd);
+        // Get planning key for the new branch
+        const newPlanningKey = sanitizeBranchForDir(specBranch);
 
-        tui.log(`Activated spec: ${specName}`);
-        tui.log(`Note: Branch management is handled by agent flows, not the TUI.`);
+        // Ensure planning directory exists
+        if (!planningDirExists(newPlanningKey, cwd)) {
+          tui.log(`Creating .planning/${newPlanningKey}/`);
+          ensurePlanningDir(newPlanningKey, cwd);
+          initializeStatus(newPlanningKey, specFile.path, null, cwd);
+        }
 
         // Update TUI state
-        const newStatus = readStatus(specName, cwd);
-        const newPrompts = loadAllPrompts(specName, cwd);
+        const newStatus = readStatus(newPlanningKey, cwd);
+        const newPrompts = loadAllPrompts(newPlanningKey, cwd);
         tui.updateState({
-          spec: specName,
+          spec: specFile.id,
+          branch: specBranch,
           prompts: newPrompts.map((p) => ({
             number: p.frontmatter.number,
             title: p.frontmatter.title,
             status: p.frontmatter.status as 'pending' | 'in_progress' | 'done',
           })),
         });
+
+        tui.log(`Switched to spec: ${specFile.id} on branch: ${specBranch}`);
       } catch (e) {
         const message = e instanceof Error ? e.message : String(e);
         tui.log(`Error: ${message}`);
         logTuiError('switch-spec', e instanceof Error ? e : message, {
           specId: data?.specId,
-          spec,
+          spec: currentSpec?.id,
           branch,
         }, cwd);
       }
@@ -458,8 +469,8 @@ async function handleAction(
 
     case 'toggle-loop': {
       const enabled = data?.enabled as boolean;
-      if (spec && status) {
-        updateStatus({ loop: { ...status.loop, enabled } }, spec, cwd);
+      if (planningKey && status) {
+        updateStatus({ loop: { ...status.loop, enabled } }, planningKey, cwd);
       }
       tui.log(`Loop: ${enabled ? 'Started' : 'Stopped'}`);
       break;
@@ -467,8 +478,8 @@ async function handleAction(
 
     case 'toggle-emergent': {
       const enabled = data?.enabled as boolean;
-      if (spec && status) {
-        updateStatus({ loop: { ...status.loop, emergent: enabled } }, spec, cwd);
+      if (planningKey && status) {
+        updateStatus({ loop: { ...status.loop, emergent: enabled } }, planningKey, cwd);
       }
       tui.log(`Emergent: ${enabled ? 'Enabled' : 'Disabled'}`);
       break;
@@ -484,22 +495,57 @@ async function handleAction(
     }
 
     case 'branch-changed': {
-      // Branch changes are informational only in the new model
-      // The active spec is independent of the git branch
+      // Branch changes update the spec context in the branch-keyed model
       const newBranch = data?.branch as string;
+      const newSpec = data?.spec as SpecFile | null | undefined;
+
       if (!newBranch) break;
 
       tui.log(`Branch changed to: ${newBranch}`);
 
-      // Optionally update last_known_branch hint if we have an active spec
-      const activeSpec = getActiveSpec(cwd);
-      if (activeSpec) {
-        updateLastKnownBranch(activeSpec, newBranch, cwd);
-        tui.log(`Updated last_known_branch for ${activeSpec}`);
-      }
+      // Update state based on new branch's spec
+      const newPlanningKey = sanitizeBranchForDir(newBranch);
+      const newStatus = planningDirExists(newPlanningKey, cwd) ? readStatus(newPlanningKey, cwd) : null;
+      const newPrompts = newStatus ? loadAllPrompts(newPlanningKey, cwd) : [];
 
-      // Update branch in TUI state (but don't reload prompts - they're spec-based)
-      tui.updateState({ branch: newBranch });
+      tui.updateState({
+        branch: newBranch,
+        spec: newSpec?.id,
+        prompts: newPrompts.map((p) => ({
+          number: p.frontmatter.number,
+          title: p.frontmatter.title,
+          status: p.frontmatter.status as 'pending' | 'in_progress' | 'done',
+        })),
+      });
+
+      if (newSpec) {
+        tui.log(`Spec: ${newSpec.id}`);
+      } else {
+        tui.log('No spec for this branch');
+      }
+      break;
+    }
+
+    case 'clear-spec': {
+      const baseBranch = getBaseBranch();
+      tui.log(`Checking out base branch: ${baseBranch}`);
+
+      try {
+        execSync(`git checkout ${baseBranch}`, { stdio: 'pipe', cwd });
+        tui.updateState({
+          spec: undefined,
+          branch: baseBranch,
+          prompts: [],
+        });
+        tui.log(`Now on branch: ${baseBranch} (no spec)`);
+      } catch (e) {
+        const message = e instanceof Error ? e.message : String(e);
+        tui.log(`Error: ${message}`);
+        logTuiError('clear-spec', e instanceof Error ? e : message, {
+          spec: currentSpec?.id,
+          branch,
+        }, cwd);
+      }
       break;
     }
 
