@@ -16,6 +16,16 @@ import { parse as parseYaml } from 'yaml';
 import { minimatch } from 'minimatch';
 import { detectSchemaType, type SchemaType } from '../lib/schema.js';
 import { allowTool, blockTool, denyTool, FormatConfig, getProjectDir, HookInput, loadProjectSettings, outputContext, readHookInput } from './shared.js';
+import { logHookStart } from '../lib/trace-store.js';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Hook Names
+// ─────────────────────────────────────────────────────────────────────────────
+
+const HOOK_DIAGNOSTICS = 'validation diagnostics';
+const HOOK_SCHEMA = 'validation schema';
+const HOOK_FORMAT = 'validation format';
+const HOOK_SCHEMA_PRE = 'validation schema-pre';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -143,7 +153,7 @@ export function runDiagnostics(input: HookInput): void {
   const filePath = input.tool_input?.file_path as string | undefined;
 
   if (!filePath) {
-    allowTool();
+    allowTool(HOOK_DIAGNOSTICS);
   }
 
   const ext = extname(filePath!).toLowerCase();
@@ -167,10 +177,10 @@ export function runDiagnostics(input: HookInput): void {
   // Output context if there are errors
   if (results.length > 0) {
     const context = formatDiagnosticsContext(results);
-    outputContext(context);
+    outputContext(context, HOOK_DIAGNOSTICS);
   }
 
-  allowTool();
+  allowTool(HOOK_DIAGNOSTICS);
 }
 
 /**
@@ -502,17 +512,17 @@ export function runFormat(input: HookInput): void {
 
   // Check if formatting is enabled
   if (!formatConfig?.enabled) {
-    allowTool();
+    allowTool(HOOK_FORMAT);
   }
 
   const filePath = input.tool_input?.file_path as string | undefined;
   if (!filePath) {
-    allowTool();
+    allowTool(HOOK_FORMAT);
   }
 
   const command = getFormatCommand(formatConfig!, filePath!);
   if (!command) {
-    allowTool();
+    allowTool(HOOK_FORMAT);
   }
 
   try {
@@ -528,7 +538,7 @@ export function runFormat(input: HookInput): void {
     // Could optionally log or output context here
   }
 
-  allowTool();
+  allowTool(HOOK_FORMAT);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -549,9 +559,10 @@ export function register(parent: Command): void {
     .action(async () => {
       try {
         const input = await readHookInput();
+        logHookStart(HOOK_DIAGNOSTICS, { tool: input.tool_name, file: input.tool_input?.file_path });
         runDiagnostics(input);
       } catch {
-        allowTool();
+        allowTool(HOOK_DIAGNOSTICS);
       }
     });
 
@@ -562,9 +573,10 @@ export function register(parent: Command): void {
       try {
         const input = await readHookInput();
         const filePath = input.tool_input?.file_path as string | undefined;
+        logHookStart(HOOK_SCHEMA, { tool: input.tool_name, file: filePath });
 
         if (!filePath) {
-          allowTool();
+          allowTool(HOOK_SCHEMA);
         }
 
         const errors = runSchemaValidation(filePath!);
@@ -572,12 +584,12 @@ export function register(parent: Command): void {
         if (errors && errors.length > 0) {
           const schemaType = detectSchemaTypeLocal(filePath!) || 'unknown';
           const context = formatSchemaErrors(errors, schemaType);
-          blockTool(context);
+          blockTool(context, HOOK_SCHEMA);
         }
 
-        allowTool();
+        allowTool(HOOK_SCHEMA);
       } catch {
-        allowTool();
+        allowTool(HOOK_SCHEMA);
       }
     });
 
@@ -587,9 +599,10 @@ export function register(parent: Command): void {
     .action(async () => {
       try {
         const input = await readHookInput();
+        logHookStart(HOOK_FORMAT, { tool: input.tool_name, file: input.tool_input?.file_path });
         runFormat(input);
       } catch {
-        allowTool();
+        allowTool(HOOK_FORMAT);
       }
     });
 
@@ -601,9 +614,10 @@ export function register(parent: Command): void {
         const input = await readHookInput();
         const toolName = input.tool_name as string | undefined;
         const filePath = input.tool_input?.file_path as string | undefined;
+        logHookStart(HOOK_SCHEMA_PRE, { tool: toolName, file: filePath });
 
         if (!filePath) {
-          allowTool();
+          allowTool(HOOK_SCHEMA_PRE);
           return;
         }
 
@@ -619,13 +633,13 @@ export function register(parent: Command): void {
           const replaceAll = input.tool_input?.replace_all as boolean | undefined;
 
           if (oldString === undefined || newString === undefined) {
-            allowTool();
+            allowTool(HOOK_SCHEMA_PRE);
             return;
           }
 
           // Read current file content
           if (!existsSync(filePath)) {
-            allowTool();
+            allowTool(HOOK_SCHEMA_PRE);
             return;
           }
 
@@ -640,7 +654,7 @@ export function register(parent: Command): void {
         }
 
         if (!contentToValidate) {
-          allowTool();
+          allowTool(HOOK_SCHEMA_PRE);
           return;
         }
 
@@ -649,12 +663,12 @@ export function register(parent: Command): void {
         if (errors && errors.length > 0) {
           const schemaType = detectSchemaTypeLocal(filePath) || 'unknown';
           const context = formatSchemaErrors(errors, schemaType);
-          denyTool(context);
+          denyTool(context, HOOK_SCHEMA_PRE);
         }
 
-        allowTool();
+        allowTool(HOOK_SCHEMA_PRE);
       } catch {
-        allowTool();
+        allowTool(HOOK_SCHEMA_PRE);
       }
     });
 }

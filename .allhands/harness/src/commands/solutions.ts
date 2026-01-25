@@ -15,6 +15,7 @@ import { Command } from 'commander';
 import { existsSync, readFileSync, readdirSync, statSync } from 'fs';
 import { basename, join } from 'path';
 import { parse } from 'yaml';
+import { tracedAction } from '../lib/base-command.js';
 
 const getProjectRoot = (): string => {
   return process.env.PROJECT_ROOT || process.cwd();
@@ -231,7 +232,7 @@ export function register(program: Command): void {
     .description('Search solutions by keywords (searches title, tags, component, symptoms)')
     .option('--full', 'Include full content of matched solutions')
     .option('--limit <n>', 'Maximum number of results', '10')
-    .action(async (query: string, options: { full?: boolean; limit?: string }) => {
+    .action(tracedAction('solutions search', async (query: string, options: { full?: boolean; limit?: string }) => {
       const limit = parseInt(options.limit || '10', 10);
       const matches = searchSolutions(query, limit);
 
@@ -273,13 +274,13 @@ export function register(program: Command): void {
         result_count: results.length,
         results,
       }, null, 2));
-    });
+    }));
 
   // List command
   solutionsCmd
     .command('list [category]')
     .description('List solution categories or solutions in a category')
-    .action(async (category?: string) => {
+    .action(tracedAction('solutions list', async (category?: string) => {
       const solutionsDir = getSolutionsDir();
 
       if (!category) {
@@ -348,5 +349,5 @@ export function register(program: Command): void {
         solution_count: solutions.length,
         solutions,
       }, null, 2));
-    });
+    }));
 }

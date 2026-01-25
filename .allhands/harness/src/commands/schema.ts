@@ -12,6 +12,7 @@ import { existsSync, readFileSync, readdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { parse, stringify } from 'yaml';
+import { tracedAction } from '../lib/base-command.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -21,7 +22,7 @@ export function register(program: Command): void {
     .command('schema <type> [property]')
     .description('Output schema for a file type (prompt, alignment, spec, documentation). Optionally specify a top-level property to inspect.')
     .option('--json', 'Output as JSON instead of YAML')
-    .action(async (type: string, property: string | undefined, options: { json?: boolean }) => {
+    .action(tracedAction('schema', async (type: string, property: string | undefined, options: { json?: boolean }) => {
       // Path: harness/src/commands/ -> harness/src/ -> harness/ -> .allhands/ -> schemas/
       const schemaDir = join(__dirname, '..', '..', '..', 'schemas');
       const schemaPath = join(schemaDir, `${type}.yaml`);
@@ -60,7 +61,7 @@ export function register(program: Command): void {
       } else {
         console.log(content);
       }
-    });
+    }));
 }
 
 function getAvailableSchemas(schemaDir: string): string[] {

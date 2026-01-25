@@ -9,6 +9,7 @@
  */
 
 import { Command } from 'commander';
+import { tracedAction } from '../lib/base-command.js';
 
 interface TavilySearchResult {
   title?: string;
@@ -48,7 +49,7 @@ export function register(program: Command): void {
     .description('Web search with optional LLM answer')
     .option('--max-results <n>', 'Max results (default: 5, max: 20)', parseInt)
     .option('--json', 'Output as JSON')
-    .action(async (query: string, options: { maxResults?: number; json?: boolean }) => {
+    .action(tracedAction('tavily search', async (query: string, options: { maxResults?: number; json?: boolean }) => {
       const apiKey = process.env.TAVILY_API_KEY;
       if (!apiKey) {
         if (options.json) {
@@ -120,14 +121,14 @@ export function register(program: Command): void {
         }
         process.exit(1);
       }
-    });
+    }));
 
   // ah tavily extract
   tavily
     .command('extract <urls...>')
     .description('Extract full content from URLs (max 20)')
     .option('--json', 'Output as JSON')
-    .action(async (urls: string[], options: { json?: boolean }) => {
+    .action(tracedAction('tavily extract', async (urls: string[], options: { json?: boolean }) => {
       const apiKey = process.env.TAVILY_API_KEY;
       if (!apiKey) {
         if (options.json) {
@@ -192,7 +193,7 @@ export function register(program: Command): void {
         }
         process.exit(1);
       }
-    });
+    }));
 }
 
 async function callTavilyApi<T>(

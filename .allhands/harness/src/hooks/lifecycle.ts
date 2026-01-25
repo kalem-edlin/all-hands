@@ -14,8 +14,13 @@ import { parseTranscript, buildCompactionMessage } from './transcript-parser.js'
 import { sendNotification } from '../lib/notification.js';
 import { killWindow, SESSION_NAME, windowExists } from '../lib/tmux.js'; // killWindow used in compact
 import { getPromptByNumber } from '../lib/prompts.js';
-import { getActiveSpec } from '../lib/planning.js';
+import { getCurrentBranch, sanitizeBranchForDir } from '../lib/planning.js';
+import { findSpecByBranch } from '../lib/specs.js';
 import { ask } from '../lib/llm.js';
+import { logHookStart, logHookSuccess } from '../lib/trace-store.js';
+
+const HOOK_AGENT_STOP = 'lifecycle agent-stop';
+const HOOK_AGENT_COMPACT = 'lifecycle agent-compact';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Agent Stop
@@ -45,7 +50,7 @@ export function handleAgentStop(_input: HookInput): void {
 
   // Approve stop - window closes naturally when claude exits
   // (spawn uses exec so there's no orphan shell keeping the window open)
-  outputStopHook('approve');
+  outputStopHook('approve', undefined, HOOK_AGENT_STOP);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -155,18 +160,25 @@ export async function handleAgentCompact(input: HookInput): Promise<void> {
       killWindow(SESSION_NAME, agentId);
     }
 
-    outputPreCompact();
+    outputPreCompact(undefined, HOOK_AGENT_COMPACT);
     return;
   }
 
-  // Get the active spec for prompt lookup
-  const spec = process.env.SPEC_NAME || getActiveSpec();
+  // Get the planning key from env or current branch
+  let spec = process.env.SPEC_NAME;
+  if (!spec) {
+    const branch = getCurrentBranch();
+    const currentSpec = findSpecByBranch(branch);
+    if (currentSpec) {
+      spec = sanitizeBranchForDir(branch);
+    }
+  }
   if (!spec) {
     // No spec, just kill the window
     if (agentId && windowExists(SESSION_NAME, agentId)) {
       killWindow(SESSION_NAME, agentId);
     }
-    outputPreCompact();
+    outputPreCompact(undefined, HOOK_AGENT_COMPACT);
     return;
   }
 
@@ -179,7 +191,7 @@ export async function handleAgentCompact(input: HookInput): Promise<void> {
     if (agentId && windowExists(SESSION_NAME, agentId)) {
       killWindow(SESSION_NAME, agentId);
     }
-    outputPreCompact();
+    outputPreCompact(undefined, HOOK_AGENT_COMPACT);
     return;
   }
 
@@ -225,7 +237,7 @@ export async function handleAgentCompact(input: HookInput): Promise<void> {
     killWindow(SESSION_NAME, agentId);
   }
 
-  outputPreCompact();
+  outputPreCompact(undefined, HOOK_AGENT_COMPACT);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -246,9 +258,11 @@ export function register(parent: Command): void {
     .action(async () => {
       try {
         const input = await readHookInput();
+        logHookStart(HOOK_AGENT_STOP, { agentId: process.env.AGENT_ID });
         handleAgentStop(input);
       } catch {
         // On error, approve stop
+        logHookSuccess(HOOK_AGENT_STOP, { action: 'approve', error: true });
         console.log(JSON.stringify({ decision: 'approve' }));
         process.exit(0);
       }
@@ -260,9 +274,14 @@ export function register(parent: Command): void {
     .action(async () => {
       try {
         const input = await readHookInput();
+        logHookStart(HOOK_AGENT_COMPACT, {
+          agentId: process.env.AGENT_ID,
+          promptNumber: process.env.PROMPT_NUMBER,
+        });
         await handleAgentCompact(input);
       } catch {
         // On error, continue without context
+        logHookSuccess(HOOK_AGENT_COMPACT, { action: 'continue', error: true });
         console.log(JSON.stringify({ continue: true }));
         process.exit(0);
       }

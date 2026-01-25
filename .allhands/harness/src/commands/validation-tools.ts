@@ -12,6 +12,7 @@ import { existsSync, readdirSync, readFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 import { parse as parseYaml } from 'yaml';
+import { tracedAction } from '../lib/base-command.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -95,7 +96,7 @@ export function register(program: Command): void {
     .command('list')
     .description('List all validation suites with their descriptions and glob patterns')
     .option('--json', 'Output as JSON (default)')
-    .action(async () => {
+    .action(tracedAction('validation-tools list', async () => {
       const suites = listValidationSuites();
 
       if (suites.length === 0) {
@@ -112,5 +113,5 @@ export function register(program: Command): void {
         suites,
         count: suites.length,
       }, null, 2));
-    });
+    }));
 }

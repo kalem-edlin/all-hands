@@ -11,6 +11,7 @@
 
 import { Command } from 'commander';
 import { Context7, type Library } from '@upstash/context7-sdk';
+import { tracedAction } from '../lib/base-command.js';
 
 const DEFAULT_TIMEOUT = 120000;
 
@@ -26,7 +27,7 @@ export function register(program: Command): void {
     .description('Search for libraries by name, returns IDs for context command')
     .option('--limit <n>', 'Max results (default: 5)', parseInt)
     .option('--json', 'Output as JSON')
-    .action(async (library: string, query: string | undefined, options: { limit?: number; json?: boolean }) => {
+    .action(tracedAction('context7 search', async (library: string, query: string | undefined, options: { limit?: number; json?: boolean }) => {
       const apiKey = process.env.CONTEXT7_API_KEY;
       if (!apiKey) {
         if (options.json) {
@@ -96,7 +97,7 @@ export function register(program: Command): void {
         }
         process.exit(1);
       }
-    });
+    }));
 
   // ah context7 context
   context7
@@ -104,7 +105,7 @@ export function register(program: Command): void {
     .description('Get documentation context for a known library (use search first)')
     .option('--text', 'Return plain text instead of JSON (better for direct LLM use)')
     .option('--json', 'Output as JSON')
-    .action(async (libraryId: string, query: string, options: { text?: boolean; json?: boolean }) => {
+    .action(tracedAction('context7 context', async (libraryId: string, query: string, options: { text?: boolean; json?: boolean }) => {
       const apiKey = process.env.CONTEXT7_API_KEY;
       if (!apiKey) {
         if (options.json) {
@@ -188,7 +189,7 @@ export function register(program: Command): void {
         }
         process.exit(1);
       }
-    });
+    }));
 }
 
 async function withTimeout<T>(fn: () => Promise<T>): Promise<T> {

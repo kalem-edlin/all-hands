@@ -12,6 +12,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { parse as parseYaml } from 'yaml';
+import { tracedAction } from '../lib/base-command.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -106,7 +107,7 @@ export function register(program: Command): void {
     .command('list')
     .description('List all skills with their descriptions and glob patterns')
     .option('--json', 'Output as JSON (default)')
-    .action(async () => {
+    .action(tracedAction('skills list', async () => {
       const skills = listSkills();
 
       if (skills.length === 0) {
@@ -123,5 +124,5 @@ export function register(program: Command): void {
         skills,
         count: skills.length,
       }, null, 2));
-    });
+    }));
 }

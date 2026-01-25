@@ -36,9 +36,16 @@ export type TraceEventType =
   | 'tool.failure'      // Tool returned an error result
   | 'tool.denied'       // Hook denied the tool use
   | 'bash.error'        // Bash command non-zero exit
+  | 'hook.start'        // Hook execution started
+  | 'hook.success'      // Hook execution succeeded
   | 'hook.error'        // Hook execution failed
   | 'harness.error'     // Internal harness error
+  | 'tui.action'        // TUI user action
+  | 'tui.lifecycle'     // TUI lifecycle event
   | 'tui.error'         // TUI runtime error
+  | 'command.start'     // CLI command started
+  | 'command.success'   // CLI command succeeded
+  | 'command.error'     // CLI command failed
   | 'agent.spawn'
   | 'agent.stop'
   | 'agent.compact';
@@ -51,6 +58,7 @@ export const ERROR_EVENT_TYPES: TraceEventType[] = [
   'hook.error',
   'harness.error',
   'tui.error',
+  'command.error',
 ];
 
 export interface TraceEvent {
@@ -379,6 +387,125 @@ export function logTuiError(
     error: errorMessage,
     stack: errorStack,
     ...context,
+  }, undefined, cwd);
+}
+
+/**
+ * Log CLI command start
+ * Use this at the beginning of important CLI commands (specs, prompts, etc.)
+ */
+export function logCommandStart(
+  command: string,
+  args: Record<string, unknown> = {},
+  cwd?: string
+): void {
+  logEvent('command.start', {
+    command,
+    args: sanitizePayload(args),
+  }, undefined, cwd);
+}
+
+/**
+ * Log CLI command success
+ * Use this when a CLI command completes successfully
+ */
+export function logCommandSuccess(
+  command: string,
+  result: Record<string, unknown> = {},
+  cwd?: string
+): void {
+  logEvent('command.success', {
+    command,
+    result: sanitizePayload(result),
+  }, undefined, cwd);
+}
+
+/**
+ * Log CLI command error
+ * Use this when a CLI command fails
+ */
+export function logCommandError(
+  command: string,
+  error: Error | string,
+  args: Record<string, unknown> = {},
+  cwd?: string
+): void {
+  const errorMessage = error instanceof Error ? error.message : error;
+  const errorStack = error instanceof Error ? error.stack : undefined;
+
+  logEvent('command.error', {
+    command,
+    error: errorMessage,
+    stack: errorStack,
+    args: sanitizePayload(args),
+  }, undefined, cwd);
+}
+
+// ============================================================================
+// Hook Logging
+// ============================================================================
+
+/**
+ * Log hook execution start
+ * Use this at the beginning of hook handlers
+ */
+export function logHookStart(
+  hookName: string,
+  input: Record<string, unknown> = {},
+  cwd?: string
+): void {
+  logEvent('hook.start', {
+    hook: hookName,
+    input: sanitizePayload(input),
+  }, undefined, cwd);
+}
+
+/**
+ * Log hook execution success
+ * Use this when a hook completes successfully
+ */
+export function logHookSuccess(
+  hookName: string,
+  result: Record<string, unknown> = {},
+  cwd?: string
+): void {
+  logEvent('hook.success', {
+    hook: hookName,
+    result: sanitizePayload(result),
+  }, undefined, cwd);
+}
+
+// ============================================================================
+// TUI Logging
+// ============================================================================
+
+/**
+ * Log TUI user action
+ * Use this when user performs an action in the TUI
+ */
+export function logTuiAction(
+  action: string,
+  data: Record<string, unknown> = {},
+  cwd?: string
+): void {
+  logEvent('tui.action', {
+    action,
+    ...sanitizePayload(data),
+  }, undefined, cwd);
+}
+
+/**
+ * Log TUI lifecycle event
+ * Use this for TUI state changes and lifecycle events
+ */
+export function logTuiLifecycle(
+  event: string,
+  data: Record<string, unknown> = {},
+  cwd?: string
+): void {
+  logEvent('tui.lifecycle', {
+    event,
+    ...sanitizePayload(data),
   }, undefined, cwd);
 }
 

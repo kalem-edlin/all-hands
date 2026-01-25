@@ -28,7 +28,7 @@ import { validateDocs } from '../lib/docs-validation.js';
 import { loadAllProfiles } from '../lib/opencode/index.js';
 import { logTuiError } from '../lib/trace-store.js';
 import { loadAllPrompts, type PromptFile } from '../lib/prompts.js';
-import { readStatus } from '../lib/planning.js';
+import { readStatus, sanitizeBranchForDir, planningDirExists } from '../lib/planning.js';
 import { loadAllSpecs, specsToModalItems } from '../lib/specs.js';
 import { loadAllFlows, flowsToModalItems } from '../lib/flows.js';
 import { join } from 'path';
@@ -204,41 +204,43 @@ export class TUI {
             this.render();
           }
         },
-        onBranchChange: (newBranch) => {
+        onBranchChange: (newBranch, newSpec) => {
           this.log(`Branch changed to: ${newBranch}`);
           this.state.branch = newBranch;
-          this.options.onAction('branch-changed', { branch: newBranch });
-          this.render();
-        },
-        onActiveSpecChange: (newSpec) => {
-          if (newSpec !== this.state.spec) {
-            this.log(`Active spec changed to: ${newSpec ?? '(none)'}`);
-            this.state.spec = newSpec ?? undefined;
 
-            // Reload prompts for new spec
-            if (newSpec && this.options.cwd) {
-              const prompts = loadAllPrompts(newSpec, this.options.cwd);
-              const status = readStatus(newSpec, this.options.cwd);
+          // Update spec context when branch changes (branch-keyed model)
+          const newSpecId = newSpec?.id;
+          if (newSpecId !== this.state.spec) {
+            this.state.spec = newSpecId;
 
-              this.state.prompts = prompts.map((p: { frontmatter: { number: number; title: string; status: string } }) => ({
-                number: p.frontmatter.number,
-                title: p.frontmatter.title,
-                status: p.frontmatter.status as 'pending' | 'in_progress' | 'done',
-              }));
-              this.state.loopEnabled = status?.loop?.enabled ?? false;
-              this.state.emergentEnabled = status?.loop?.emergent ?? false;
-              this.state.compoundRun = status?.compound_run ?? false;
-            } else {
-              this.state.prompts = [];
-              this.state.loopEnabled = false;
-              this.state.emergentEnabled = false;
-              this.state.compoundRun = false;
+            // Reload prompts for new branch's planning directory
+            if (this.options.cwd) {
+              const planningKey = sanitizeBranchForDir(newBranch);
+              if (planningDirExists(planningKey, this.options.cwd)) {
+                const prompts = loadAllPrompts(planningKey, this.options.cwd);
+                const status = readStatus(planningKey, this.options.cwd);
+
+                this.state.prompts = prompts.map((p: { frontmatter: { number: number; title: string; status: string } }) => ({
+                  number: p.frontmatter.number,
+                  title: p.frontmatter.title,
+                  status: p.frontmatter.status as 'pending' | 'in_progress' | 'done',
+                }));
+                this.state.loopEnabled = status?.loop?.enabled ?? false;
+                this.state.emergentEnabled = status?.loop?.emergent ?? false;
+                this.state.compoundRun = status?.compound_run ?? false;
+              } else {
+                this.state.prompts = [];
+                this.state.loopEnabled = false;
+                this.state.emergentEnabled = false;
+                this.state.compoundRun = false;
+              }
             }
 
             this.buildActionItems();
-            this.options.onAction('spec-changed', { spec: newSpec });
-            this.render();
           }
+
+          this.options.onAction('branch-changed', { branch: newBranch, spec: newSpec });
+          this.render();
         },
         onAgentsChange: (agents) => {
           this.state.activeAgents = agents.map((name) => ({
@@ -975,6 +977,10 @@ export class TUI {
     this.state = { ...this.state, ...updates };
     this.buildActionItems();
     this.render();
+  }
+
+  public getState(): TUIState {
+    return { ...this.state };
   }
 
   public log(message: string): void {

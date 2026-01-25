@@ -9,6 +9,7 @@
 
 import type { Command } from 'commander';
 import { HookInput, denyTool, allowTool, readHookInput } from './shared.js';
+import { logHookStart } from '../lib/trace-store.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants
@@ -19,6 +20,8 @@ const GITHUB_DOMAINS = ['github.com', 'raw.githubusercontent.com', 'gist.github.
 // ─────────────────────────────────────────────────────────────────────────────
 // GitHub URL Enforcement
 // ─────────────────────────────────────────────────────────────────────────────
+
+const HOOK_GITHUB_URL = 'enforcement github-url';
 
 /**
  * Block GitHub URLs in WebFetch and Bash fetch commands.
@@ -35,10 +38,10 @@ export function enforceGitHubUrl(input: HookInput): void {
     const url = (toolInput.url as string) || '';
     for (const domain of GITHUB_DOMAINS) {
       if (url.includes(domain)) {
-        denyTool("GitHub URL detected. Use 'gh' CLI: gh api repos/OWNER/REPO/contents/PATH");
+        denyTool("GitHub URL detected. Use 'gh' CLI: gh api repos/OWNER/REPO/contents/PATH", HOOK_GITHUB_URL);
       }
     }
-    allowTool();
+    allowTool(HOOK_GITHUB_URL);
   }
 
   // Check Bash commands for curl, wget, tavily extract
@@ -48,23 +51,25 @@ export function enforceGitHubUrl(input: HookInput): void {
     // Check for fetch-like commands
     const isFetchCmd = ['curl', 'wget', 'tavily extract'].some((cmd) => command.includes(cmd));
     if (!isFetchCmd) {
-      allowTool();
+      allowTool(HOOK_GITHUB_URL);
     }
 
     // Check for GitHub URLs
     for (const domain of GITHUB_DOMAINS) {
       if (command.includes(domain)) {
-        denyTool("GitHub URL detected. Use 'gh' CLI: gh api repos/OWNER/REPO/contents/PATH");
+        denyTool("GitHub URL detected. Use 'gh' CLI: gh api repos/OWNER/REPO/contents/PATH", HOOK_GITHUB_URL);
       }
     }
   }
 
-  allowTool();
+  allowTool(HOOK_GITHUB_URL);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Research Fetch Enforcement
 // ─────────────────────────────────────────────────────────────────────────────
+
+const HOOK_RESEARCH_FETCH = 'enforcement research-fetch';
 
 /**
  * Block WebFetch and suggest research tools.
@@ -75,17 +80,20 @@ export function enforceResearchFetch(input: HookInput): void {
   const url = (input.tool_input?.url as string) || '';
 
   if (!url) {
-    allowTool();
+    allowTool(HOOK_RESEARCH_FETCH);
   }
 
   denyTool(
-    'WebFetch blocked. Main agent: delegate to researcher agent. Subagent: use `ah tavily extract "<url>"` instead.'
+    'WebFetch blocked. Main agent: delegate to researcher agent. Subagent: use `ah tavily extract "<url>"` instead.',
+    HOOK_RESEARCH_FETCH
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Research Search Enforcement
 // ─────────────────────────────────────────────────────────────────────────────
+
+const HOOK_RESEARCH_SEARCH = 'enforcement research-search';
 
 /**
  * Block WebSearch and suggest research delegation.
@@ -94,7 +102,8 @@ export function enforceResearchFetch(input: HookInput): void {
  */
 export function enforceResearchSearch(_input: HookInput): void {
   denyTool(
-    'WebSearch blocked. Main agent: delegate to researcher agent. Subagent: respond to main agent requesting researcher delegation.'
+    'WebSearch blocked. Main agent: delegate to researcher agent. Subagent: respond to main agent requesting researcher delegation.',
+    HOOK_RESEARCH_SEARCH
   );
 }
 
@@ -116,9 +125,10 @@ export function register(parent: Command): void {
     .action(async () => {
       try {
         const input = await readHookInput();
+        logHookStart(HOOK_GITHUB_URL, { tool: input.tool_name });
         enforceGitHubUrl(input);
       } catch {
-        allowTool();
+        allowTool(HOOK_GITHUB_URL);
       }
     });
 
@@ -128,9 +138,10 @@ export function register(parent: Command): void {
     .action(async () => {
       try {
         const input = await readHookInput();
+        logHookStart(HOOK_RESEARCH_FETCH, { tool: input.tool_name });
         enforceResearchFetch(input);
       } catch {
-        allowTool();
+        allowTool(HOOK_RESEARCH_FETCH);
       }
     });
 
@@ -140,9 +151,10 @@ export function register(parent: Command): void {
     .action(async () => {
       try {
         const input = await readHookInput();
+        logHookStart(HOOK_RESEARCH_SEARCH, { tool: input.tool_name });
         enforceResearchSearch(input);
       } catch {
-        allowTool();
+        allowTool(HOOK_RESEARCH_SEARCH);
       }
     });
 }

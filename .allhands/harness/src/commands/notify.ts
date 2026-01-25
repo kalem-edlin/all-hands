@@ -16,6 +16,7 @@
 
 import { Command } from 'commander';
 import { sendNotification } from '../lib/notification.js';
+import { tracedAction } from '../lib/base-command.js';
 
 export function register(program: Command): void {
   const notify = program
@@ -30,7 +31,7 @@ export function register(program: Command): void {
     .option('-t, --type <type>', 'Notification type: banner or alert', 'banner')
     .option('--json', 'Output as JSON')
     .action(
-      async (
+      tracedAction('notify send', async (
         title: string,
         message: string,
         options: { sound?: string; type?: string; json?: boolean }
@@ -55,6 +56,6 @@ export function register(program: Command): void {
           console.error('Failed to send notification (notifier not installed?)');
           process.exit(1);
         }
-      }
+      })
     );
 }

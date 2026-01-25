@@ -22,6 +22,7 @@ import {
 } from '../lib/llm.js';
 import { buildPR } from '../lib/oracle.js';
 import { runCompaction } from '../lib/compaction.js';
+import { tracedAction } from '../lib/base-command.js';
 
 export function register(program: Command): void {
   const oracle = program
@@ -37,7 +38,7 @@ export function register(program: Command): void {
     .option('--files <files...>', 'Files to include as context')
     .option('--context <context>', 'Additional context')
     .option('--json', 'Output as JSON')
-    .action(async (query: string, options: {
+    .action(tracedAction('oracle ask', async (query: string, options: {
       provider: ProviderName;
       model?: string;
       files?: string[];
@@ -83,13 +84,13 @@ export function register(program: Command): void {
         }
         process.exit(1);
       }
-    });
+    }));
 
   // ah oracle compaction
   oracle
     .command('compaction <conversation_logs> <prompt_file>')
     .description('Post-agent analysis and learning extraction')
-    .action(async (
+    .action(tracedAction('oracle compaction', async (
       conversationLogs: string,
       promptFile: string
     ) => {
@@ -112,7 +113,7 @@ export function register(program: Command): void {
         console.error(`Error: ${error}`);
         process.exit(1);
       }
-    });
+    }));
 
   // ah oracle pr-build
   oracle
@@ -121,17 +122,27 @@ export function register(program: Command): void {
     .option('--spec <spec>', 'Spec to create PR for (defaults to active)')
     .option('--dry-run', 'Generate description without creating PR')
     .option('--json', 'Output as JSON')
-    .action(async (options: {
+    .action(tracedAction('oracle pr-build', async (options: {
       spec?: string;
       dryRun?: boolean;
       json?: boolean;
     }) => {
       try {
-        // Import getActiveSpec here to avoid circular dependency
-        const { getActiveSpec } = await import('../lib/planning.js');
-        const spec = options.spec || getActiveSpec();
+        // Import planning utils here to avoid circular dependency
+        const { getCurrentBranch, sanitizeBranchForDir, planningDirExists } = await import('../lib/planning.js');
+        const { findSpecByBranch } = await import('../lib/specs.js');
+
+        let spec = options.spec;
         if (!spec) {
-          console.error('Error: No active spec. Use "ah planning activate <spec>" to set one.');
+          // Use current branch to find spec
+          const branch = getCurrentBranch();
+          const currentSpec = findSpecByBranch(branch);
+          if (currentSpec) {
+            spec = sanitizeBranchForDir(branch);
+          }
+        }
+        if (!spec) {
+          console.error('Error: No spec for current branch. Checkout a spec branch first.');
           return;
         }
         const result = await buildPR(spec, undefined, options.dryRun);
@@ -176,5 +187,5 @@ export function register(program: Command): void {
         }
         process.exit(1);
       }
-    });
+    }));
 }

@@ -34,6 +34,7 @@ import {
   restartServer,
   shutdownDaemon,
 } from '../lib/mcp-client.js';
+import { tracedAction } from '../lib/base-command.js';
 import {
   DAEMON_DEFAULT_MCP_TIMEOUT,
   formatToolHelp,
@@ -53,7 +54,7 @@ export function register(program: Command): void {
     .option('--restart', 'Restart server session (recovery from bad state)')
     .option('--shutdown-daemon', 'Shutdown the daemon for this AGENT_ID')
     .allowUnknownOption(true)
-    .action(async (target: string | undefined, options: {
+    .action(tracedAction('tools', async (target: string | undefined, options: {
       json?: boolean;
       helpTool?: boolean;
       list?: boolean;
@@ -203,7 +204,7 @@ export function register(program: Command): void {
         }
         process.exit(1);
       }
-    });
+    }));
 }
 
 /**

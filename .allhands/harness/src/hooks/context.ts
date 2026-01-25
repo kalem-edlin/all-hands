@@ -21,6 +21,7 @@ import {
   loadSearchContext,
   denyTool,
 } from './shared.js';
+import { logHookStart } from '../lib/trace-store.js';
 import {
   isTldrInstalled,
   isTldrDaemonRunning,
@@ -33,6 +34,20 @@ import {
   diagnosticsDaemon,
   notifyFileChanged,
 } from '../lib/tldr.js';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Hook Names
+// ─────────────────────────────────────────────────────────────────────────────
+
+const HOOK_TLDR_INJECT = 'context tldr-inject';
+const HOOK_EDIT_INJECT = 'context edit-inject';
+const HOOK_ARCH_INJECT = 'context arch-inject';
+const HOOK_SIGNATURE = 'context signature';
+const HOOK_DIAGNOSTICS = 'context diagnostics';
+const HOOK_IMPORT_VALIDATE = 'context import-validate';
+const HOOK_EDIT_NOTIFY = 'context edit-notify';
+const HOOK_READ_ENFORCER = 'context read-enforcer';
+const HOOK_SEARCH_ROUTER = 'context search-router';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Intent Detection
@@ -147,12 +162,12 @@ function tldrContextInject(input: HookInput): void {
   const projectDir = getProjectDir();
 
   if (!isTldrInstalled() || !isTldrDaemonRunning(projectDir)) {
-    allowTool();
+    allowTool(HOOK_TLDR_INJECT);
   }
 
   const prompt = (input.tool_input?.prompt as string) || '';
   if (!prompt) {
-    allowTool();
+    allowTool(HOOK_TLDR_INJECT);
   }
 
   const intent = detectIntent(prompt);
@@ -246,10 +261,10 @@ function tldrContextInject(input: HookInput): void {
   }
 
   if (contextParts.length > 0) {
-    preToolContext(`# TLDR Analysis (${intent})\n\n${contextParts.join('\n')}`);
+    preToolContext(`# TLDR Analysis (${intent})\n\n${contextParts.join('\n')}`, HOOK_TLDR_INJECT);
   }
 
-  allowTool();
+  allowTool(HOOK_TLDR_INJECT);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -263,17 +278,17 @@ function editContextInject(input: HookInput): void {
   const projectDir = getProjectDir();
 
   if (!isTldrInstalled() || !isTldrDaemonRunning(projectDir)) {
-    allowTool();
+    allowTool(HOOK_EDIT_INJECT);
   }
 
   const filePath = (input.tool_input?.file_path as string) || '';
   if (!filePath) {
-    allowTool();
+    allowTool(HOOK_EDIT_INJECT);
   }
 
   const extract = extractDaemon(filePath, projectDir);
   if (!extract || extract.symbols.length === 0) {
-    allowTool();
+    allowTool(HOOK_EDIT_INJECT);
   }
 
   const contextParts: string[] = ['## File Structure', ''];
@@ -316,7 +331,7 @@ function editContextInject(input: HookInput): void {
     contextParts.push(extract!.imports.slice(0, 10).join(', '));
   }
 
-  preToolContext(contextParts.join('\n'));
+  preToolContext(contextParts.join('\n'), HOOK_EDIT_INJECT);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -330,7 +345,7 @@ function archContextInject(input: HookInput): void {
   const projectDir = getProjectDir();
 
   if (!isTldrInstalled() || !isTldrDaemonRunning(projectDir)) {
-    allowTool();
+    allowTool(HOOK_ARCH_INJECT);
   }
 
   const prompt = (input.tool_input?.prompt as string) || '';
@@ -344,12 +359,12 @@ function archContextInject(input: HookInput): void {
     !lower.includes('overview') &&
     !lower.includes('structure')
   ) {
-    allowTool();
+    allowTool(HOOK_ARCH_INJECT);
   }
 
   const arch = archDaemon(projectDir);
   if (!arch) {
-    allowTool();
+    allowTool(HOOK_ARCH_INJECT);
   }
 
   const contextParts: string[] = ['## Project Architecture', ''];
@@ -370,7 +385,7 @@ function archContextInject(input: HookInput): void {
     }
   }
 
-  preToolContext(contextParts.join('\n'));
+  preToolContext(contextParts.join('\n'), HOOK_ARCH_INJECT);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -384,18 +399,18 @@ function signatureHelper(input: HookInput): void {
   const projectDir = getProjectDir();
 
   if (!isTldrInstalled() || !isTldrDaemonRunning(projectDir)) {
-    allowTool();
+    allowTool(HOOK_SIGNATURE);
   }
 
   const newString = (input.tool_input?.new_string as string) || '';
   if (!newString) {
-    allowTool();
+    allowTool(HOOK_SIGNATURE);
   }
 
   // Extract function calls from the new code
   const refs = extractReferences(newString);
   if (refs.length === 0) {
-    allowTool();
+    allowTool(HOOK_SIGNATURE);
   }
 
   const signatures: string[] = [];
@@ -410,10 +425,10 @@ function signatureHelper(input: HookInput): void {
   }
 
   if (signatures.length > 0) {
-    preToolContext(`## Referenced Signatures\n\n${signatures.join('\n')}`);
+    preToolContext(`## Referenced Signatures\n\n${signatures.join('\n')}`, HOOK_SIGNATURE);
   }
 
-  allowTool();
+  allowTool(HOOK_SIGNATURE);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -427,29 +442,29 @@ function postEditDiagnostics(input: HookInput): void {
   const projectDir = getProjectDir();
 
   if (!isTldrInstalled() || !isTldrDaemonRunning(projectDir)) {
-    allowTool();
+    allowTool(HOOK_DIAGNOSTICS);
   }
 
   const filePath = (input.tool_input?.file_path as string) || '';
   if (!filePath) {
-    allowTool();
+    allowTool(HOOK_DIAGNOSTICS);
   }
 
   // Only for Python files
   if (!filePath.endsWith('.py')) {
-    allowTool();
+    allowTool(HOOK_DIAGNOSTICS);
   }
 
   const diag = diagnosticsDaemon(filePath, projectDir);
   if (!diag || diag.errors.length === 0) {
-    allowTool();
+    allowTool(HOOK_DIAGNOSTICS);
   }
 
   const errors = diag!.errors.filter((e) => e.severity === 'error');
   const warnings = diag!.errors.filter((e) => e.severity === 'warning');
 
   if (errors.length === 0) {
-    allowTool();
+    allowTool(HOOK_DIAGNOSTICS);
   }
 
   const contextParts: string[] = ['## TLDR Diagnostics'];
@@ -470,7 +485,7 @@ function postEditDiagnostics(input: HookInput): void {
 
   contextParts.push('\nPlease fix these issues.');
 
-  outputContext(contextParts.join('\n'));
+  outputContext(contextParts.join('\n'), HOOK_DIAGNOSTICS);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -484,22 +499,22 @@ function importValidator(input: HookInput): void {
   const projectDir = getProjectDir();
 
   if (!isTldrInstalled() || !isTldrDaemonRunning(projectDir)) {
-    allowTool();
+    allowTool(HOOK_IMPORT_VALIDATE);
   }
 
   const filePath = (input.tool_input?.file_path as string) || '';
   if (!filePath) {
-    allowTool();
+    allowTool(HOOK_IMPORT_VALIDATE);
   }
 
   // Only for Python files
   if (!filePath.endsWith('.py')) {
-    allowTool();
+    allowTool(HOOK_IMPORT_VALIDATE);
   }
 
   const extract = extractDaemon(filePath, projectDir);
   if (!extract || extract.imports.length === 0) {
-    allowTool();
+    allowTool(HOOK_IMPORT_VALIDATE);
   }
 
   const invalidImports: string[] = [];
@@ -533,11 +548,12 @@ function importValidator(input: HookInput): void {
 
   if (invalidImports.length > 0) {
     outputContext(
-      `## Import Warnings\n\nThese imports may be invalid:\n${invalidImports.map((i) => `- ${i}`).join('\n')}`
+      `## Import Warnings\n\nThese imports may be invalid:\n${invalidImports.map((i) => `- ${i}`).join('\n')}`,
+      HOOK_IMPORT_VALIDATE
     );
   }
 
-  allowTool();
+  allowTool(HOOK_IMPORT_VALIDATE);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -551,7 +567,7 @@ async function editNotify(input: HookInput): Promise<void> {
   const projectDir = getProjectDir();
 
   if (!isTldrInstalled()) {
-    return allowTool();
+    return allowTool(HOOK_EDIT_NOTIFY);
   }
 
   // Start daemon if not running (ensures dirty tracking works)
@@ -571,12 +587,12 @@ async function editNotify(input: HookInput): Promise<void> {
 
   const filePath = (input.tool_input?.file_path as string) || '';
   if (!filePath) {
-    return allowTool();
+    return allowTool(HOOK_EDIT_NOTIFY);
   }
 
   // Fire and forget - don't block on notification
   await notifyFileChanged(projectDir, filePath);
-  allowTool();
+  allowTool(HOOK_EDIT_NOTIFY);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -638,49 +654,49 @@ function tldrReadEnforcer(input: HookInput): void {
 
   // Always allow if TLDR not available
   if (!isTldrInstalled() || !isTldrDaemonRunning(projectDir)) {
-    allowTool();
+    allowTool(HOOK_READ_ENFORCER);
   }
 
   const filePath = (input.tool_input?.file_path as string) || '';
   if (!filePath) {
-    allowTool();
+    allowTool(HOOK_READ_ENFORCER);
   }
 
   // Bypass: explicit offset/limit means user wants specific lines
   const offset = input.tool_input?.offset as number | undefined;
   const limit = input.tool_input?.limit as number | undefined;
   if (offset !== undefined || limit !== undefined) {
-    allowTool();
+    allowTool(HOOK_READ_ENFORCER);
   }
 
   // Bypass: not a code file
   if (!isCodeFile(filePath)) {
-    allowTool();
+    allowTool(HOOK_READ_ENFORCER);
   }
 
   // Bypass: file doesn't exist
   if (!existsSync(filePath)) {
-    allowTool();
+    allowTool(HOOK_READ_ENFORCER);
   }
 
   // Bypass: small file
   const lineCount = countFileLines(filePath);
   if (lineCount < MIN_LINES_FOR_TLDR) {
-    allowTool();
+    allowTool(HOOK_READ_ENFORCER);
   }
 
   // Check search context - if recent search targeted specific location, allow read
   const searchCtx = loadSearchContext(sessionId);
   if (searchCtx && searchCtx.definitionLocation) {
     // Recent search found a specific location - allow targeted read
-    allowTool();
+    allowTool(HOOK_READ_ENFORCER);
   }
 
   // Get TLDR extract for the file
   const extract = extractDaemon(filePath, projectDir);
   if (!extract || extract.symbols.length === 0) {
     // TLDR extraction failed - allow normal read
-    allowTool();
+    allowTool(HOOK_READ_ENFORCER);
   }
 
   // Build token-efficient summary instead of raw file
@@ -754,7 +770,7 @@ function tldrReadEnforcer(input: HookInput): void {
   parts.push('To read specific sections, use: `Read(file_path, offset=LINE, limit=COUNT)`');
 
   // Deny the raw read and provide TLDR summary
-  denyTool(parts.join('\n'));
+  denyTool(parts.join('\n'), HOOK_READ_ENFORCER);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -849,7 +865,7 @@ function smartSearchRouter(input: HookInput): void {
 
   const pattern = (input.tool_input?.pattern as string) || '';
   if (!pattern) {
-    allowTool();
+    allowTool(HOOK_SEARCH_ROUTER);
   }
 
   // Classify the query
@@ -913,11 +929,11 @@ function smartSearchRouter(input: HookInput): void {
     parts.push('');
     parts.push('Proceeding with grep for additional matches...');
 
-    preToolContext(parts.join('\n'));
+    preToolContext(parts.join('\n'), HOOK_SEARCH_ROUTER);
   }
 
   // Allow grep to proceed (with context saved for read enforcer)
-  allowTool();
+  allowTool(HOOK_SEARCH_ROUTER);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -939,9 +955,10 @@ export function register(parent: Command): void {
     .action(async () => {
       try {
         const input = await readHookInput();
+        logHookStart(HOOK_TLDR_INJECT, { tool: input.tool_name });
         tldrContextInject(input);
       } catch {
-        allowTool();
+        allowTool(HOOK_TLDR_INJECT);
       }
     });
 
@@ -951,9 +968,10 @@ export function register(parent: Command): void {
     .action(async () => {
       try {
         const input = await readHookInput();
+        logHookStart(HOOK_EDIT_INJECT, { tool: input.tool_name, file: input.tool_input?.file_path });
         editContextInject(input);
       } catch {
-        allowTool();
+        allowTool(HOOK_EDIT_INJECT);
       }
     });
 
@@ -963,9 +981,10 @@ export function register(parent: Command): void {
     .action(async () => {
       try {
         const input = await readHookInput();
+        logHookStart(HOOK_ARCH_INJECT, { tool: input.tool_name });
         archContextInject(input);
       } catch {
-        allowTool();
+        allowTool(HOOK_ARCH_INJECT);
       }
     });
 
@@ -975,9 +994,10 @@ export function register(parent: Command): void {
     .action(async () => {
       try {
         const input = await readHookInput();
+        logHookStart(HOOK_SIGNATURE, { tool: input.tool_name, file: input.tool_input?.file_path });
         signatureHelper(input);
       } catch {
-        allowTool();
+        allowTool(HOOK_SIGNATURE);
       }
     });
 
@@ -988,9 +1008,10 @@ export function register(parent: Command): void {
     .action(async () => {
       try {
         const input = await readHookInput();
+        logHookStart(HOOK_DIAGNOSTICS, { tool: input.tool_name, file: input.tool_input?.file_path });
         postEditDiagnostics(input);
       } catch {
-        allowTool();
+        allowTool(HOOK_DIAGNOSTICS);
       }
     });
 
@@ -1000,9 +1021,10 @@ export function register(parent: Command): void {
     .action(async () => {
       try {
         const input = await readHookInput();
+        logHookStart(HOOK_IMPORT_VALIDATE, { tool: input.tool_name, file: input.tool_input?.file_path });
         importValidator(input);
       } catch {
-        allowTool();
+        allowTool(HOOK_IMPORT_VALIDATE);
       }
     });
 
@@ -1012,9 +1034,10 @@ export function register(parent: Command): void {
     .action(async () => {
       try {
         const input = await readHookInput();
+        logHookStart(HOOK_EDIT_NOTIFY, { tool: input.tool_name, file: input.tool_input?.file_path });
         await editNotify(input);
       } catch {
-        allowTool();
+        allowTool(HOOK_EDIT_NOTIFY);
       }
     });
 
@@ -1025,9 +1048,10 @@ export function register(parent: Command): void {
     .action(async () => {
       try {
         const input = await readHookInput();
+        logHookStart(HOOK_READ_ENFORCER, { tool: input.tool_name, file: input.tool_input?.file_path });
         tldrReadEnforcer(input);
       } catch {
-        allowTool();
+        allowTool(HOOK_READ_ENFORCER);
       }
     });
 
@@ -1037,9 +1061,10 @@ export function register(parent: Command): void {
     .action(async () => {
       try {
         const input = await readHookInput();
+        logHookStart(HOOK_SEARCH_ROUTER, { tool: input.tool_name, pattern: input.tool_input?.pattern });
         smartSearchRouter(input);
       } catch {
-        allowTool();
+        allowTool(HOOK_SEARCH_ROUTER);
       }
     });
 }

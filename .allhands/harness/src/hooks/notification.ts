@@ -11,6 +11,11 @@
 import type { Command } from 'commander';
 import { HookInput, readHookInput, allowTool } from './shared.js';
 import { sendGateNotification } from '../lib/notification.js';
+import { logHookStart, logHookSuccess } from '../lib/trace-store.js';
+
+const HOOK_ELICITATION = 'notification elicitation';
+const HOOK_STOP = 'notification stop';
+const HOOK_COMPACT = 'notification compact';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PreToolUse: AskUserQuestion
@@ -37,7 +42,7 @@ function handleElicitationNotification(input: HookInput): void {
   sendGateNotification('Question', preview);
 
   // Allow the tool to proceed
-  allowTool();
+  allowTool(HOOK_ELICITATION);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -55,6 +60,7 @@ function handleStopNotification(_input: HookInput): void {
   sendGateNotification('Stopped', 'Agent has finished');
 
   // Output approval to allow stop
+  logHookSuccess(HOOK_STOP, { action: 'approve' });
   console.log(JSON.stringify({ decision: 'approve' }));
   process.exit(0);
 }
@@ -74,6 +80,7 @@ function handleCompactNotification(_input: HookInput): void {
   sendGateNotification('Compacting', 'Context is being summarized');
 
   // Output to allow compaction to proceed
+  logHookSuccess(HOOK_COMPACT, { action: 'continue' });
   console.log(JSON.stringify({ continue: true }));
   process.exit(0);
 }
@@ -97,10 +104,11 @@ export function register(parent: Command): void {
     .action(async () => {
       try {
         const input = await readHookInput();
+        logHookStart(HOOK_ELICITATION, { tool: input.tool_name });
         handleElicitationNotification(input);
       } catch {
         // On error, allow tool
-        allowTool();
+        allowTool(HOOK_ELICITATION);
       }
     });
 
@@ -111,9 +119,11 @@ export function register(parent: Command): void {
     .action(async () => {
       try {
         const input = await readHookInput();
+        logHookStart(HOOK_STOP, {});
         handleStopNotification(input);
       } catch {
         // On error, approve stop
+        logHookSuccess(HOOK_STOP, { action: 'approve', error: true });
         console.log(JSON.stringify({ decision: 'approve' }));
         process.exit(0);
       }
@@ -126,9 +136,11 @@ export function register(parent: Command): void {
     .action(async () => {
       try {
         const input = await readHookInput();
+        logHookStart(HOOK_COMPACT, {});
         handleCompactNotification(input);
       } catch {
         // On error, allow compaction
+        logHookSuccess(HOOK_COMPACT, { action: 'continue', error: true });
         console.log(JSON.stringify({ continue: true }));
         process.exit(0);
       }

@@ -2,13 +2,13 @@
  * BaseCommand - Foundation for all ah CLI commands
  *
  * Provides:
- * - Structured logging with pino
  * - Agent context tracking (AGENT_TYPE, PROMPT_NUMBER, SPEC_NAME)
  * - JSON vs human-friendly output modes
  * - Standard error handling
+ * - Trace logging (SQLite + JSONL)
  */
 
-import pino from 'pino';
+import { logCommandStart, logCommandSuccess, logCommandError } from './trace-store.js';
 
 export interface CommandContext {
   /** Agent type (executor, coordinator, planner, judge, ideation, documentor, pr-reviewer) */
@@ -39,36 +39,6 @@ export function getEnvContext(): Partial<CommandContext> {
     promptNumber: process.env.PROMPT_NUMBER,
     specName: process.env.SPEC_NAME,
   };
-}
-
-/**
- * Create a logger instance with context
- */
-export function createLogger(name: string, context: Partial<CommandContext> = {}): pino.Logger {
-  const transport = context.json
-    ? undefined
-    : pino.transport({
-        target: 'pino-pretty',
-        options: {
-          colorize: true,
-          ignore: 'pid,hostname',
-        },
-      });
-
-  const logger = pino(
-    {
-      name,
-      level: context.verbose ? 'debug' : 'info',
-      base: {
-        ...(context.agentType && { agent: context.agentType }),
-        ...(context.promptNumber && { prompt: context.promptNumber }),
-        ...(context.specName && { spec: context.specName }),
-      },
-    },
-    transport
-  );
-
-  return logger;
 }
 
 /**
@@ -113,30 +83,36 @@ export function parseContext(options: {
 }
 
 /**
- * Execute a command with standard error handling
+ * Execute a command with standard error handling and trace logging
  */
 export async function executeCommand<T>(
   name: string,
   context: CommandContext,
-  fn: () => Promise<CommandResult<T>>
+  fn: () => Promise<CommandResult<T>>,
+  args: Record<string, unknown> = {}
 ): Promise<void> {
-  const logger = createLogger(name, context);
+  // Log command start to trace store
+  logCommandStart(name, { ...args, context });
 
   try {
-    logger.debug({ action: 'start' }, `Starting ${name}`);
     const result = await fn();
-    logger.debug({ action: 'complete', success: result.success }, `Completed ${name}`);
 
     const output = formatOutput(result, context);
     if (result.success) {
+      // Log success to trace store
+      logCommandSuccess(name, { data: result.data });
       console.log(output);
     } else {
+      // Log error to trace store
+      logCommandError(name, result.error || 'Unknown error', args);
       console.error(output);
       process.exit(1);
     }
   } catch (err) {
     const error = err instanceof Error ? err.message : String(err);
-    logger.error({ action: 'error', error }, `Failed ${name}`);
+
+    // Log error to trace store
+    logCommandError(name, error, args);
 
     const result: CommandResult<T> = {
       success: false,
@@ -155,6 +131,40 @@ export function addCommonOptions(cmd: { option: (flags: string, description: str
   cmd.option('--json', 'Output as JSON (for agent consumption)');
   cmd.option('-v, --verbose', 'Enable verbose logging');
   return cmd;
+}
+
+/**
+ * Wrap a Commander action handler with trace logging.
+ * Use this for commands that don't use executeCommand.
+ *
+ * @example
+ * .action(tracedAction('specs persist', async (path, options) => {
+ *   // command implementation
+ * }))
+ */
+export function tracedAction<TArgs extends unknown[]>(
+  commandName: string,
+  handler: (...args: TArgs) => Promise<void> | void
+): (...args: TArgs) => Promise<void> {
+  return async (...args: TArgs) => {
+    // Extract args for logging (filter out Commander object at the end)
+    const logArgs: Record<string, unknown> = {};
+    args.slice(0, -1).forEach((arg, i) => {
+      logArgs[`arg${i}`] = arg;
+    });
+
+    logCommandStart(commandName, logArgs);
+
+    try {
+      await handler(...args);
+      // If we get here without process.exit, it succeeded
+      logCommandSuccess(commandName, {});
+    } catch (err) {
+      const error = err instanceof Error ? err.message : String(err);
+      logCommandError(commandName, error, logArgs);
+      throw err; // Re-throw to let Commander handle it
+    }
+  };
 }
 
 /**

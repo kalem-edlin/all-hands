@@ -7,6 +7,7 @@
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
+import { logHookStart, logHookSuccess } from '../lib/trace-store.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -87,8 +88,12 @@ export async function readHookInput(): Promise<HookInput> {
  * Deny a tool use with a reason.
  * Outputs JSON to stdout and exits with 0 (success for hooks).
  * The reason is shown to Claude via permissionDecisionReason.
+ * Optionally logs to trace-store if hookName is provided.
  */
-export function denyTool(reason: string): never {
+export function denyTool(reason: string, hookName?: string): never {
+  if (hookName) {
+    logHookSuccess(hookName, { action: 'deny', reason });
+  }
   const output = {
     hookSpecificOutput: {
       hookEventName: 'PreToolUse',
@@ -103,16 +108,24 @@ export function denyTool(reason: string): never {
 /**
  * Allow a tool use (silent exit).
  * Hooks that don't output anything allow the tool.
+ * Optionally logs to trace-store if hookName is provided.
  */
-export function allowTool(): never {
+export function allowTool(hookName?: string): never {
+  if (hookName) {
+    logHookSuccess(hookName, { action: 'allow' });
+  }
   process.exit(0);
 }
 
 /**
  * Output additional context for PostToolUse hooks.
  * Uses systemMessage field per official hook documentation.
+ * Optionally logs to trace-store if hookName is provided.
  */
-export function outputContext(context: string): never {
+export function outputContext(context: string, hookName?: string): never {
+  if (hookName) {
+    logHookSuccess(hookName, { action: 'context', hasContext: true });
+  }
   const output: PostToolUseOutput = {
     continue: true,
     systemMessage: context,
@@ -124,8 +137,12 @@ export function outputContext(context: string): never {
 /**
  * Block a PostToolUse action with a message.
  * The file change will be rejected and the message shown.
+ * Optionally logs to trace-store if hookName is provided.
  */
-export function blockTool(message: string): never {
+export function blockTool(message: string, hookName?: string): never {
+  if (hookName) {
+    logHookSuccess(hookName, { action: 'block', message });
+  }
   const output: PostToolUseOutput = {
     continue: false,
     systemMessage: message,
@@ -137,8 +154,12 @@ export function blockTool(message: string): never {
 /**
  * Output Stop/SubagentStop hook result.
  * Use decision: "approve" to allow stop, "block" to continue.
+ * Optionally logs to trace-store if hookName is provided.
  */
-export function outputStopHook(decision: 'approve' | 'block', reason?: string): never {
+export function outputStopHook(decision: 'approve' | 'block', reason?: string, hookName?: string): never {
+  if (hookName) {
+    logHookSuccess(hookName, { action: decision, reason });
+  }
   const output: StopHookOutput = {
     decision,
     reason,
@@ -150,8 +171,12 @@ export function outputStopHook(decision: 'approve' | 'block', reason?: string): 
 /**
  * Output PreCompact hook result.
  * Use systemMessage to inject context that survives compaction.
+ * Optionally logs to trace-store if hookName is provided.
  */
-export function outputPreCompact(systemMessage?: string): never {
+export function outputPreCompact(systemMessage?: string, hookName?: string): never {
+  if (hookName) {
+    logHookSuccess(hookName, { action: 'precompact', hasMessage: !!systemMessage });
+  }
   const output: PreCompactOutput = {
     continue: true,
     systemMessage,
@@ -206,12 +231,17 @@ export function getCacheSubdir(name: string): string {
 /**
  * Output PreToolUse with context injection (modifies tool input).
  * Prepends additionalContext to the specified field (default: 'prompt').
+ * Optionally logs to trace-store if hookName is provided.
  */
 export function injectContext(
   originalInput: Record<string, unknown>,
   additionalContext: string,
-  targetField: string = 'prompt'
+  targetField: string = 'prompt',
+  hookName?: string
 ): never {
+  if (hookName) {
+    logHookSuccess(hookName, { action: 'inject', targetField });
+  }
   const currentValue = (originalInput[targetField] as string) || '';
   const output: PreToolUseOutput = {
     hookSpecificOutput: {
@@ -229,8 +259,12 @@ export function injectContext(
 /**
  * Output PreToolUse additional context without modifying input.
  * Adds context to the conversation via systemMessage.
+ * Optionally logs to trace-store if hookName is provided.
  */
-export function preToolContext(context: string): never {
+export function preToolContext(context: string, hookName?: string): never {
+  if (hookName) {
+    logHookSuccess(hookName, { action: 'preToolContext', hasContext: true });
+  }
   const output: PreToolUseOutput = {
     hookSpecificOutput: {
       permissionDecision: 'allow',
@@ -361,3 +395,4 @@ export function loadSearchContext(sessionId: string): SearchContext | null {
     return null;
   }
 }
+

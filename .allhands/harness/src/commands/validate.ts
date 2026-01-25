@@ -21,6 +21,7 @@ import {
   validateFile,
 } from '../lib/schema.js';
 import { TEMPLATE_VAR_NAMES } from '../lib/schemas/template-vars.js';
+import { tracedAction } from '../lib/base-command.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -36,7 +37,7 @@ export function register(program: Command): void {
     .command('agents')
     .description('Validate all agent profiles')
     .option('--json', 'Output as JSON')
-    .action((options: { json?: boolean }) => {
+    .action(tracedAction('validate agents', (options: { json?: boolean }) => {
       const { profiles, errors } = loadAllProfiles();
 
       if (options.json) {
@@ -79,7 +80,7 @@ export function register(program: Command): void {
 
       console.log('\nValid template variables:');
       console.log(`  ${TEMPLATE_VAR_NAMES.join(', ')}\n`);
-    });
+    }));
 
   // Subcommand: validate file <path>
   validateCmd
@@ -87,7 +88,7 @@ export function register(program: Command): void {
     .description('Validate a file against its schema')
     .option('-t, --type <type>', 'Schema type (prompt, alignment, spec, documentation)')
     .option('--json', 'Output as JSON')
-    .action(async (file: string, options: { type?: string; json?: boolean }) => {
+    .action(tracedAction('validate file', async (file: string, options: { type?: string; json?: boolean }) => {
       if (!existsSync(file)) {
         if (options.json) {
           console.log(JSON.stringify({ success: false, error: `File not found: ${file}` }));
@@ -137,6 +138,6 @@ export function register(program: Command): void {
         console.error(formatErrors(result));
         process.exit(1);
       }
-    });
+    }));
 }
 

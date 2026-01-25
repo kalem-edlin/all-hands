@@ -1,13 +1,16 @@
 /**
  * Perplexity Commands (Agent-Facing)
  *
- * Deep research with citations using Perplexity's sonar-deep-research model.
+ * Web search with citations using Perplexity's sonar-pro model.
+ * Matches the configuration used by the Perplexity MCP server.
  *
  * Commands:
- * - ah perplexity research <query> - Deep research with citations
+ * - ah perplexity research <query> - Web search with citations
+ *   --challenge: Challenge findings using Grok X/Twitter search
  */
 
 import { Command } from 'commander';
+import { tracedAction } from '../lib/base-command.js';
 
 interface PerplexityResponse {
   choices?: Array<{
@@ -18,19 +21,40 @@ interface PerplexityResponse {
   citations?: string[];
 }
 
-const PERPLEXITY_TIMEOUT = parseInt(process.env.PERPLEXITY_TIMEOUT_MS ?? '300000', 10);
+interface GrokResponse {
+  choices?: Array<{
+    message?: {
+      content?: string;
+    };
+  }>;
+  citations?: string[];
+}
+
+const GROK_CHALLENGER_PROMPT = `You are a critical research challenger. Given research findings, search X to:
+
+1. CHALLENGE: Find contradicting opinions, failed implementations, known issues
+2. ALTERNATIVES: Surface newer/better tools the research may have missed
+3. TRENDS: Identify emerging patterns that could affect the recommendations
+4. SENTIMENT: Gauge real developer satisfaction vs marketing claims
+5. DISCUSSIONS: Find where the best practitioners are discussing this topic
+
+Be skeptical. Surface what the research missed or got wrong. Focus on recent posts (last 6 months).`;
+
+const GROK_TIMEOUT = 120000;
+
+const PERPLEXITY_TIMEOUT = parseInt(process.env.PERPLEXITY_TIMEOUT_MS ?? '60000', 10);
 
 export function register(program: Command): void {
   const perplexity = program
     .command('perplexity')
-    .description('Deep research with citations');
+    .description('Web search with citations');
 
   // ah perplexity research
   perplexity
     .command('research <query>')
-    .description('Deep research with citations')
+    .description('Web search with citations (sonar-pro model)')
     .option('--json', 'Output as JSON')
-    .action(async (query: string, options: { json?: boolean }) => {
+    .action(tracedAction('perplexity research', async (query: string, options: { json?: boolean }) => {
       const apiKey = process.env.PERPLEXITY_API_KEY;
       if (!apiKey) {
         if (options.json) {
@@ -44,9 +68,7 @@ export function register(program: Command): void {
       try {
         const response = await callPerplexityApi(apiKey, query);
 
-        let content = response.choices?.[0]?.message?.content ?? '';
-        // Remove <think> tags if present
-        content = content.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+        const content = response.choices?.[0]?.message?.content ?? '';
         const citations = response.citations ?? [];
 
         if (options.json) {
@@ -79,7 +101,7 @@ export function register(program: Command): void {
         }
         process.exit(1);
       }
-    });
+    }));
 }
 
 async function callPerplexityApi(apiKey: string, query: string): Promise<PerplexityResponse> {
@@ -94,7 +116,7 @@ async function callPerplexityApi(apiKey: string, query: string): Promise<Perplex
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'sonar-deep-research',
+        model: 'sonar-pro',
         messages: [{ role: 'user', content: query }],
       }),
       signal: controller.signal,

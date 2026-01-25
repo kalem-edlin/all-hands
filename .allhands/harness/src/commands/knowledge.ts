@@ -26,7 +26,7 @@ import {
   type FileChange,
   type IndexName,
 } from "../lib/knowledge.js";
-import { BaseCommand, CommandResult } from "../lib/base-command.js";
+import { BaseCommand, CommandResult, tracedAction } from "../lib/base-command.js";
 import { getBaseBranch } from "../lib/git.js";
 
 const getProjectRoot = (): string => {
@@ -334,7 +334,7 @@ export function register(program: Command): void {
     const searchCmd = new SearchCommand(indexName as IndexName);
     const searchSubCmd = indexCmd.command(searchCmd.name).description(searchCmd.description);
     searchCmd.defineArguments(searchSubCmd);
-    searchSubCmd.action(async (...args) => {
+    searchSubCmd.action(tracedAction(`knowledge ${indexName} search`, async (...args) => {
       const opts = args[args.length - 2] as Record<string, unknown>;
       const cmdObj = args[args.length - 1] as Command;
       const positionalArgs = cmdObj.args;
@@ -342,35 +342,35 @@ export function register(program: Command): void {
       if (positionalArgs[0]) namedArgs.query = positionalArgs[0];
       const result = await searchCmd.execute(namedArgs);
       console.log(JSON.stringify(result, null, 2));
-    });
+    }));
 
     // Reindex command
     const reindexCmd = new ReindexCommand(indexName as IndexName);
     const reindexSubCmd = indexCmd.command(reindexCmd.name).description(reindexCmd.description);
     reindexCmd.defineArguments(reindexSubCmd);
-    reindexSubCmd.action(async (...args) => {
+    reindexSubCmd.action(tracedAction(`knowledge ${indexName} reindex`, async (...args) => {
       const opts = args[args.length - 2] as Record<string, unknown>;
       const result = await reindexCmd.execute(opts);
       console.log(JSON.stringify(result, null, 2));
-    });
+    }));
   }
 
   // Global reindex command
   const globalReindexCmd = new ReindexCommand("all");
   const globalReindexSubCmd = knowledgeCmd.command("reindex").description(globalReindexCmd.description);
   globalReindexCmd.defineArguments(globalReindexSubCmd);
-  globalReindexSubCmd.action(async (...args) => {
+  globalReindexSubCmd.action(tracedAction('knowledge reindex', async (...args) => {
     const opts = args[args.length - 2] as Record<string, unknown>;
     const result = await globalReindexCmd.execute(opts);
     console.log(JSON.stringify(result, null, 2));
-  });
+  }));
 
   // Status command
   const statusCmd = new StatusCommand();
   const statusSubCmd = knowledgeCmd.command(statusCmd.name).description(statusCmd.description);
   statusCmd.defineArguments(statusSubCmd);
-  statusSubCmd.action(async () => {
+  statusSubCmd.action(tracedAction('knowledge status', async () => {
     const result = await statusCmd.execute({});
     console.log(JSON.stringify(result, null, 2));
-  });
+  }));
 }

@@ -13,6 +13,7 @@
 
 import { Command } from 'commander';
 import { queryEvents, getStats, type TraceEventType, type TraceQueryOptions, ERROR_EVENT_TYPES } from '../lib/trace-store.js';
+import { tracedAction } from '../lib/base-command.js';
 
 // ANSI color codes for terminal output
 const RED = '\x1b[31m';
@@ -38,7 +39,7 @@ export function register(program: Command): void {
     .option('--offset <n>', 'Skip first N events', '0')
     .option('--errors', 'Show only error events')
     .option('--json', 'Output as JSON')
-    .action((options) => {
+    .action(tracedAction('trace list', (options) => {
       try {
         const queryOpts: TraceQueryOptions = {
           agentType: options.agent,
@@ -118,7 +119,7 @@ export function register(program: Command): void {
         console.error(`Error: ${err instanceof Error ? err.message : err}`);
         process.exit(1);
       }
-    });
+    }));
 
   // Errors shortcut - show only errors
   trace
@@ -128,7 +129,7 @@ export function register(program: Command): void {
     .option('--since <time>', 'Events since time (e.g., 1h, 30m, 2d)')
     .option('--limit <n>', 'Maximum events to return', '50')
     .option('--json', 'Output as JSON')
-    .action((options) => {
+    .action(tracedAction('trace errors', (options) => {
       try {
         const queryOpts: TraceQueryOptions = {
           agentType: options.agent,
@@ -178,7 +179,7 @@ export function register(program: Command): void {
         console.error(`Error: ${err instanceof Error ? err.message : err}`);
         process.exit(1);
       }
-    });
+    }));
 
   // Stats
   trace
@@ -186,7 +187,7 @@ export function register(program: Command): void {
     .description('Show aggregate statistics')
     .option('--since <time>', 'Stats since time (e.g., 1h, 30m, 2d)')
     .option('--json', 'Output as JSON')
-    .action((options) => {
+    .action(tracedAction('trace stats', (options) => {
       try {
         const stats = getStats(options.since);
 
@@ -230,7 +231,7 @@ export function register(program: Command): void {
         console.error(`Error: ${err instanceof Error ? err.message : err}`);
         process.exit(1);
       }
-    });
+    }));
 
   // Tail (real-time streaming via file watch)
   trace
@@ -238,7 +239,7 @@ export function register(program: Command): void {
     .description('Watch trace events in real-time')
     .option('--agent <type>', 'Filter by agent type')
     .option('--type <eventType>', 'Filter by event type')
-    .action((options) => {
+    .action(tracedAction('trace tail', (options) => {
       const { watch } = require('fs');
       const { join } = require('path');
       const { createReadStream } = require('fs');
@@ -322,5 +323,5 @@ export function register(program: Command): void {
           }
         }, 1000);
       }
-    });
+    }));
 }

@@ -9,6 +9,7 @@
  */
 
 import { Command } from 'commander';
+import { tracedAction } from '../lib/base-command.js';
 
 const SYSTEM_PROMPT = `You are a technology research assistant. Search X (Twitter) for posts about the given technology, tool, or concept.
 
@@ -57,7 +58,7 @@ export function register(program: Command): void {
     .description('Search X for tech opinions, alternatives, and insights')
     .option('--context <context>', 'Previous research findings to build upon')
     .option('--json', 'Output as JSON')
-    .action(async (query: string, options: { context?: string; json?: boolean }) => {
+    .action(tracedAction('grok search', async (query: string, options: { context?: string; json?: boolean }) => {
       const apiKey = process.env.X_AI_API_KEY;
       if (!apiKey) {
         if (options.json) {
@@ -116,7 +117,7 @@ Focus on opinions, alternatives, and community discussions that complement the e
         }
         process.exit(1);
       }
-    });
+    }));
 
   // ah grok challenge
   grok
@@ -124,7 +125,7 @@ Focus on opinions, alternatives, and community discussions that complement the e
     .description('Challenge research findings with X search')
     .requiredOption('--findings <findings>', 'Research findings to challenge')
     .option('--json', 'Output as JSON')
-    .action(async (query: string, options: { findings: string; json?: boolean }) => {
+    .action(tracedAction('grok challenge', async (query: string, options: { findings: string; json?: boolean }) => {
       const apiKey = process.env.X_AI_API_KEY;
       if (!apiKey) {
         if (options.json) {
@@ -179,7 +180,7 @@ Search X to challenge these findings.`;
         }
         process.exit(1);
       }
-    });
+    }));
 }
 
 async function callGrokApi(
