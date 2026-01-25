@@ -119,7 +119,7 @@ If gaps exist, return to Surveying for specific categories.
 
 Use "Assuming X exists..." or "Assuming any of X, Y, Z exist..." to express dependencies on milestones that will be implemented by the time this one is.
 
-## Spec Flow Analysis (Optional)
+## Spec Flow Analysis (Optional if you feel there are still ambiguities in the complexity of this milestone)
 
 After writing the spec, offer flow analysis:
 
@@ -152,8 +152,7 @@ Ask the engineer:
 > If no, the spec remains in `specs/roadmap/` for later activation via TUI.
 
 If yes:
-- Run `ah oracle suggest-branch` with spec content for branch name
-- Run `git checkout -b <suggested-branch-name>`
+- Run `git checkout -b <infered-branch-name-from-spec>`
 - Run `ah planning init` to initialize planning directory
 - Notify engineer the milestone is active
 
