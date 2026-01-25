@@ -4,7 +4,6 @@ Extract learnings from completed milestones to improve the harness, skills, and 
 
 <constraints>
 - MUST ask the engineer before modifying harness files
-- MUST update `.allhands/flows/shared/HARNESS_FUNCTIONALITY.md` when making structural harness changes
 - MUST write compounding summary to `.planning/<milestone>/compounding_summary.md`
 - MUST write non-trivial solutions to `docs/solutions/<category>/`
 - NEVER modify harness without first principle justification
@@ -38,31 +37,6 @@ Identify patterns that indicate harness improvement opportunities:
 - Design decisions made given limitations
 - Engineer rejections and frustrations
 - Compromises between agentic suggestions and engineer preferences
-
-## Harness Improvement Decision Tree
-
-Per **Frontier Models are Capable**, apply learnings to improve the harness:
-
-| Signal Pattern | Improvement Target |
-|----------------|-------------------|
-| Initial ideas forgotten during implementation | `MILESTONE_PLANNING.md` |
-| More prompts than expected for ideation | `PROMPT_TASKS_CURATION.md` |
-| Skills led to bad guidance | Fix skill files directly |
-| Validation missed issues | Fix validation suite files |
-| Structural harness issues | Read `.allhands/flows/shared/HARNESS_FUNCTIONALITY.md` |
-
-Before modifying any harness file:
-- Read `.allhands/flows/shared/HARNESS_FLOWS.md` for flow writing rules
-- Cite first principle justification for changes
-- Ask the engineer for approval
-
-## Harness Ideation Interview
-
-Conduct a mini ideation session for harness improvements:
-- Present detected issues and proposed fixes
-- Ask the engineer about painpoints they experienced
-- Reference `.allhands/principles.md` to ensure alignment
-- Validate that proposed changes serve first principles
 
 ## Memory Extraction
 
@@ -111,6 +85,32 @@ Update the milestone spec as a historical record:
 - Amend expectations based on implementation reality
 - Document decisions and their rationale
 - Capture what changed and why
+
+## Harness Improvement Handling [LAST PHASE]
+
+**Intentionally last** - complete all other compounding before diverting to harness work.
+
+### Classify and Interview
+
+Classify issues from Signal Analysis:
+
+| Signal Pattern | Action |
+|----------------|--------|
+| Skills/validation issues | Small fix - inline with approval |
+| Flow/command/hook/planning issues | Structural - create spec |
+
+Interview engineer:
+- Present classified issues
+- Ask about additional painpoints
+- Validate against `.allhands/principles.md`
+
+### Apply Changes
+
+**Small fixes**: Make approved skill/validation changes inline.
+
+**Structural changes**: Present options to engineer:
+- **(A) Create spec** → Invoke `.allhands/flows/shared/CREATE_HARNESS_SPEC.md` with `domain_name: harness`
+- **(B) Defer** → Document in `.allhands/memories.md` under "Deferred Harness Improvements"
 
 ## Completion
 

@@ -29,14 +29,19 @@ For each implementation approach area identified from spec, spawn parallel subta
 - Read `.allhands/flows/shared/CODEBASE_UNDERSTANDING.md` for codebase grounding
 - Read `.allhands/flows/shared/RESEARCH_GUIDANCE.md` for solution exploration
 
-## Validation Tooling Analysis
+## Validation Tooling Assessment
 
-Per **Agentic Validation Tooling**, prompts without validation tooling are weak:
-- Run `ah validation-tools list` to see existing coverage
-- For greenfield technology → read `.allhands/flows/shared/CREATE_VALIDATION_TOOLING.md` to research and document new suites
-- For brownfield domains → verify existing suites cover scope; flag gaps
+Per **Agentic Validation Tooling**, implementation cannot be planned without knowing what deterministic validation is available.
 
-This informs acceptance criteria quality for new prompts.
+Spawn sub-agent with `.allhands/flows/shared/ASSESS_VALIDATION_TOOLING.md`:
+- Provide: spec path, acceptance criteria
+- Receive: coverage report with gaps
+
+**If blocking gaps exist**, present options to engineer:
+- **(A) Create tooling spec** → Invoke `.allhands/flows/shared/CREATE_VALIDATION_TOOLING_SPEC.md`, feature spec gets `dependencies: [tooling-spec]`, exit planning
+- **(B) Proceed without** → Document in alignment doc `validation_gaps_accepted`, note fallback in prompts, continue
+
+**If no blocking gaps**: Assign `validation_suites` to prompts in Prompt Creation phase.
 
 ## External Technology Research
 

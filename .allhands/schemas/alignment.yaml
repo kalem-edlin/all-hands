@@ -18,6 +18,12 @@ frontmatter:
     default: 1
     description: "The current planning session number (1, 2, etc.) incremented each time a planning session is successfully used to change / add prompts"
 
+  validation_gaps_accepted:
+    type: array
+    items: string
+    required: false
+    description: "Validation gaps engineer accepted (e.g., 'No E2E - manual UI testing')"
+
 body:
   description: "Markdown document with header and append sections"
   sections:

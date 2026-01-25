@@ -44,6 +44,7 @@
 - Strict acceptance criteria make prompt work verifiable
 - Types of validation: tests, UI automation, profiling, script results
 - Makes engineering supervision redundant for routine checks
+- Validation tooling is infrastructure - assess gaps before planning, create via specs
 
 ### 7. Knowledge Compounding
 **Everything feeds forward**:
