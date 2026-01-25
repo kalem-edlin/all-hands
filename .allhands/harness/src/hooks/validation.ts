@@ -14,7 +14,7 @@ import { minimatch } from 'minimatch';
 import { dirname, extname, join } from 'path';
 import { fileURLToPath } from 'url';
 import { parse as parseYaml } from 'yaml';
-import { allowTool, blockTool, denyTool, getProjectDir, HookInput, outputContext, readHookInput } from './shared.js';
+import { allowTool, blockTool, denyTool, FormatConfig, getProjectDir, HookInput, loadProjectSettings, outputContext, readHookInput } from './shared.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -482,6 +482,81 @@ function formatSchemaErrors(errors: ValidationError[], schemaType: string): stri
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Auto-Format
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Get the format command for a specific file.
+ * Checks patterns first, then falls back to default command.
+ */
+function getFormatCommand(config: FormatConfig, filePath: string): string | null {
+  // Check patterns first (most specific)
+  if (config.patterns) {
+    for (const pattern of config.patterns) {
+      if (minimatch(filePath, pattern.match) || filePath.endsWith(pattern.match.replace('*', ''))) {
+        return pattern.command;
+      }
+    }
+  }
+
+  // Fall back to default command
+  return config.command || null;
+}
+
+/**
+ * Run auto-format on an edited file.
+ *
+ * Reads format configuration from .allhands/settings.json:
+ * {
+ *   "validation": {
+ *     "format": {
+ *       "enabled": true,
+ *       "command": "pnpm format",
+ *       "patterns": [
+ *         { "match": "*.py", "command": "ruff format" }
+ *       ]
+ *     }
+ *   }
+ * }
+ *
+ * Triggered by: PostToolUse matcher "(Write|Edit)"
+ */
+export function runFormat(input: HookInput): void {
+  const settings = loadProjectSettings();
+  const formatConfig = settings?.validation?.format;
+
+  // Check if formatting is enabled
+  if (!formatConfig?.enabled) {
+    allowTool();
+  }
+
+  const filePath = input.tool_input?.file_path as string | undefined;
+  if (!filePath) {
+    allowTool();
+  }
+
+  const command = getFormatCommand(formatConfig!, filePath!);
+  if (!command) {
+    allowTool();
+  }
+
+  try {
+    // Run format command on the file
+    // Use || true pattern to ensure non-blocking (format failures shouldn't stop the agent)
+    execSync(`${command} "${filePath}"`, {
+      cwd: getProjectDir(),
+      stdio: ['pipe', 'pipe', 'pipe'],
+      timeout: 30000, // 30 second timeout
+    });
+  } catch {
+    // Format failures are non-blocking
+    // Could optionally log or output context here
+  }
+
+  allowTool();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Command Registration
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -526,6 +601,18 @@ export function register(parent: Command): void {
         }
 
         allowTool();
+      } catch {
+        allowTool();
+      }
+    });
+
+  validation
+    .command('format')
+    .description('Auto-format edited files (PostToolUse)')
+    .action(async () => {
+      try {
+        const input = await readHookInput();
+        runFormat(input);
       } catch {
         allowTool();
       }

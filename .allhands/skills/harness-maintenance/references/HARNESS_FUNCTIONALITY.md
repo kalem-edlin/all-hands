@@ -26,6 +26,7 @@ Guide maintainers in preserving and improving the harness architecture. This doc
 
 ```
 .allhands/
+├── settings.json    # Repository-specific settings (format, validation)
 ├── flows/           # Agent instructions (progressive disclosure)
 ├── agents/          # Agent profiles (YAML spawn configs)
 ├── skills/          # Domain expertise (patterns, best practices)
@@ -35,9 +36,24 @@ Guide maintainers in preserving and improving the harness architecture. This doc
     ├── src/commands/    # Auto-discovered CLI commands
     ├── src/hooks/       # Claude Code lifecycle hooks
     ├── src/lib/         # Core utilities + internal Zod schemas
+    ├── src/schemas/     # JSON schemas for settings files
     ├── src/tui/         # Terminal UI implementation
     └── src/platforms/   # Claude Code settings.json
 ```
+
+---
+
+## Project Settings
+
+**Location:** `.allhands/settings.json` | **Schema:** `harness/src/schemas/settings.schema.json`
+
+Repository-specific, platform-agnostic configuration. Hooks read this to determine behavior.
+
+| Setting | Hook | Purpose |
+|---------|------|---------|
+| `validation.format` | `ah hooks validation format` | Auto-format after Write/Edit |
+
+Format config: `enabled`, `command` (default), `patterns` (file-specific overrides).
 
 ---
 
@@ -78,7 +94,7 @@ Per **Context is Precious** and **Agentic Validation Tooling**, hooks bridge Cla
 |----------|---------|-----------|
 | **Context** | Token-efficient context injection | `tldr-inject`, `read-enforcer`, `edit-inject`, `signature` |
 | **Enforcement** | Guide toward appropriate tools | `github-url`, `research-fetch`, `research-search` |
-| **Validation** | Quality gates on edits | `diagnostics`, `schema`, `import-validate` |
+| **Validation** | Quality gates on edits | `diagnostics`, `schema`, `format` |
 | **Lifecycle** | Handle agent events | `agent-stop`, `agent-compact` |
 | **Notification** | Desktop alerts | `elicitation`, `stop`, `compact` |
 | **Session** | Startup tasks | `tldr-warm` |

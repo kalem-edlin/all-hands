@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://allhands.dev/schemas/settings.schema.json",
+  "title": "All-Hands Project Settings",
+  "description": "Repository-specific configuration for the all-hands harness",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "JSON Schema reference"
+    },
+    "validation": {
+      "type": "object",
+      "description": "Validation and quality settings",
+      "properties": {
+        "format": {
+          "type": "object",
+          "description": "Auto-format configuration for edited files",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "default": false,
+              "description": "Enable auto-formatting after Write/Edit tool use"
+            },
+            "command": {
+              "type": "string",
+              "description": "Default format command (e.g., 'pnpm format', 'bun run format')"
+            },
+            "patterns": {
+              "type": "array",
+              "description": "File-specific format commands",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "match": {
+                    "type": "string",
+                    "description": "Glob pattern to match files (e.g., '*.py', 'src/**/*.ts')"
+                  },
+                  "command": {
+                    "type": "string",
+                    "description": "Format command for matched files"
+                  }
+                },
+                "required": ["match", "command"]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

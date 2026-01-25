@@ -242,6 +242,51 @@ export function preToolContext(context: string): never {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Project Settings (.allhands/settings.json)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Format pattern configuration */
+export interface FormatPattern {
+  match: string;
+  command: string;
+}
+
+/** Format configuration */
+export interface FormatConfig {
+  enabled?: boolean;
+  command?: string;
+  patterns?: FormatPattern[];
+}
+
+/** Validation section of settings */
+export interface ValidationSettings {
+  format?: FormatConfig;
+}
+
+/** Project settings structure (.allhands/settings.json) */
+export interface ProjectSettings {
+  validation?: ValidationSettings;
+}
+
+/**
+ * Load project settings from .allhands/settings.json.
+ * Returns null if file doesn't exist or is invalid.
+ */
+export function loadProjectSettings(): ProjectSettings | null {
+  const settingsPath = join(getProjectDir(), '.allhands', 'settings.json');
+  if (!existsSync(settingsPath)) {
+    return null;
+  }
+
+  try {
+    const content = readFileSync(settingsPath, 'utf-8');
+    return JSON.parse(content) as ProjectSettings;
+  } catch {
+    return null;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Search Context (for hook coordination)
 // ─────────────────────────────────────────────────────────────────────────────
 

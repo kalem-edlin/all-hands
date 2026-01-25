@@ -148,6 +148,10 @@
           },
           {
             "type": "command",
+            "command": "ah hooks validation format"
+          },
+          {
+            "type": "command",
             "command": "ah hooks context edit-notify"
           }
         ]

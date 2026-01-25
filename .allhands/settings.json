@@ -1,0 +1,10 @@
+{
+  "$schema": "./harness/src/schemas/settings.schema.json",
+  "validation": {
+    "format": {
+      "enabled": false,
+      "command": "pnpm format",
+      "patterns": []
+    }
+  }
+}
