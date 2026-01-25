@@ -13,11 +13,9 @@ Milestone specs are one type of spec in the workflow system - they represent pla
 
 ## Pre-flight
 
-Check current git branch. If not on `$BASE_BRANCH`:
-- Inform engineer: "You're on branch `{current_branch}`. Roadmap specs should be created on `$BASE_BRANCH` so they're visible to all feature branches."
-- Ask: "Switch to `$BASE_BRANCH` before continuing?"
-- If yes, run `git checkout $BASE_BRANCH`
-- If no, continue but note the spec will only exist on this branch
+> **Enforced by TUI:** You must be on `$BASE_BRANCH` to ideate. The TUI checks this before invoking this flow and will error if main has uncommitted changes or cannot be checked out.
+
+Verify you're on `$BASE_BRANCH`. If not, something went wrong with TUI enforcement - ask the engineer to restart ideation from the TUI.
 
 ## Initiation
 
@@ -148,6 +146,11 @@ This is recommended for:
 ## Closing
 
 After writing the spec:
+- Commit the spec to local `$BASE_BRANCH`:
+  ```bash
+  git add specs/roadmap/{SPEC_NAME}.spec.md
+  git commit -m "spec: {SPEC_NAME}"
+  ```
 - Run `ah knowledge roadmap reindex` to update the roadmap knowledge index
 
 Ask the engineer:

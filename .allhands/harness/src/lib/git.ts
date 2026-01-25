@@ -146,3 +146,38 @@ export function getHeadCommit(cwd?: string): string {
 export function getShortCommit(commitHash: string): string {
   return commitHash.substring(0, 7);
 }
+
+/**
+ * Check if there are uncommitted changes in the working directory.
+ * Returns true if there are staged or unstaged changes.
+ */
+export function hasUncommittedChanges(cwd?: string): boolean {
+  const workingDir = cwd || process.cwd();
+  try {
+    const result = spawnSync("git", ["status", "--porcelain"], {
+      encoding: "utf-8",
+      cwd: workingDir,
+    });
+    // If output is non-empty, there are uncommitted changes
+    return result.status === 0 && result.stdout.trim().length > 0;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Checkout a git branch.
+ * Returns true on success, false on failure.
+ */
+export function checkoutBranch(branch: string, cwd?: string): boolean {
+  const workingDir = cwd || process.cwd();
+  try {
+    const result = spawnSync("git", ["checkout", branch], {
+      encoding: "utf-8",
+      cwd: workingDir,
+    });
+    return result.status === 0;
+  } catch {
+    return false;
+  }
+}

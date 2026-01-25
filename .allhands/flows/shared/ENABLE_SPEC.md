@@ -31,8 +31,11 @@ Parse the JSON response to get the spec name and branch state.
 Ensure you have an isolated branch for this spec's work:
 
 - Check `last_known_branch` from the activate response
-- If prior branch exists and is not `$BASE_BRANCH`, checkout that branch
-- Otherwise create a new branch off `$BASE_BRANCH`
+- **If prior branch exists** (not null, not `$BASE_BRANCH`):
+  - Checkout that branch: `git checkout {last_known_branch}`
+  - Merge in latest from base: `git merge $BASE_BRANCH` (pulls in any new specs/changes)
+- **If null or equals `$BASE_BRANCH`**:
+  - Create new branch from base: `git checkout -b feature/{spec-name}`
 
 The EventLoop automatically updates `last_known_branch` when you switch branches, so no manual tracking command is needed.
 
