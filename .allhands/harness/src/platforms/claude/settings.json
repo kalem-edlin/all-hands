@@ -1,7 +1,42 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
   "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "ah hooks observability session-start"
+          },
+          {
+            "type": "command",
+            "command": "ah hooks session tldr-warm"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "ah hooks observability prompt-submit"
+          }
+        ]
+      }
+    ],
     "PreToolUse": [
+      {
+        "matcher": "(Task|Bash|Write|Edit|AskUserQuestion|EnterPlanMode|ExitPlanMode)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "ah hooks observability tool-pre"
+          }
+        ]
+      },
       {
         "matcher": "(WebFetch|Bash)",
         "hooks": [
@@ -96,6 +131,15 @@
     ],
     "PostToolUse": [
       {
+        "matcher": "(Task|Bash|Write|Edit)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "ah hooks observability tool-post"
+          }
+        ]
+      },
+      {
         "matcher": "(Write|Edit)",
         "hooks": [
           {
@@ -109,13 +153,13 @@
         ]
       }
     ],
-    "SessionStart": [
+    "PostToolUseFailure": [
       {
         "matcher": "*",
         "hooks": [
           {
             "type": "command",
-            "command": "ah hooks session tldr-warm"
+            "command": "ah hooks observability tool-failure"
           }
         ]
       }
@@ -124,6 +168,10 @@
       {
         "matcher": "*",
         "hooks": [
+          {
+            "type": "command",
+            "command": "ah hooks observability agent-stop"
+          },
           {
             "type": "command",
             "command": "ah hooks lifecycle agent-stop"
