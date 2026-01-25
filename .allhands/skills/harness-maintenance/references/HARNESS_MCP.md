@@ -26,7 +26,6 @@ Investigate the MCP package requirements:
 
 **Find the package**:
 - Run `ah tavily search "<mcp_name> MCP server npm"` for package details
-- Run `ah grok search "<mcp_name> MCP configuration"` for setup patterns
 
 **Read documentation**:
 - Run `ah context7 search "<mcp_name>"` for official docs

@@ -6,41 +6,15 @@ Pick the right research tool and depth for the need. Per **Context is Precious**
 - MUST determine discovery level before researching
 - MUST use `gh` CLI for GitHub content, not research tools
 - NEVER use WebSearch or WebFetch tools since the tooling here is much better
+- If any tool fails, you MUST try another tool from the decision tree.
 </constraints>
-
-## Discovery Levels
-
-Gate research effort based on what's being planned:
-
-| Level | When | Action |
-|-------|------|--------|
-| **Level 0 - Skip** | Pure internal work, existing patterns | No research needed |
-| **Level 1 - Quick** | Single known library, confirming syntax | Quick query, no documentation |
-| **Level 2 - Standard** | Choosing between 2-3 options, new integration | Full research with documentation |
-| **Level 3 - Deep** | Architectural decision, novel problem | Full research with DISCOVERY output |
-
-**Depth Indicators:**
-- Level 2+: New library not in package.json, external API, "choose/evaluate" in task
-- Level 3: "architecture/design/system", multiple services, data modeling, auth design
-
-## Confidence Levels
-
-Treat Model's training data as hypothesis, not fact (6-18 months stale):
-
-| Level | Sources | Use |
-|-------|---------|-----|
-| HIGH | Official docs, verified sources | State as fact |
-| MEDIUM | WebSearch verified with official source | State with attribution |
-| LOW | Unverified, training data only | Flag for validation |
 
 ## Decision Tree
 
 ```
-├─ Broad synthesis, deep research with citations? → `ah perplexity research "<query>"`
-├─ Same + X/Twitter community insights? → `ah perplexity research "<query>" --grok-challenge`
-├─ Developer opinions, sentiment, alternatives? → `ah grok search "<query>"`
 ├─ Find sources, discover URLs? → `ah tavily search "<query>"`
 ├─ Full content from known URL? → `ah tavily extract "<url1>" "<url2>"`
+├─ Challenge findings with social signals? → `ah perplexity research "<query>" --challenge`
 └─ GitHub content? → Use `gh` CLI directly
 ```
 
@@ -48,11 +22,9 @@ Treat Model's training data as hypothesis, not fact (6-18 months stale):
 
 | Need | Tool | Why |
 |------|------|-----|
-| "Best ways to solve X?" | perplexity | Synthesizes multiple sources |
-| "Best ways to solve X for agentic developers?" | perplexity --grok-challenge | Synthesis + X/Twitter community challenge |
-| "What do agentic developers think of X?" | grok | Real-time social signals |
 | "Find articles about X" | tavily search | Returns URLs to explore |
 | "Get content from this doc" | tavily extract | Full page content |
+| "Challenge research with developer sentiment" | perplexity --challenge | Validates findings via X/Twitter |
 
 ## Combination Strategy
 

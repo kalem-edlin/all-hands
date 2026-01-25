@@ -54,7 +54,8 @@ export function register(program: Command): void {
     .command('research <query>')
     .description('Web search with citations (sonar-pro model)')
     .option('--json', 'Output as JSON')
-    .action(tracedAction('perplexity research', async (query: string, options: { json?: boolean }) => {
+    .option('--challenge', 'Challenge findings using Grok X/Twitter search')
+    .action(tracedAction('perplexity research', async (query: string, options: { json?: boolean; challenge?: boolean }) => {
       const apiKey = process.env.PERPLEXITY_API_KEY;
       if (!apiKey) {
         if (options.json) {
@@ -71,13 +72,40 @@ export function register(program: Command): void {
         const content = response.choices?.[0]?.message?.content ?? '';
         const citations = response.citations ?? [];
 
+        // If --challenge flag, use Grok to challenge the findings
+        let challengeContent: string | undefined;
+        let challengeCitations: string[] | undefined;
+
+        if (options.challenge) {
+          const grokApiKey = process.env.X_AI_API_KEY;
+          if (!grokApiKey) {
+            if (options.json) {
+              console.log(JSON.stringify({ success: false, error: 'X_AI_API_KEY not set (required for --challenge)' }));
+            } else {
+              console.error('Error: X_AI_API_KEY not set in environment (required for --challenge)');
+            }
+            process.exit(1);
+          }
+
+          const grokResponse = await callGrokChallengeApi(grokApiKey, query, content);
+          challengeContent = grokResponse.choices?.[0]?.message?.content ?? '';
+          challengeCitations = grokResponse.citations ?? [];
+        }
+
         if (options.json) {
-          console.log(JSON.stringify({
+          const result: Record<string, unknown> = {
             success: true,
             query,
             content,
             citations,
-          }, null, 2));
+          };
+          if (options.challenge) {
+            result.challenge = {
+              content: challengeContent,
+              citations: challengeCitations,
+            };
+          }
+          console.log(JSON.stringify(result, null, 2));
           return;
         }
 
@@ -90,6 +118,23 @@ export function register(program: Command): void {
           console.log('Citations:');
           for (let i = 0; i < citations.length; i++) {
             console.log(`  [${i + 1}] ${citations[i]}`);
+          }
+        }
+
+        if (options.challenge && challengeContent) {
+          console.log();
+          console.log('---');
+          console.log();
+          console.log('Challenge (via X/Twitter):');
+          console.log();
+          console.log(challengeContent);
+
+          if (challengeCitations && challengeCitations.length > 0) {
+            console.log();
+            console.log('Challenge Sources:');
+            for (const citation of challengeCitations) {
+              console.log(`  - ${citation}`);
+            }
           }
         }
       } catch (e) {
@@ -127,6 +172,48 @@ async function callPerplexityApi(apiKey: string, query: string): Promise<Perplex
     }
 
     return (await response.json()) as PerplexityResponse;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function callGrokChallengeApi(
+  apiKey: string,
+  query: string,
+  findings: string
+): Promise<GrokResponse> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), GROK_TIMEOUT);
+
+  const userPrompt = `Original query: ${query}
+
+Research findings to challenge:
+${findings}
+
+Search X to challenge these findings.`;
+
+  try {
+    const response = await fetch('https://api.x.ai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'grok-4-1-fast',
+        messages: [
+          { role: 'system', content: GROK_CHALLENGER_PROMPT },
+          { role: 'user', content: userPrompt },
+        ],
+      }),
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${await response.text()}`);
+    }
+
+    return (await response.json()) as GrokResponse;
   } finally {
     clearTimeout(timeout);
   }
