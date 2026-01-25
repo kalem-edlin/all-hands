@@ -24,18 +24,23 @@ Run a quick premortem on your idea:
 - Read `.allhands/flows/shared/QUICK_PREMORTEM.md` for 5-question risk assessment
 - If Tigers identified, adjust implementation before validation
 
+## Validation Tooling Discovery
 
+- Spawn subtask to read `.allhands/flows/shared/UTILIZE_VALIDATION_TOOLING.md` and inform it of your hypothesis and intended files/domains for your tasking
+- Read returned `validation_suites` for validation commands and result interpretation - these will inform your prompt's acceptance criteria
 
 ## Implementation
 
 - Create a new prompt file following `.allhands/flows/shared/PROMPT_TASKS_CURATION.md`
   - Use next available number
   - Set `type: emergent` in frontmatter
+  - Add discovered suites to `validation_suites` frontmatter
+  - Derive acceptance criteria from suite validation commands
 - For high-risk domains (auth, payments, data mutations):
   - Read `.allhands/flows/shared/TDD_WORKFLOW.md` for test-first approach
   - Write failing tests before implementation
 - Follow tasks and break into Todos if necessary
-- Use validation tooling to acquire test data meeting acceptance criteria
+- Use discovered `validation_suites` to acquire test data meeting acceptance criteria
 
 ### Deviation Handling
 
@@ -46,6 +51,7 @@ Handle deviations automatically:
 ## Validation
 
 - Spawn subtask to read `.allhands/flows/shared/PROMPT_VALIDATION_REVIEW.md` and follow its instructions
+  - Include validation results and `validation_suites` file paths in subtask inputs
 - Act on feedback until it passes
 - If at prompt attempt > 2 with real limitations, communicate compromises - reviewer may still reject
 

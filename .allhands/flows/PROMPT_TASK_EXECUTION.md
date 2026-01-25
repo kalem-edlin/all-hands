@@ -22,7 +22,9 @@ Execute prompt tasks with full context, validate thoroughly, and document your w
 ## Implementation
 
 - Follow tasks and break them down into Todos if necessary
-- After implementation, use validation tooling to acquire test data meeting acceptance criteria
+- After implementation, 
+  - Read `validation_suites` frontmatter entries for validation commands and result interpretation
+  - use validation tooling to acquire test data meeting acceptance criteria
 
 ### Deviation Handling
 
@@ -40,6 +42,7 @@ If architectural deviation is needed, document the blocker and set `status: bloc
 ## Validation
 
 - Spawn subtask to read `.allhands/flows/shared/PROMPT_VALIDATION_REVIEW.md` and follow its instructions
+  - Include validation results and `validation_suites` file paths in subtask inputs
 - Act on feedback until it passes
 - If at prompt attempt > 2 with real limitations, communicate compromises - reviewer may still reject
 
