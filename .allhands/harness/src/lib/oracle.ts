@@ -20,6 +20,7 @@ import {
   updatePRStatus
 } from './planning.js';
 import { loadAllPrompts, type PromptFile } from './prompts.js';
+import { getBaseBranch } from './git.js';
 
 // ============================================================================
 // Types
@@ -60,19 +61,14 @@ export interface BuildPRResult {
 // ============================================================================
 
 /**
- * Get git diff from base branch (main/master) to current branch
+ * Get git diff from base branch to current branch
  */
 function getGitDiffFromBase(cwd?: string, maxLines: number = 300): string {
   const workingDir = cwd || process.cwd();
 
   try {
-    // Determine base branch (main or master)
-    let baseBranch = 'main';
-    try {
-      execSync('git rev-parse --verify main', { cwd: workingDir, stdio: 'pipe' });
-    } catch {
-      baseBranch = 'master';
-    }
+    // Use the configured base branch
+    const baseBranch = getBaseBranch(workingDir);
 
     // Get diff stat summary
     const diffStat = execSync(`git diff ${baseBranch}...HEAD --stat`, {
@@ -382,16 +378,13 @@ export async function buildPR(
   }
 
   try {
-    // Create PR via gh CLI
-    // Escape quotes in title and body for shell safety
-    const escapedTitle = prContent.title.replace(/"/g, '\\"');
-    const escapedBody = prContent.body.replace(/"/g, '\\"').replace(/\$/g, '\\$');
-
+    // Create PR via gh CLI using stdin for body to avoid shell escaping issues
     const output = execSync(
-      `gh pr create --title "${escapedTitle}" --body "${escapedBody}"`,
+      `gh pr create --title "${prContent.title.replace(/"/g, '\\"')}" --body-file -`,
       {
         encoding: 'utf-8',
         cwd: workingDir,
+        input: prContent.body,
       }
     );
 
@@ -407,14 +400,12 @@ export async function buildPR(
       // Post review steps as the first comment
       if (prContent.reviewSteps) {
         try {
-          const escapedReviewSteps = prContent.reviewSteps
-            .replace(/"/g, '\\"')
-            .replace(/\$/g, '\\$');
           execSync(
-            `gh pr comment ${prNumber} --body "${escapedReviewSteps}"`,
+            `gh pr comment ${prNumber} --body-file -`,
             {
               encoding: 'utf-8',
               cwd: workingDir,
+              input: prContent.reviewSteps,
             }
           );
         } catch {

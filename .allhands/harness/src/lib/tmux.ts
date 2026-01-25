@@ -24,7 +24,7 @@
  */
 
 import { execSync, spawn } from 'child_process';
-import { existsSync, readFileSync, mkdirSync, writeFileSync } from 'fs';
+import { existsSync, readFileSync, mkdirSync, writeFileSync, readdirSync, unlinkSync, statSync } from 'fs';
 import { join } from 'path';
 import {
   buildAgentInvocation,
@@ -87,6 +87,35 @@ export const SESSION_NAME = 'ah-hub';
  * Also persisted to session.json for cross-process visibility.
  */
 const spawnedAgentRegistry = new Set<string>();
+
+/**
+ * Clean up old launcher scripts (older than 24 hours)
+ */
+function cleanupOldLaunchers(launcherDir: string): void {
+  if (!existsSync(launcherDir)) return;
+
+  const maxAge = 24 * 60 * 60 * 1000; // 24 hours
+  const now = Date.now();
+
+  try {
+    const files = readdirSync(launcherDir);
+    for (const file of files) {
+      if (!file.endsWith('-launcher.sh') && !file.endsWith('-prompt.txt')) continue;
+
+      const filePath = join(launcherDir, file);
+      try {
+        const stat = statSync(filePath);
+        if (now - stat.mtimeMs > maxAge) {
+          unlinkSync(filePath);
+        }
+      } catch {
+        // Ignore errors for individual files
+      }
+    }
+  } catch {
+    // Ignore errors during cleanup
+  }
+}
 
 /**
  * Register an agent as spawned by ALL HANDS (persisted to disk)
@@ -577,6 +606,9 @@ export function spawnAgent(
   const tempDir = join(cwd || process.cwd(), '.allhands', 'harness', '.cache', 'launchers');
   mkdirSync(tempDir, { recursive: true });
 
+  // Clean up old launcher files (older than 24h)
+  cleanupOldLaunchers(tempDir);
+
   const launcherScript = join(tempDir, `${windowName}-launcher.sh`);
   const promptFile = join(tempDir, `${windowName}-prompt.txt`);
 
@@ -667,7 +699,10 @@ export function spawnAgentFromProfile(
   const profile = loadAgentProfile(config.agentName);
 
   if (!profile) {
-    throw new Error(`Agent profile not found: ${config.agentName}`);
+    const available = listAgentProfiles();
+    throw new Error(
+      `Agent profile not found: ${config.agentName}. Available profiles: ${available.join(', ')}`
+    );
   }
 
   // Build the invocation (validates template vars)
@@ -680,7 +715,7 @@ export function spawnAgentFromProfile(
     flowPath: invocation.flowPath,
     preamble: invocation.preamble,
     promptNumber: config.promptNumber,
-    specName: config.context.SPEC_NAME,
+    specName: config.context.SPEC_NAME ?? undefined,
     nonCoding: profile.nonCoding,
     focusWindow: config.focusWindow,
     promptScoped: profile.promptScoped,
@@ -758,6 +793,9 @@ export function spawnCustomFlow(
   // Write a launcher script to avoid all shell escaping issues
   const tempDir = join(cwd || process.cwd(), '.allhands', 'harness', '.cache', 'launchers');
   mkdirSync(tempDir, { recursive: true });
+
+  // Clean up old launcher files (older than 24h)
+  cleanupOldLaunchers(tempDir);
 
   const launcherScript = join(tempDir, `${windowName}-launcher.sh`);
   const promptFile = join(tempDir, `${windowName}-prompt.txt`);

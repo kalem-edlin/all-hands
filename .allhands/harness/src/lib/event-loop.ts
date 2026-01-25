@@ -3,17 +3,21 @@
  *
  * Non-blocking event loop that monitors external state:
  * 1. Greptile PR feedback polling
- * 2. Git branch change detection
+ * 2. Git branch change detection (and associated spec changes)
  * 3. Agent window status monitoring
  * 4. Prompt execution loop (when enabled)
  *
- * Uses setInterval with cleanup to prevent memory leaks.
+ * In the branch-keyed model:
+ * - The current git branch determines the active spec
+ * - Branch changes trigger spec context updates
+ * - No separate "active spec" tracking needed
  */
 
-import { getCurrentBranch, updateGreptileStatus, readStatus, getActiveSpec, updateLastKnownBranch } from './planning.js';
+import { getCurrentBranch, updateGreptileStatus, readStatus, sanitizeBranchForDir } from './planning.js';
 import { listWindows, SESSION_NAME, sessionExists, getCurrentSession, getSpawnedAgentRegistry, unregisterSpawnedAgent } from './tmux.js';
 import { pickNextPrompt, markPromptInProgress, type PromptFile } from './prompts.js';
 import { shutdownDaemon } from './mcp-client.js';
+import { findSpecByBranch, type SpecFile } from './specs.js';
 import {
   checkGreptileStatus,
   hasNewReview,
@@ -23,7 +27,8 @@ import {
 
 export interface EventLoopState {
   currentBranch: string;
-  activeSpec: string | null;
+  currentSpec: SpecFile | null;
+  planningKey: string | null;  // Sanitized branch name for .planning/ lookup
   prUrl: string | null;
   greptileFeedbackAvailable: boolean;
   greptileReviewState: GreptileReviewState;
@@ -35,8 +40,7 @@ export interface EventLoopState {
 
 export interface EventLoopCallbacks {
   onGreptileFeedback?: (available: boolean) => void;
-  onBranchChange?: (newBranch: string) => void;
-  onActiveSpecChange?: (spec: string | null) => void;
+  onBranchChange?: (newBranch: string, spec: SpecFile | null) => void;
   onAgentsChange?: (agents: string[]) => void;
   onSpawnExecutor?: (prompt: PromptFile) => void;
   onLoopStatus?: (message: string) => void;
@@ -59,9 +63,16 @@ export class EventLoop {
     this.cwd = cwd;
     this.callbacks = callbacks;
     this.pollIntervalMs = pollIntervalMs;
+
+    // Initialize state based on current branch
+    const currentBranch = getCurrentBranch(cwd);
+    const currentSpec = findSpecByBranch(currentBranch, cwd);
+    const planningKey = sanitizeBranchForDir(currentBranch);
+
     this.state = {
-      currentBranch: getCurrentBranch(),
-      activeSpec: getActiveSpec(cwd),
+      currentBranch,
+      currentSpec,
+      planningKey,
       prUrl: null,
       greptileFeedbackAvailable: false,
       greptileReviewState: {
@@ -141,7 +152,6 @@ export class EventLoop {
     await Promise.all([
       this.checkGreptileFeedback(),
       this.checkGitBranch(),
-      this.checkActiveSpec(),
       this.checkAgentWindows(),
     ]);
 
@@ -182,8 +192,8 @@ export class EventLoop {
         this.state.greptileFeedbackAvailable = hasGreptileComment;
         this.state.greptileReviewState = currentState;
 
-        // Update status.yaml with Greptile state (use active spec)
-        if (this.state.activeSpec) {
+        // Update status.yaml with Greptile state (use planning key)
+        if (this.state.planningKey) {
           try {
             updateGreptileStatus(
               {
@@ -191,7 +201,7 @@ export class EventLoop {
                 lastReviewTime: currentState.lastCommentTime,
                 status: currentState.status,
               },
-              this.state.activeSpec,
+              this.state.planningKey,
               this.cwd
             );
           } catch {
@@ -212,50 +222,29 @@ export class EventLoop {
   /**
    * Check for git branch changes
    *
-   * In the spec-based model, branch changes are informational only.
-   * If an active spec exists, update its last_known_branch hint.
-   * The TUI state is based on the active spec, not the current branch.
+   * In the branch-keyed model:
+   * - Branch changes are the primary trigger for context changes
+   * - Find the spec for the new branch via findSpecByBranch()
+   * - Notify callbacks so TUI can update state
    */
   private async checkGitBranch(): Promise<void> {
     try {
-      const currentBranch = getCurrentBranch();
+      const currentBranch = getCurrentBranch(this.cwd);
 
       if (currentBranch !== this.state.currentBranch) {
+        // Branch changed - update spec context
+        const previousBranch = this.state.currentBranch;
+        const previousSpec = this.state.currentSpec;
+
         this.state.currentBranch = currentBranch;
+        this.state.currentSpec = findSpecByBranch(currentBranch, this.cwd);
+        this.state.planningKey = sanitizeBranchForDir(currentBranch);
 
-        // Update last_known_branch hint if we have an active spec
-        if (this.state.activeSpec) {
-          updateLastKnownBranch(this.state.activeSpec, currentBranch, this.cwd);
-        }
-
-        // Notify callback (TUI may want to display the new branch)
-        this.callbacks.onBranchChange?.(currentBranch);
+        // Notify callback with branch and spec info
+        this.callbacks.onBranchChange?.(currentBranch, this.state.currentSpec);
       }
-    } catch {
-      // Silently fail
-    }
-  }
-
-  /**
-   * Check for active spec changes
-   *
-   * Polls .allhands/harness/.cache/session.json for changes made by agents.
-   * This allows agents running in separate shells to change the active spec
-   * and have the TUI react accordingly.
-   */
-  private async checkActiveSpec(): Promise<void> {
-    try {
-      const activeSpec = getActiveSpec(this.cwd);
-
-      if (activeSpec !== this.state.activeSpec) {
-        const previousSpec = this.state.activeSpec;
-        this.state.activeSpec = activeSpec;
-
-        // Notify callback so TUI can reload prompts/status for new spec
-        this.callbacks.onActiveSpecChange?.(activeSpec);
-      }
-    } catch {
-      // Silently fail
+    } catch (err) {
+      console.error('[EventLoop] checkGitBranch failed:', err);
     }
   }
 
@@ -317,8 +306,8 @@ export class EventLoop {
         this.state.activeAgents = agentWindows;
         this.callbacks.onAgentsChange?.(agentWindows);
       }
-    } catch {
-      // Silently fail
+    } catch (err) {
+      console.error('[EventLoop] checkAgentWindows failed:', err);
     }
   }
 
@@ -345,9 +334,9 @@ export class EventLoop {
       return;
     }
 
-    // Need an active spec to pick prompts
-    if (!this.state.activeSpec) {
-      this.callbacks.onLoopStatus?.('No active spec - loop paused');
+    // Need a spec and planning directory to pick prompts
+    if (!this.state.currentSpec || !this.state.planningKey) {
+      this.callbacks.onLoopStatus?.('No spec for this branch - loop paused');
       return;
     }
 
@@ -362,8 +351,8 @@ export class EventLoop {
         return;
       }
 
-      // No executor running - pick next prompt from active spec
-      const result = pickNextPrompt(this.state.activeSpec, this.cwd);
+      // No executor running - pick next prompt from planning directory
+      const result = pickNextPrompt(this.state.planningKey, this.cwd);
 
       if (!result.prompt) {
         // No actionable prompts
@@ -379,8 +368,8 @@ export class EventLoop {
         `Spawning executor for prompt ${result.prompt.frontmatter.number}: ${result.prompt.frontmatter.title}`
       );
       this.callbacks.onSpawnExecutor?.(result.prompt);
-    } catch {
-      // Silently fail
+    } catch (err) {
+      console.error('[EventLoop] checkPromptLoop failed:', err);
     }
   }
 
