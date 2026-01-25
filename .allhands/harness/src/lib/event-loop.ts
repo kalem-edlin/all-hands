@@ -17,7 +17,7 @@ import { getCurrentBranch, updateGreptileStatus, readStatus, sanitizeBranchForDi
 import { listWindows, SESSION_NAME, sessionExists, getCurrentSession, getSpawnedAgentRegistry, unregisterSpawnedAgent } from './tmux.js';
 import { pickNextPrompt, markPromptInProgress, type PromptFile } from './prompts.js';
 import { shutdownDaemon } from './mcp-client.js';
-import { findSpecByBranch, type SpecFile } from './specs.js';
+import { getSpecForBranch, type SpecFile } from './specs.js';
 import {
   checkGreptileStatus,
   hasNewReview,
@@ -48,12 +48,18 @@ export interface EventLoopCallbacks {
 
 // Note: Use isLockedBranch() from planning.ts for consistent branch checks
 
+// Greptile polling interval (separate from main event loop tick)
+const GREPTILE_POLL_INTERVAL_MS = 60 * 1000;  // Poll every 60 seconds
+
 export class EventLoop {
   private intervalId: NodeJS.Timeout | null = null;
   private pollIntervalMs: number;
   private state: EventLoopState;
   private callbacks: EventLoopCallbacks;
   private cwd: string;
+
+  // Greptile polling state - only check every GREPTILE_POLL_INTERVAL_MS
+  private greptileLastPollTime: number = 0;
 
   constructor(
     cwd: string,
@@ -66,7 +72,7 @@ export class EventLoop {
 
     // Initialize state based on current branch
     const currentBranch = getCurrentBranch(cwd);
-    const currentSpec = findSpecByBranch(currentBranch, cwd);
+    const currentSpec = getSpecForBranch(currentBranch, cwd);
     const planningKey = sanitizeBranchForDir(currentBranch);
 
     this.state = {
@@ -144,6 +150,20 @@ export class EventLoop {
   }
 
   /**
+   * Manually set branch context after TUI-initiated branch changes.
+   *
+   * This prevents the EventLoop from triggering onBranchChange callbacks
+   * for changes that the TUI already handled (e.g., switch-spec, clear-spec).
+   * Without this, the EventLoop would detect the branch change on its next
+   * tick and potentially overwrite TUI state with stale/incorrect data.
+   */
+  setBranchContext(branch: string, spec: SpecFile | null): void {
+    this.state.currentBranch = branch;
+    this.state.currentSpec = spec;
+    this.state.planningKey = sanitizeBranchForDir(branch);
+  }
+
+  /**
    * Main tick - runs all checks
    */
   private async tick(): Promise<void> {
@@ -166,11 +186,21 @@ export class EventLoop {
    * - Track review cycles (not just presence)
    * - Compare comment timestamps with last check
    * - Update status.yaml with current state
+   *
+   * Polls at a slower rate than the main event loop since Greptile
+   * reviews can take several minutes to complete.
    */
   private async checkGreptileFeedback(): Promise<void> {
     if (!this.state.prUrl) {
       return;
     }
+
+    // Only poll Greptile every GREPTILE_POLL_INTERVAL_MS (not every tick)
+    const now = Date.now();
+    if (now - this.greptileLastPollTime < GREPTILE_POLL_INTERVAL_MS) {
+      return;
+    }
+    this.greptileLastPollTime = now;
 
     // Validate PR URL
     const prInfo = parsePRUrl(this.state.prUrl);
@@ -233,11 +263,8 @@ export class EventLoop {
 
       if (currentBranch !== this.state.currentBranch) {
         // Branch changed - update spec context
-        const previousBranch = this.state.currentBranch;
-        const previousSpec = this.state.currentSpec;
-
         this.state.currentBranch = currentBranch;
-        this.state.currentSpec = findSpecByBranch(currentBranch, this.cwd);
+        this.state.currentSpec = getSpecForBranch(currentBranch, this.cwd);
         this.state.planningKey = sanitizeBranchForDir(currentBranch);
 
         // Notify callback with branch and spec info
