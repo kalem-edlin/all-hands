@@ -49,7 +49,7 @@ import { isTldrInstalled, hasSemanticIndex, buildSemanticIndex, needsSemanticReb
  */
 export async function launchTUI(options: { spec?: string } = {}): Promise<void> {
   const cwd = process.cwd();
-  const branch = getCurrentBranch();
+  const branch = getCurrentBranch(cwd);
 
   // Determine active spec (from option or .active file)
   const activeSpecName = options.spec || getActiveSpec(cwd);
@@ -84,6 +84,8 @@ export async function launchTUI(options: { spec?: string } = {}): Promise<void> 
     isRunning: true,
   }));
 
+  const baseBranch = getBaseBranch();
+
   const initialState: Partial<TUIState> = {
     loopEnabled: status?.loop.enabled ?? false,
     emergentEnabled: status?.loop.emergent ?? false,
@@ -91,6 +93,7 @@ export async function launchTUI(options: { spec?: string } = {}): Promise<void> 
     activeAgents,
     spec: activeSpecName ?? undefined,
     branch,
+    baseBranch,
     prActionState: 'create-pr' as PRActionState,
     compoundRun: status?.compound_run ?? false,
     customFlowCounter: 0,
@@ -298,6 +301,20 @@ async function handleAction(
       } catch (e) {
         tui.log(`Error: ${e instanceof Error ? e.message : String(e)}`);
       }
+      break;
+    }
+
+    case 'clear-spec': {
+      tui.log('Clearing active spec...');
+      clearActiveSpec(cwd);
+      tui.updateState({
+        spec: undefined,
+        prompts: [],
+        loopEnabled: false,
+        emergentEnabled: false,
+        compoundRun: false,
+      });
+      tui.log('Spec cleared');
       break;
     }
 

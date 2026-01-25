@@ -26,6 +26,7 @@ export interface ModalOptions {
   items: ModalItem[];
   onSelect: (id: string) => void;
   onCancel: () => void;
+  onClear?: () => void;
   scrollable?: boolean;
 }
 
@@ -41,7 +42,7 @@ export function createModal(
   screen: blessed.Widgets.Screen,
   options: ModalOptions
 ): Modal {
-  const { title, items, onSelect, onCancel, scrollable = false } = options;
+  const { title, items, onSelect, onCancel, onClear, scrollable = false } = options;
 
   // Calculate modal size
   const width = 50;
@@ -104,11 +105,14 @@ export function createModal(
   });
 
   // Add help text (fixed at bottom of container, outside scrollable area)
+  const helpText = onClear
+    ? '{gray-fg}[Space] Select  [x] Clear  [Esc] Cancel{/gray-fg}'
+    : '{gray-fg}[Space] Select  [Esc] Cancel{/gray-fg}';
   blessed.text({
     parent: container,
     bottom: 0,
     left: 1,
-    content: '{gray-fg}[Space] Select  [Esc] Cancel{/gray-fg}',
+    content: helpText,
     tags: true,
   });
 
@@ -209,6 +213,9 @@ export function createModal(
   container.key(['d'], () => navigate(5));
   container.key(['space', 'enter'], () => select());
   container.key(['escape'], () => onCancel());
+  if (onClear) {
+    container.key(['x'], () => onClear());
+  }
 
   // Initial render
   renderItems();

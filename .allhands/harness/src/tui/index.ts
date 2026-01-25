@@ -48,6 +48,7 @@ export interface TUIState {
   activeAgents: AgentInfo[];
   spec?: string;
   branch?: string;
+  baseBranch?: string;
   prActionState: PRActionState;
   compoundRun: boolean;
   customFlowCounter: number;
@@ -177,6 +178,7 @@ export class TUI {
       undefined,
       this.state.spec,
       this.state.branch,
+      this.state.baseBranch,
       this.logEntries,
       undefined, // fileStates - will be set on render
       undefined  // options - will be set on render
@@ -618,7 +620,7 @@ export class TUI {
     const items = specsToModalItems(specGroups);
 
     this.activeModal = createModal(this.screen, {
-      title: 'Select Spec',
+      title: this.state.spec ? `Select Spec (current: ${this.state.spec})` : 'Select Spec',
       items,
       onSelect: (id: string) => {
         this.closeModal();
@@ -627,6 +629,10 @@ export class TUI {
       onCancel: () => {
         this.closeModal();
       },
+      onClear: this.state.spec ? () => {
+        this.closeModal();
+        this.options.onAction('clear-spec');
+      } : undefined,
     });
     this.screen.render();
   }
@@ -1007,6 +1013,7 @@ export class TUI {
       this.focusedPane === 'status' ? this.selectedIndex.status : undefined,
       this.state.spec,
       this.state.branch,
+      this.state.baseBranch,
       this.logEntries,
       fileStates,
       {
