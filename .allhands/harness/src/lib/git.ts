@@ -268,18 +268,7 @@ export function commitFilesToBranch(options: CommitToBranchOptions): CommitToBra
     const method = worktreePath === gitRoot ? 'direct' :
                    (worktreePath.includes('worktrees-tmp') ? 'temp-worktree' : 'existing-worktree');
 
-    let didStash = false;
-
     try {
-      // Check for existing changes and stash them
-      if (hasUncommittedChanges(worktreePath)) {
-        execSync('git stash push -m "commitFilesToBranch: temporary stash"', {
-          cwd: worktreePath,
-          stdio: 'pipe'
-        });
-        didStash = true;
-      }
-
       // Copy files to worktree and stage them
       for (let i = 0; i < files.length; i++) {
         const srcPath = files[i];
@@ -289,7 +278,7 @@ export function commitFilesToBranch(options: CommitToBranchOptions): CommitToBra
         // Ensure target directory exists
         mkdirSync(dirname(destPath), { recursive: true });
 
-        // Copy file (skip if same location)
+        // Copy file (skip if same location - direct mode)
         if (srcPath !== destPath) {
           copyFileSync(srcPath, destPath);
         }
@@ -304,11 +293,6 @@ export function commitFilesToBranch(options: CommitToBranchOptions): CommitToBra
         stdio: 'pipe'
       });
 
-      // Pop stash if we stashed
-      if (didStash) {
-        execSync('git stash pop', { cwd: worktreePath, stdio: 'pipe' });
-      }
-
       return {
         success: true,
         method,
@@ -316,14 +300,6 @@ export function commitFilesToBranch(options: CommitToBranchOptions): CommitToBra
         currentBranch: currentBranch !== branch ? currentBranch : undefined,
       };
     } catch (e) {
-      // Try to pop stash on error to restore state
-      if (didStash) {
-        try {
-          execSync('git stash pop', { cwd: worktreePath, stdio: 'pipe' });
-        } catch {
-          // Ignore - stash pop might fail if there were conflicts
-        }
-      }
       const errorMsg = e instanceof Error ? e.message : String(e);
       return { success: false, error: errorMsg, method };
     }
@@ -379,5 +355,53 @@ export function commitFilesToBranch(options: CommitToBranchOptions): CommitToBra
     }
     const errorMsg = e instanceof Error ? e.message : String(e);
     return { success: false, error: `Failed to create worktree: ${errorMsg}` };
+  }
+}
+
+/**
+ * Create a new branch from a base branch without checking it out.
+ * Useful for setting up spec branches while staying on the current branch.
+ *
+ * @returns true if branch was created successfully, false if it already exists or failed
+ */
+export function createBranchWithoutCheckout(
+  branch: string,
+  baseBranch: string,
+  cwd?: string
+): { success: boolean; created: boolean; error?: string } {
+  const workingDir = cwd || getProjectRoot();
+
+  try {
+    // Check if branch already exists
+    const checkResult = spawnSync('git', ['rev-parse', '--verify', branch], {
+      encoding: 'utf-8',
+      cwd: workingDir,
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+
+    if (checkResult.status === 0) {
+      // Branch already exists
+      return { success: true, created: false };
+    }
+
+    // Create branch from base without checkout
+    const result = spawnSync('git', ['branch', branch, baseBranch], {
+      encoding: 'utf-8',
+      cwd: workingDir,
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+
+    if (result.status !== 0) {
+      return {
+        success: false,
+        created: false,
+        error: result.stderr?.trim() || 'Failed to create branch',
+      };
+    }
+
+    return { success: true, created: true };
+  } catch (e) {
+    const errorMsg = e instanceof Error ? e.message : String(e);
+    return { success: false, created: false, error: errorMsg };
   }
 }
