@@ -6,6 +6,7 @@ Transform the spec into executable prompts with validated approaches. Per **Qual
 - Spec doc path
 - Alignment doc path
 - Prompts folder path
+- Last known branch (may be null if spec was just created)
 </inputs>
 
 <constraints>
@@ -14,13 +15,15 @@ Transform the spec into executable prompts with validated approaches. Per **Qual
 - MUST verify validation tooling coverage before creating prompts
 - MUST spawn plan review jury before finalizing
 - NEVER create prompts without validation tooling analysis
+- NEVER work directly on `$BASE_BRANCH`
 </constraints>
 
 ## Context Gathering
 
-- Read the alignment doc for existing prompts that may impact planning
 - Read the spec doc (high-level engineer intent)
+- Read the alignment doc for existing prompts that may impact planning (if exists)
 - Read codebase files referenced in spec for initial grounding
+- Ensure you're on an appropriate branch for this work (if you need to create/switch branches and it differs from Last Known Branch, use `ah planning update-branch --spec <name> --branch <branch>`)
 - Search documented solutions with `ah solutions search "<keywords>"` for relevant past learnings in this domain
 
 ## Deep Research

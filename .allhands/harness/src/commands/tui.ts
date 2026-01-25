@@ -58,10 +58,10 @@ export async function launchTUI(options: { spec?: string } = {}): Promise<void> 
   if (isTldrInstalled()) {
     if (!hasSemanticIndex(cwd)) {
       console.log('Building semantic index for first run...');
-      buildSemanticIndex(cwd, 'typescript');
+      buildSemanticIndex(cwd);
     } else if (needsSemanticRebuild(cwd)) {
       console.log('Rebuilding semantic index (branch changed)...');
-      buildSemanticIndex(cwd, 'typescript');
+      buildSemanticIndex(cwd);
     }
   }
 

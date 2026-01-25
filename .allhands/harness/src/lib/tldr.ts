@@ -154,7 +154,7 @@ export function hasSemanticIndex(projectDir: string): boolean {
  */
 export function buildSemanticIndex(
   projectDir: string,
-  lang: string = 'typescript'
+  lang: string = 'all'
 ): boolean {
   if (!isTldrInstalled()) {
     return false;
@@ -409,7 +409,7 @@ export async function warmIndex(projectDir: string): Promise<boolean> {
 
     // Build semantic index if missing (run in background)
     if (!hasSemanticIndex(projectDir)) {
-      execSync(`tldr semantic index "${projectDir}" --lang typescript &`, {
+      execSync(`tldr semantic index "${projectDir}" --lang all &`, {
         stdio: 'ignore',
         timeout: 2000,
       });

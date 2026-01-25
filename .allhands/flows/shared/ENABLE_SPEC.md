@@ -10,7 +10,6 @@ Enable a spec by setting up its planning directory and activating it. Per **Fron
 - `.planning/{spec}/` directory with `status.yaml` and `prompts/`
 - Spec set as active via `.planning/.active`
 - Appropriate git branch checked out
-- `last_known_branch` updated in status.yaml
 </outputs>
 
 <constraints>
@@ -32,9 +31,10 @@ Parse the JSON response to get the spec name and branch state.
 Ensure you have an isolated branch for this spec's work:
 
 - Check `last_known_branch` from the activate response
-- If prior branch exists and is not `$BASE_BRANCH`, continue there
+- If prior branch exists and is not `$BASE_BRANCH`, checkout that branch
 - Otherwise create a new branch off `$BASE_BRANCH`
-- Update tracking with `ah planning update-branch --spec <spec> --branch <branch>`
+
+The EventLoop automatically updates `last_known_branch` when you switch branches, so no manual tracking command is needed.
 
 ## Confirm
 

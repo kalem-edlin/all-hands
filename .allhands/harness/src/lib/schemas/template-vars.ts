@@ -29,6 +29,7 @@ export const TemplateVars = {
 
   // Branch/context variables
   BRANCH: z.string().describe('Current git branch name'),
+  LAST_KNOWN_BRANCH: z.string().nullable().describe('Last known branch for this spec (from status.yaml)'),
 } as const;
 
 /**

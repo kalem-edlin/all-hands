@@ -18,10 +18,10 @@ async function main(): Promise<void> {
     .name('ah')
     .description('All Hands - Agentic harness for model-first software development')
     .version('0.1.0')
-    .option('--spec <spec>', 'Spec to use for TUI (defaults to active)')
-    .action(async (options: { spec?: string }) => {
+    .option('-s, --use-spec <spec>', 'Spec to use for TUI (defaults to active)')
+    .action(async (options: { useSpec?: string }) => {
       // Default action when no subcommand - launch TUI
-      await launchTUI({ spec: options.spec });
+      await launchTUI({ spec: options.useSpec });
     });
 
   // Auto-discover and register all commands
