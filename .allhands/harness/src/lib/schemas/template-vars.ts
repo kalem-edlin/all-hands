@@ -73,6 +73,8 @@ export function validateContext(
   for (const varName of requiredVars) {
     const value = context[varName];
 
+    // Allow null values - they're valid for nullable schemas (e.g., LAST_KNOWN_BRANCH)
+    // Only reject undefined or empty string
     if (value === undefined || value === '') {
       errors.push(`Missing required template variable: ${varName}`);
       continue;

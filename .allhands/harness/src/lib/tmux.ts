@@ -861,11 +861,11 @@ export function buildTemplateContext(
       if (specMatch) {
         context.SPEC_PATH = specMatch[1].trim();
       }
-      // Parse last_known_branch
+      // Parse last_known_branch (null is valid - agents handle branching)
       const branchMatch = content.match(/^last_known_branch:\s*(.+)/m);
       if (branchMatch) {
         const branchValue = branchMatch[1].trim();
-        context.LAST_KNOWN_BRANCH = branchValue === 'null' ? undefined : branchValue;
+        context.LAST_KNOWN_BRANCH = branchValue === 'null' ? null : branchValue;
       }
     } catch {
       // Ignore parse errors
