@@ -532,6 +532,10 @@ export function buildAgentEnv(config: SpawnConfig, branch: string, windowName: s
     BRANCH: branch,
   };
 
+  if (config.promptScoped) {
+    env.PROMPT_SCOPED = 'true';
+  }
+
   if (config.promptNumber !== undefined) {
     env.PROMPT_NUMBER = String(config.promptNumber).padStart(2, '0');
   }

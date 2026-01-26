@@ -38,6 +38,7 @@ const HOOK_AGENT_COMPACT = 'lifecycle agent-compact';
 export function handleAgentStop(_input: HookInput): void {
   const agentId = process.env.AGENT_ID;
   const agentType = process.env.AGENT_TYPE || 'Agent';
+  const isPromptScoped = process.env.PROMPT_SCOPED === 'true';
 
   // Send notification
   const title = agentId ? `${agentType} Stopped` : 'Agent Stopped';
@@ -49,13 +50,15 @@ export function handleAgentStop(_input: HookInput): void {
     type: 'banner',
   });
 
-  // Explicitly kill the tmux window to ensure cleanup
-  // (prompt-scoped agents may not close naturally even with exec)
-  // Use current session (not hardcoded SESSION_NAME) since agents may be
-  // spawned in whatever session is active, not necessarily 'ah-hub'
-  const sessionName = getCurrentSession() || SESSION_NAME;
-  if (agentId && windowExists(sessionName, agentId)) {
-    killWindow(sessionName, agentId);
+  // Only kill the tmux window for prompt-scoped agents.
+  // Non-prompt-scoped agents should remain running (their window stays open).
+  // Prompt-scoped agents may not close naturally even with exec, so we
+  // explicitly kill them here.
+  if (isPromptScoped) {
+    const sessionName = getCurrentSession() || SESSION_NAME;
+    if (agentId && windowExists(sessionName, agentId)) {
+      killWindow(sessionName, agentId);
+    }
   }
 
   // Approve stop
