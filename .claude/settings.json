@@ -87,10 +87,6 @@
         "hooks": [
           {
             "type": "command",
-            "command": "ah hooks context edit-inject"
-          },
-          {
-            "type": "command",
             "command": "ah hooks context signature"
           }
         ]

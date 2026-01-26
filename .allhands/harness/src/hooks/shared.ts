@@ -26,17 +26,24 @@ export interface HookInput {
 /** PreToolUse hook output */
 export interface PreToolUseOutput {
   hookSpecificOutput: {
-    permissionDecision: 'allow' | 'deny' | 'ask';
+    hookEventName: 'PreToolUse';
+    permissionDecision?: 'allow' | 'deny' | 'ask';
+    permissionDecisionReason?: string;
     updatedInput?: Record<string, unknown>;
+    additionalContext?: string;
   };
   systemMessage?: string;
 }
 
-/** PostToolUse hook output - uses standard output format */
+/** PostToolUse hook output - uses hookSpecificOutput for model-visible context */
 export interface PostToolUseOutput {
   continue?: boolean;
   suppressOutput?: boolean;
   systemMessage?: string;
+  hookSpecificOutput?: {
+    hookEventName: 'PostToolUse';
+    additionalContext?: string;
+  };
 }
 
 /** Stop/SubagentStop hook output */
@@ -119,16 +126,19 @@ export function allowTool(hookName?: string): never {
 
 /**
  * Output additional context for PostToolUse hooks.
- * Uses systemMessage field per official hook documentation.
+ * Uses decision: 'block' with reason for reliable visibility to model.
+ * (Since PostToolUse runs after the edit, 'block' just shows the message prominently)
  * Optionally logs to trace-store if hookName is provided.
  */
 export function outputContext(context: string, hookName?: string): never {
   if (hookName) {
     logHookSuccess(hookName, { action: 'context', hasContext: true });
   }
-  const output: PostToolUseOutput = {
-    continue: true,
-    systemMessage: context,
+  // Use decision: 'block' with reason for reliable visibility (like Continuous-Claude-v3)
+  // The edit already happened, so 'block' just ensures the message is shown prominently
+  const output = {
+    decision: 'block',
+    reason: context,
   };
   console.log(JSON.stringify(output));
   process.exit(0);
@@ -136,16 +146,17 @@ export function outputContext(context: string, hookName?: string): never {
 
 /**
  * Block a PostToolUse action with a message.
- * The file change will be rejected and the message shown.
+ * Uses decision: 'block' with reason for reliable visibility.
  * Optionally logs to trace-store if hookName is provided.
  */
 export function blockTool(message: string, hookName?: string): never {
   if (hookName) {
     logHookSuccess(hookName, { action: 'block', message });
   }
-  const output: PostToolUseOutput = {
-    continue: false,
-    systemMessage: message,
+  // Use decision: 'block' with reason for reliable visibility (like Continuous-Claude-v3)
+  const output = {
+    decision: 'block',
+    reason: message,
   };
   console.log(JSON.stringify(output));
   process.exit(0);
@@ -183,6 +194,174 @@ export function outputPreCompact(systemMessage?: string, hookName?: string): nev
   };
   console.log(JSON.stringify(output));
   process.exit(0);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Language Detection (for AST-grep, TLDR, etc.)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Map of file extensions to AST-grep compatible language names */
+const EXTENSION_TO_LANGUAGE: Record<string, string> = {
+  // TypeScript
+  '.ts': 'typescript',
+  '.tsx': 'tsx',
+  '.mts': 'typescript',
+  '.cts': 'typescript',
+  // JavaScript
+  '.js': 'javascript',
+  '.jsx': 'javascript',
+  '.mjs': 'javascript',
+  '.cjs': 'javascript',
+  // Python
+  '.py': 'python',
+  '.pyi': 'python',
+  '.pyx': 'python',
+  // Go
+  '.go': 'go',
+  // Rust
+  '.rs': 'rust',
+  // C/C++
+  '.c': 'c',
+  '.h': 'c',
+  '.cpp': 'cpp',
+  '.cc': 'cpp',
+  '.cxx': 'cpp',
+  '.hpp': 'cpp',
+  '.hh': 'cpp',
+  // Java
+  '.java': 'java',
+  // Kotlin
+  '.kt': 'kotlin',
+  '.kts': 'kotlin',
+  // Ruby
+  '.rb': 'ruby',
+  // Swift
+  '.swift': 'swift',
+  // C#
+  '.cs': 'c-sharp',
+  // Lua
+  '.lua': 'lua',
+  // HTML/CSS
+  '.html': 'html',
+  '.css': 'css',
+  '.scss': 'scss',
+  // JSON/YAML
+  '.json': 'json',
+  '.yaml': 'yaml',
+  '.yml': 'yaml',
+};
+
+/** Map of ripgrep type names to AST-grep language names */
+const TYPE_TO_LANGUAGE: Record<string, string> = {
+  'ts': 'typescript',
+  'typescript': 'typescript',
+  'tsx': 'tsx',
+  'js': 'javascript',
+  'javascript': 'javascript',
+  'jsx': 'javascript',
+  'py': 'python',
+  'python': 'python',
+  'go': 'go',
+  'rust': 'rust',
+  'rs': 'rust',
+  'c': 'c',
+  'cpp': 'cpp',
+  'java': 'java',
+  'kotlin': 'kotlin',
+  'kt': 'kotlin',
+  'ruby': 'ruby',
+  'rb': 'ruby',
+  'swift': 'swift',
+  'cs': 'c-sharp',
+  'csharp': 'c-sharp',
+  'lua': 'lua',
+  'html': 'html',
+  'css': 'css',
+  'json': 'json',
+  'yaml': 'yaml',
+};
+
+/** Map of code patterns to likely languages */
+const PATTERN_TO_LANGUAGE: Record<string, string> = {
+  'def ': 'python',
+  'async def ': 'python',
+  'class ': 'python', // Could be multiple languages, default to python
+  'function ': 'typescript',
+  'async function ': 'typescript',
+  'const ': 'typescript',
+  'let ': 'typescript',
+  'export ': 'typescript',
+  'import ': 'typescript',
+  'func ': 'go',
+  'fn ': 'rust',
+  'pub fn ': 'rust',
+  'impl ': 'rust',
+  'package ': 'go',
+};
+
+/**
+ * Detect language from various inputs.
+ * Checks in order: glob patterns, ripgrep type, code patterns.
+ * Returns AST-grep compatible language name.
+ */
+export function detectLanguage(options: {
+  glob?: string;
+  type?: string;
+  pattern?: string;
+  filePath?: string;
+}): string {
+  const { glob, type, pattern, filePath } = options;
+
+  // 1. Check file path extension
+  if (filePath) {
+    const ext = filePath.substring(filePath.lastIndexOf('.'));
+    if (EXTENSION_TO_LANGUAGE[ext]) {
+      return EXTENSION_TO_LANGUAGE[ext];
+    }
+  }
+
+  // 2. Check glob pattern for extensions
+  if (glob) {
+    for (const [ext, lang] of Object.entries(EXTENSION_TO_LANGUAGE)) {
+      if (glob.includes(ext)) {
+        return lang;
+      }
+    }
+  }
+
+  // 3. Check ripgrep type parameter
+  if (type) {
+    const lowerType = type.toLowerCase();
+    if (TYPE_TO_LANGUAGE[lowerType]) {
+      return TYPE_TO_LANGUAGE[lowerType];
+    }
+  }
+
+  // 4. Check code pattern for language hints
+  if (pattern) {
+    for (const [hint, lang] of Object.entries(PATTERN_TO_LANGUAGE)) {
+      if (pattern.includes(hint)) {
+        return lang;
+      }
+    }
+  }
+
+  // Default to typescript (most common in this codebase)
+  return 'typescript';
+}
+
+/**
+ * Get all file extensions for a given language.
+ * Useful for building glob patterns.
+ */
+export function getExtensionsForLanguage(language: string): string[] {
+  const extensions: string[] = [];
+  for (const [ext, lang] of Object.entries(EXTENSION_TO_LANGUAGE)) {
+    if (lang === language) {
+      extensions.push(ext);
+    }
+  }
+  return extensions;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -266,6 +445,7 @@ export function injectContext(
   const currentValue = (originalInput[targetField] as string) || '';
   const output: PreToolUseOutput = {
     hookSpecificOutput: {
+      hookEventName: 'PreToolUse',
       permissionDecision: 'allow',
       updatedInput: {
         ...originalInput,
@@ -288,6 +468,7 @@ export function preToolContext(context: string, hookName?: string): never {
   }
   const output: PreToolUseOutput = {
     hookSpecificOutput: {
+      hookEventName: 'PreToolUse',
       permissionDecision: 'allow',
     },
     systemMessage: context,

@@ -15,13 +15,15 @@ import {
   allowTool,
   outputContext,
   preToolContext,
+  injectContext,
   getProjectDir,
   SearchContext,
   saveSearchContext,
   loadSearchContext,
   denyTool,
+  detectLanguage,
 } from './shared.js';
-import { logHookStart } from '../lib/trace-store.js';
+import { logHookStart, logHookSuccess } from '../lib/trace-store.js';
 import {
   isTldrInstalled,
   isTldrDaemonRunning,
@@ -268,7 +270,13 @@ function tldrContextInject(input: HookInput): void {
   }
 
   if (contextParts.length > 0) {
-    preToolContext(`# TLDR Analysis (${intent})\n\n${contextParts.join('\n')}`, HOOK_TLDR_INJECT);
+    // Inject context into the Task prompt using updatedInput (like Continuous-Claude-v3)
+    injectContext(
+      input.tool_input as Record<string, unknown>,
+      `# TLDR Analysis (${intent})\n\n${contextParts.join('\n')}`,
+      'prompt',
+      HOOK_TLDR_INJECT
+    );
   }
 
   allowTool(HOOK_TLDR_INJECT);
@@ -421,7 +429,16 @@ function signatureHelper(input: HookInput): void {
   }
 
   if (signatures.length > 0) {
-    preToolContext(`## Referenced Signatures\n\n${signatures.join('\n')}`, HOOK_SIGNATURE);
+    // Use additionalContext in hookSpecificOutput (like Continuous-Claude-v3)
+    logHookSuccess(HOOK_SIGNATURE, { action: 'signature', count: signatures.length });
+    const output = {
+      hookSpecificOutput: {
+        hookEventName: 'PreToolUse',
+        additionalContext: `[Signatures from TLDR]\n${signatures.join('\n')}`,
+      },
+    };
+    console.log(JSON.stringify(output));
+    process.exit(0);
   }
 
   allowTool(HOOK_SIGNATURE);
@@ -842,13 +859,15 @@ function suggestLayers(queryType: QueryType, targetType: TargetType): string[] {
 }
 
 /**
- * Smart Search Router - intercepts Grep and routes to optimal tool.
+ * Smart Search Router - intercepts Grep and redirects to token-efficient tools.
  *
  * Classifies the search pattern and:
+ * - For structural queries: redirects to AST-grep or TLDR
+ * - For literal queries: redirects to TLDR search
+ * - For semantic queries: runs TLDR semantic search and returns results
  * - Stores search context for downstream hooks (e.g., read enforcer)
- * - For structural queries: suggests TLDR if available
- * - For semantic queries: suggests TLDR semantic search
- * - For literal queries: allows pass-through to ripgrep
+ *
+ * Matches Continuous-Claude-v3 approach for maximum token efficiency.
  */
 function smartSearchRouter(input: HookInput): void {
   const projectDir = getProjectDir();
@@ -863,67 +882,140 @@ function smartSearchRouter(input: HookInput): void {
   const { queryType, targetType } = classifySearchPattern(pattern);
   const suggestedLayers = suggestLayers(queryType, targetType);
 
+  // Extract target name from pattern
+  const nameMatch = pattern.match(/(?:def|function|func|class|struct|interface)\s+(\w+)/);
+  const target = nameMatch ? nameMatch[1] : pattern.match(/^(\w+)/)?.[1] || pattern;
+
   // Build search context for downstream hooks
   const searchContext: SearchContext = {
     timestamp: Date.now(),
     queryType,
     pattern,
-    target: null,
+    target,
     targetType,
     suggestedLayers,
   };
 
-  // If TLDR is available and query is structural, try to find definition
-  if (isTldrInstalled() && isTldrDaemonRunning(projectDir) && queryType === 'structural') {
-    // Extract target name from pattern
-    const nameMatch = pattern.match(/(?:def|function|func|class|struct|interface)\s+(\w+)/);
-    const targetName = nameMatch ? nameMatch[1] : pattern.match(/^(\w+)/)?.[1];
-
-    if (targetName) {
-      searchContext.target = targetName;
-
-      // Search via TLDR
-      const results = searchDaemon(targetName, projectDir);
-      if (results.length > 0) {
-        searchContext.definitionLocation = `${results[0].file}:${results[0].line}`;
-
-        // Get callers if it's a function
-        if (targetType === 'function') {
-          const ctx = contextDaemon(targetName, projectDir);
-          if (ctx) {
-            searchContext.callers = ctx.callers;
-          }
-        }
-      }
-    }
-  }
-
-  // Save context for downstream hooks
+  // Save context for downstream hooks (read enforcer will use this)
   saveSearchContext(sessionId, searchContext);
 
-  // For structural queries with TLDR available, inject context
-  if (
-    queryType === 'structural' &&
-    isTldrInstalled() &&
-    isTldrDaemonRunning(projectDir) &&
-    searchContext.definitionLocation
-  ) {
-    const parts: string[] = [
-      `## TLDR Search Context`,
-      `Found **${searchContext.target}** at \`${searchContext.definitionLocation}\``,
-    ];
+  // LITERAL: Redirect to TLDR search (finds + enriches in one call)
+  if (queryType === 'literal') {
+    // Determine if pattern looks like natural language vs code/symbol
+    const looksLikeNaturalLanguage = pattern.includes(' ') && // has spaces
+                                      !/[_(){}[\]<>:;]/.test(pattern) && // no code chars
+                                      pattern.split(' ').length >= 2; // multiple words
 
-    if (searchContext.callers && searchContext.callers.length > 0) {
-      parts.push(`Called by: ${searchContext.callers.slice(0, 5).join(', ')}`);
+    let reason: string;
+    if (looksLikeNaturalLanguage) {
+      // Natural language query → recommend semantic search first
+      reason = `🧠 Natural language query - Use semantic search:
+
+**Recommended - Semantic search:**
+\`\`\`bash
+tldr semantic search "${pattern}"
+\`\`\`
+
+**Alternative - Literal search (if looking for exact text):**
+\`\`\`bash
+tldr search "${pattern}"
+\`\`\`
+
+Semantic search uses embeddings to find conceptually related code.`;
+    } else {
+      // Code/symbol pattern → recommend literal search first
+      reason = `🔍 Use TLDR search for code exploration (95% token savings):
+
+**Recommended - Literal search:**
+\`\`\`bash
+tldr search "${pattern}"
+\`\`\`
+
+**Alternative - Semantic search (if looking for concepts):**
+\`\`\`bash
+tldr semantic search "${pattern}"
+\`\`\`
+
+**Or read specific file:**
+Read the file containing "${pattern}" - the read-enforcer will return structured context.
+
+TLDR finds location + provides call graph + docstrings in one call.`;
     }
 
-    parts.push('');
-    parts.push('Proceeding with grep for additional matches...');
-
-    preToolContext(parts.join('\n'), HOOK_SEARCH_ROUTER);
+    denyTool(reason, HOOK_SEARCH_ROUTER);
   }
 
-  // Allow grep to proceed (with context saved for read enforcer)
+  // STRUCTURAL: Redirect to AST-grep or TLDR
+  if (queryType === 'structural') {
+    // Detect language using shared utility
+    const langHint = detectLanguage({
+      glob: input.tool_input?.glob as string,
+      type: input.tool_input?.type as string,
+      pattern,
+    });
+
+    const reason = `🎯 Structural query - Use AST-grep OR TLDR:
+
+**Option 1 - AST-grep (pattern matching):**
+\`\`\`bash
+ast-grep --pattern "${pattern}" --lang ${langHint}
+\`\`\`
+
+**Option 2 - TLDR (richer context):**
+\`\`\`bash
+tldr search "${target}"
+\`\`\`
+
+**Option 3 - TLDR context (call graph + complexity):**
+\`\`\`bash
+tldr context ${target} --project .
+\`\`\`
+
+AST-grep: precise pattern match, file:line only
+TLDR: finds + call graph + docstrings + complexity`;
+
+    denyTool(reason, HOOK_SEARCH_ROUTER);
+  }
+
+  // SEMANTIC: Try TLDR semantic search if available
+  if (queryType === 'semantic' && isTldrInstalled() && isTldrDaemonRunning(projectDir)) {
+    const results = searchDaemon(pattern, projectDir);
+
+    if (results.length > 0) {
+      const resultsStr = results.slice(0, 10).map(r =>
+        `  - ${r.file}:${r.line} - ${r.name || 'match'}`
+      ).join('\n');
+
+      const reason = `🧠 **Semantic Search Results** (via TLDR):
+
+${resultsStr}
+
+To get more context on a result, use:
+\`\`\`bash
+tldr context <function_name> --project .
+\`\`\``;
+
+      denyTool(reason, HOOK_SEARCH_ROUTER);
+    }
+  }
+
+  // Fallback: suggest TLDR for semantic queries without daemon
+  if (queryType === 'semantic') {
+    const reason = `🧠 Semantic query detected - Use TLDR semantic search:
+
+\`\`\`bash
+tldr semantic search "${pattern}"
+\`\`\`
+
+Or try structural search:
+\`\`\`bash
+tldr search "${pattern}" .
+\`\`\``;
+
+    denyTool(reason, HOOK_SEARCH_ROUTER);
+  }
+
+  // Should not reach here, but allow as fallback
   allowTool(HOOK_SEARCH_ROUTER);
 }
 
