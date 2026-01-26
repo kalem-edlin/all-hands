@@ -39,6 +39,7 @@ export interface ActionItem {
 export interface ToggleState {
   loopEnabled: boolean;
   emergentEnabled: boolean;
+  parallelEnabled: boolean;
   prActionState: PRActionState;
   hasSpec: boolean;
   hasCompletedPrompts: boolean;
@@ -165,6 +166,7 @@ function buildActionItems(toggleState: ToggleState): ActionItem[] {
     { id: 'separator-toggles', label: '─── Toggles ───', type: 'separator' },
     { id: 'toggle-loop', label: 'Loop', key: 'O', type: 'toggle', checked: toggleState.loopEnabled },
     { id: 'toggle-emergent', label: 'Emergent', key: 'E', type: 'toggle', checked: toggleState.emergentEnabled },
+    { id: 'toggle-parallel', label: 'Parallel', key: 'P', type: 'toggle', checked: toggleState.parallelEnabled },
     // Spacing before controls
     { id: 'spacer-2', label: '', type: 'separator' },
     { id: 'separator-bottom', label: '─── Controls ───', type: 'separator' },

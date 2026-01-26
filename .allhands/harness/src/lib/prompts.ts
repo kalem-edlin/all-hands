@@ -153,12 +153,22 @@ export function dependenciesSatisfied(
  *
  * Algorithm:
  * 1. Filter to pending/in_progress prompts with satisfied dependencies
- * 2. Prefer in_progress over pending (resume interrupted work)
- * 3. Sort by priority (high > medium > low)
- * 4. Within same priority, sort by number (lower first)
+ * 2. Exclude prompts already being executed (via excludePrompts)
+ * 3. Prefer in_progress over pending (resume interrupted work)
+ * 4. Sort by priority (high > medium > low)
+ * 5. Within same priority, sort by number (lower first)
+ *
+ * @param spec - The spec/planning key
+ * @param cwd - Working directory
+ * @param excludePrompts - Prompt numbers to exclude (already being executed)
  */
-export function pickNextPrompt(spec: string, cwd?: string): PickerResult {
+export function pickNextPrompt(
+  spec: string,
+  cwd?: string,
+  excludePrompts: number[] = []
+): PickerResult {
   const prompts = loadAllPrompts(spec, cwd);
+  const excludeSet = new Set(excludePrompts);
 
   const stats = {
     total: prompts.length,
@@ -191,9 +201,10 @@ export function pickNextPrompt(spec: string, cwd?: string): PickerResult {
     };
   }
 
-  // Filter to actionable prompts
+  // Filter to actionable prompts (excluding those already being executed)
   const actionable = prompts.filter((p) => {
     if (p.frontmatter.status === 'done') return false;
+    if (excludeSet.has(p.frontmatter.number)) return false;
     if (!dependenciesSatisfied(p, prompts)) {
       stats.blocked++;
       return false;
@@ -209,6 +220,15 @@ export function pickNextPrompt(spec: string, cwd?: string): PickerResult {
       return {
         prompt: null,
         reason: 'All prompts completed',
+        stats,
+      };
+    }
+    // Check if all remaining are either blocked or already being executed
+    const beingExecuted = excludePrompts.length;
+    if (beingExecuted > 0) {
+      return {
+        prompt: null,
+        reason: `${beingExecuted} prompt(s) in progress, remaining blocked by dependencies`,
         stats,
       };
     }

@@ -190,10 +190,31 @@ export function outputPreCompact(systemMessage?: string, hookName?: string): nev
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Get the project directory from environment or cwd.
+ * Get the project directory.
+ * Priority:
+ * 1. CLAUDE_PROJECT_DIR env var (set by Claude Code)
+ * 2. Find .allhands/harness directory going up from cwd (indicates project root)
+ * 3. Fall back to cwd
  */
 export function getProjectDir(): string {
-  return process.env.CLAUDE_PROJECT_DIR || process.cwd();
+  if (process.env.CLAUDE_PROJECT_DIR) {
+    return process.env.CLAUDE_PROJECT_DIR;
+  }
+
+  // Find project root by looking for .allhands/harness directory
+  // This is more reliable than just .allhands since harness may have nested .allhands
+  let dir = process.cwd();
+  while (dir !== '/') {
+    const harnessPath = join(dir, '.allhands', 'harness');
+    const ahScript = join(harnessPath, 'ah');
+    // Check for the ah script to confirm this is the project root
+    if (existsSync(ahScript)) {
+      return dir;
+    }
+    dir = join(dir, '..');
+  }
+
+  return process.cwd();
 }
 
 /**
@@ -307,11 +328,38 @@ export interface TldrSettings {
   enableForHarness?: boolean;
 }
 
+/** Knowledge search settings */
+export interface KnowledgeSettings {
+  similarityThreshold?: number;
+  fullContextSimilarityThreshold?: number;
+  contextTokenLimit?: number;
+}
+
+/** Oracle inference settings */
+export interface OracleSettings {
+  defaultProvider?: 'gemini' | 'openai';
+}
+
+/** OpenCode SDK agent execution settings */
+export interface OpencodeSdkSettings {
+  model?: string;
+  codesearchToolBudget?: number;
+}
+
+/** Spawn settings for parallel execution */
+export interface SpawnSettings {
+  maxParallelPrompts?: number;
+}
+
 /** Project settings structure (.allhands/settings.json) */
 export interface ProjectSettings {
   validation?: ValidationSettings;
   git?: GitSettings;
   tldr?: TldrSettings;
+  knowledge?: KnowledgeSettings;
+  oracle?: OracleSettings;
+  opencodeSdk?: OpencodeSdkSettings;
+  spawn?: SpawnSettings;
 }
 
 /**
@@ -333,12 +381,12 @@ export function loadProjectSettings(): ProjectSettings | null {
 }
 
 /**
- * Get base branch from settings, env, or default.
- * Priority: settings.json > BASE_BRANCH env > "main"
+ * Get base branch from settings or default.
+ * Priority: settings.json > "main"
  */
 export function getBaseBranch(): string {
   const settings = loadProjectSettings();
-  return settings?.git?.baseBranch || process.env.BASE_BRANCH || 'main';
+  return settings?.git?.baseBranch || 'main';
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

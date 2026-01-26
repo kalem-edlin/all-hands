@@ -73,6 +73,7 @@ export function isLockedBranch(branch: string): boolean {
 export interface LoopConfig {
   enabled?: boolean;  // Deprecated: loop always starts disabled, not persisted
   emergent: boolean;
+  parallel?: boolean;  // Parallel execution enabled (persisted per spec)
   iteration: number;
 }
 

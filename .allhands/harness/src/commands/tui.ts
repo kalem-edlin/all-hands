@@ -93,6 +93,7 @@ export async function launchTUI(options: { spec?: string } = {}): Promise<void> 
   const initialState: Partial<TUIState> = {
     loopEnabled: false, // Always start disabled, regardless of saved status
     emergentEnabled: status?.loop.emergent ?? false,
+    parallelEnabled: status?.loop?.parallel ?? false,
     prompts: promptItems,
     activeAgents,
     spec: currentSpec?.id,
@@ -480,6 +481,15 @@ async function handleAction(
         updateStatus({ loop: { ...status.loop, emergent: enabled } }, planningKey, cwd);
       }
       tui.log(`Emergent: ${enabled ? 'Enabled' : 'Disabled'}`);
+      break;
+    }
+
+    case 'toggle-parallel': {
+      const enabled = data?.enabled as boolean;
+      if (planningKey && status) {
+        updateStatus({ loop: { ...status.loop, parallel: enabled } }, planningKey, cwd);
+      }
+      tui.log(`Parallel: ${enabled ? 'Enabled' : 'Disabled'}`);
       break;
     }
 

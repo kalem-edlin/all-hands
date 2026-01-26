@@ -50,6 +50,7 @@ export interface TUIOptions {
 export interface TUIState {
   loopEnabled: boolean;
   emergentEnabled: boolean;
+  parallelEnabled: boolean;
   prompts: PromptItem[];
   activeAgents: AgentInfo[];
   spec?: string;
@@ -101,6 +102,7 @@ export class TUI {
     this.state = {
       loopEnabled: false,
       emergentEnabled: false,
+      parallelEnabled: false,
       prompts: [],
       activeAgents: [],
       prActionState: 'create-pr',
@@ -230,16 +232,19 @@ export class TUI {
                 }));
                 // Don't restore loopEnabled from status - always requires manual enable
                 this.state.emergentEnabled = status?.loop?.emergent ?? false;
+                this.state.parallelEnabled = status?.loop?.parallel ?? false;
                 this.state.compoundRun = status?.compound_run ?? false;
               } else {
                 this.state.prompts = [];
                 this.state.loopEnabled = false;
                 this.state.emergentEnabled = false;
+                this.state.parallelEnabled = false;
                 this.state.compoundRun = false;
               }
 
-              // Sync emergent state to event loop
+              // Sync toggle states to event loop
               this.eventLoop?.setEmergentEnabled(this.state.emergentEnabled);
+              this.eventLoop?.setParallelEnabled(this.state.parallelEnabled);
             }
 
             this.buildActionItems();
@@ -378,15 +383,43 @@ export class TUI {
 
       const service = new KnowledgeService(this.options.cwd, { quiet: true });
 
-      // Reindex roadmap
-      this.log('Indexing roadmap specs...');
-      this.render();
-      await service.reindexAll('roadmap');
+      // Smart incremental indexing: check if indexes exist before deciding strategy
+      const roadmapExists = service.indexExists('roadmap');
+      const docsExists = service.indexExists('docs');
 
-      // Reindex docs (includes specs)
-      this.log('Indexing documentation...');
-      this.render();
-      await service.reindexAll('docs');
+      if (!roadmapExists || !docsExists) {
+        // Cold start: full index required
+        if (!roadmapExists) {
+          this.log('Building roadmap index (first run)...');
+          this.render();
+          await service.reindexAll('roadmap');
+        }
+        if (!docsExists) {
+          this.log('Building docs index (first run)...');
+          this.render();
+          await service.reindexAll('docs');
+        }
+      } else {
+        // Warm start: incremental update from git changes
+        const roadmapChanges = service.getChangesFromGit('roadmap');
+        const docsChanges = service.getChangesFromGit('docs');
+
+        if (roadmapChanges.length > 0) {
+          this.log(`Updating roadmap index (${roadmapChanges.length} changes)...`);
+          this.render();
+          await service.reindexFromChanges('roadmap', roadmapChanges);
+        } else {
+          this.log('Roadmap index up to date ✓');
+        }
+
+        if (docsChanges.length > 0) {
+          this.log(`Updating docs index (${docsChanges.length} changes)...`);
+          this.render();
+          await service.reindexFromChanges('docs', docsChanges);
+        } else {
+          this.log('Docs index up to date ✓');
+        }
+      }
 
       // Run docs validation
       this.log('Validating documentation...');
@@ -446,6 +479,7 @@ export class TUI {
     return {
       loopEnabled: this.state.loopEnabled,
       emergentEnabled: this.state.emergentEnabled,
+      parallelEnabled: this.state.parallelEnabled,
       prActionState: this.state.prActionState,
       hasSpec: !!this.state.spec,
       hasCompletedPrompts,
@@ -481,6 +515,7 @@ export class TUI {
       { id: 'separator-toggles', label: '─ Toggles ─', type: 'separator' },
       { id: 'toggle-loop', label: 'Loop', key: 'O', type: 'toggle', checked: this.state.loopEnabled },
       { id: 'toggle-emergent', label: 'Emergent', key: 'E', type: 'toggle', checked: this.state.emergentEnabled },
+      { id: 'toggle-parallel', label: 'Parallel', key: 'P', type: 'toggle', checked: this.state.parallelEnabled },
       { id: 'separator-controls', label: '─ Controls ─', type: 'separator' },
       { id: 'view-logs', label: 'View Logs', key: 'V', type: 'action' },
       { id: 'clear-logs', label: 'Clear Logs', key: 'C', type: 'action' },
@@ -576,7 +611,7 @@ export class TUI {
       });
     });
 
-    // Toggle hotkeys (O for lOop, E for Emergent)
+    // Toggle hotkeys (O for lOop, E for Emergent, P for Parallel)
     this.screen.key(['o'], () => {
       if (!this.activeModal) {
         this.handleAction('toggle-loop');
@@ -585,6 +620,11 @@ export class TUI {
     this.screen.key(['e'], () => {
       if (!this.activeModal) {
         this.handleAction('toggle-emergent');
+      }
+    });
+    this.screen.key(['p'], () => {
+      if (!this.activeModal) {
+        this.handleAction('toggle-parallel');
       }
     });
 
@@ -685,6 +725,19 @@ export class TUI {
           this.eventLoop.setEmergentEnabled(this.state.emergentEnabled);
         }
         this.options.onAction('toggle-emergent', { enabled: this.state.emergentEnabled });
+        this.render();
+        break;
+      case 'toggle-parallel':
+        this.state.parallelEnabled = !this.state.parallelEnabled;
+        this.buildActionItems();
+        if (this.eventLoop) {
+          this.eventLoop.setParallelEnabled(this.state.parallelEnabled);
+          // Force tick when enabling to spawn immediately
+          if (this.state.parallelEnabled) {
+            this.eventLoop.forceTick();
+          }
+        }
+        this.options.onAction('toggle-parallel', { enabled: this.state.parallelEnabled });
         this.render();
         break;
       case 'view-logs':
@@ -1066,9 +1119,12 @@ export class TUI {
   public updateState(updates: Partial<TUIState>): void {
     this.state = { ...this.state, ...updates };
 
-    // Sync emergent state to event loop if it was updated
+    // Sync toggle states to event loop if they were updated
     if ('emergentEnabled' in updates && this.eventLoop) {
       this.eventLoop.setEmergentEnabled(this.state.emergentEnabled);
+    }
+    if ('parallelEnabled' in updates && this.eventLoop) {
+      this.eventLoop.setParallelEnabled(this.state.parallelEnabled);
     }
 
     this.buildActionItems();
