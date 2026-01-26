@@ -642,7 +642,7 @@ export function spawnAgent(
 
   // Build claude command - NO system prompt, everything in initial prompt
   const cmdParts: string[] = ['claude'];
-  cmdParts.push('--settings .allhands/harness/src/platforms/claude/settings.json');
+  cmdParts.push('--settings .claude/settings.json');
   cmdParts.push('--dangerously-skip-permissions');
   cmdParts.push(`"$(cat '${promptFile}')"`)
 
@@ -830,7 +830,7 @@ export function spawnCustomFlow(
 
   // Build claude command - NO system prompt, everything in initial prompt
   const cmdParts: string[] = ['claude'];
-  cmdParts.push('--settings .allhands/harness/src/platforms/claude/settings.json');
+  cmdParts.push('--settings .claude/settings.json');
   cmdParts.push('--dangerously-skip-permissions');
   cmdParts.push(`"$(cat '${promptFile}')"`)
 

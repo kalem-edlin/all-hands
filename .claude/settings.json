@@ -206,20 +206,8 @@
       }
     ]
   },
-  "env": {
-    "PARALLEL_MAX_WORKERS": "3",
-    "SEARCH_SIMILARITY_THRESHOLD": "0.65",
-    "SEARCH_FULL_CONTEXT_SIMILARITY_THRESHOLD": "0.82",
-    "SEARCH_CONTEXT_TOKEN_LIMIT": "5000",
-    "KNOWLEDGE_AGGREGATOR_TOKEN_THRESHOLD": "3500",
-    "MAX_LOGS_TOKENS": "10000",
-    "BASH_MAX_TIMEOUT_MS": "3600000",
-    "BASE_BRANCH": "main",
-    "ORACLE_DEFAULT_PROVIDER": "openai",
-    "ENVOY_LOG_MAX_STRING_LENGTH": "150",
-    "AGENT_MODEL": "opencode/grok-code",
-    "_AGENT_MODEL_ALT": "google/gemini-2.5-flash",
-    "CODESEARCH_TOOL_BUDGET": "12"
+  "env":{
+    "ENABLE_LSP_TOOL": "1"
   },
   "permissions": {
     "deny": ["Task(claude-code-guide)", "Task(Plan)", "Task(Explore)"],
@@ -227,9 +215,8 @@
   },
   "enableAllProjectMcpServers": false,
   "enabledPlugins": {
-    "swift-lsp@claude-plugins-official": true,
-    "vtsls@claude-code-lsps": true,
-    "basedpyright@claude-code-lsps": true,
-    "vscode-langservers@claude-code-lsps": true
+    "typescript-lsp@claude-plugins-official": true,
+    "pyright-lsp@claude-plugins-official": true,
+    "swift-lsp@claude-plugins-official": true
   }
 }

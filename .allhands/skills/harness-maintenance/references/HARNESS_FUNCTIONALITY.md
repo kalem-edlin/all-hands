@@ -102,7 +102,7 @@ Per **Context is Precious** and **Agentic Validation Tooling**, hooks bridge Cla
 ### Hook Registration
 - Auto-discovered from `src/hooks/` modules
 - Each exports `register(parent: Command)` function
-- Configured in `src/platforms/claude/settings.json` as matchers
+- Configured in `.claude/settings.json` as matchers
 
 ### Design Rules
 - Graceful degradation: hooks allow tool execution even if analysis fails
@@ -182,7 +182,7 @@ template_vars:              # Required context variables
 
 ## Platform Integration
 
-### Settings Configuration (`src/platforms/claude/settings.json`)
+### Settings Configuration (`.claude/settings.json`)
 Connection point between harness and Claude Code:
 
 ```json
