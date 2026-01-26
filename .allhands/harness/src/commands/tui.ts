@@ -587,13 +587,14 @@ function updateRunningAgents(tui: TUI, branch: string): void {
 function spawnExecutorForPrompt(tui: TUI, prompt: PromptFile, branch: string): void {
   const promptNumber = prompt.frontmatter.number;
   const cwd = process.cwd();
+  const planningKey = sanitizeBranchForDir(branch);
 
   tui.log(`Spawning executor for: ${prompt.frontmatter.title}`);
 
   try {
-    // Build context with prompt-specific info
+    // Build context with prompt-specific info (use sanitized planning key for paths)
     const context = buildTemplateContext(
-      branch,
+      planningKey,
       prompt.frontmatter.title,
       promptNumber,
       prompt.path,
@@ -627,13 +628,14 @@ function spawnExecutorForPrompt(tui: TUI, prompt: PromptFile, branch: string): v
 function spawnEmergentForPrompt(tui: TUI, prompt: PromptFile, branch: string): void {
   const promptNumber = prompt.frontmatter.number;
   const cwd = process.cwd();
+  const planningKey = sanitizeBranchForDir(branch);
 
   tui.log(`Spawning emergent for: ${prompt.frontmatter.title}`);
 
   try {
-    // Build context with prompt-specific info
+    // Build context with prompt-specific info (use sanitized planning key for paths)
     const context = buildTemplateContext(
-      branch,
+      planningKey,
       prompt.frontmatter.title,
       promptNumber,
       prompt.path,
