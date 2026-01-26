@@ -30,7 +30,8 @@ const HOOK_AGENT_COMPACT = 'lifecycle agent-compact';
  * Handle agent stop lifecycle event.
  *
  * - Sends desktop notification
- * - Approves the stop (window closes naturally via exec in spawn)
+ * - Kills the tmux window (for prompt-scoped agents that may not close naturally)
+ * - Approves the stop
  *
  * Triggered by: Stop matcher "*"
  */
@@ -48,8 +49,13 @@ export function handleAgentStop(_input: HookInput): void {
     type: 'banner',
   });
 
-  // Approve stop - window closes naturally when claude exits
-  // (spawn uses exec so there's no orphan shell keeping the window open)
+  // Explicitly kill the tmux window to ensure cleanup
+  // (prompt-scoped agents may not close naturally even with exec)
+  if (agentId && windowExists(SESSION_NAME, agentId)) {
+    killWindow(SESSION_NAME, agentId);
+  }
+
+  // Approve stop
   outputStopHook('approve', undefined, HOOK_AGENT_STOP);
 }
 
