@@ -24,5 +24,8 @@
   "opencodeSdk": {
     "model": "opencode/gpt-5-nano",
     "codesearchToolBudget": 12
+  },
+  "spawn": {
+    "promptScopedAutocompactAt": 65
   }
 }

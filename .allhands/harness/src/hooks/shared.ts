@@ -531,6 +531,8 @@ export interface OpencodeSdkSettings {
 /** Spawn settings for parallel execution */
 export interface SpawnSettings {
   maxParallelPrompts?: number;
+  /** Autocompact percentage threshold for prompt-scoped agents (1-100, default 65) */
+  promptScopedAutocompactAt?: number;
 }
 
 /** Project settings structure (.allhands/settings.json) */

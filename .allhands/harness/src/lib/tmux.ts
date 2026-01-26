@@ -35,6 +35,7 @@ import {
 import { getCurrentBranch, getPlanningPaths } from './planning.js';
 import { getBaseBranch } from './git.js';
 import { addSpawnedWindow, removeSpawnedWindow, getSpawnedWindows } from './session.js';
+import { loadProjectSettings } from '../hooks/shared.js';
 
 /**
  * Agent type = agent profile name.
@@ -534,6 +535,11 @@ export function buildAgentEnv(config: SpawnConfig, branch: string, windowName: s
 
   if (config.promptScoped) {
     env.PROMPT_SCOPED = 'true';
+
+    // Set autocompact threshold for prompt-scoped agents only
+    const settings = loadProjectSettings();
+    const autocompactAt = settings?.spawn?.promptScopedAutocompactAt ?? 65;
+    env.CLAUDE_AUTOCOMPACT_PCT_OVERRIDE = String(autocompactAt);
   }
 
   if (config.promptNumber !== undefined) {
