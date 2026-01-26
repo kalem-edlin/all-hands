@@ -302,10 +302,16 @@ export interface GitSettings {
   baseBranch?: string;
 }
 
+/** TLDR settings */
+export interface TldrSettings {
+  enableForHarness?: boolean;
+}
+
 /** Project settings structure (.allhands/settings.json) */
 export interface ProjectSettings {
   validation?: ValidationSettings;
   git?: GitSettings;
+  tldr?: TldrSettings;
 }
 
 /**

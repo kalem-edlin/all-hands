@@ -20,6 +20,17 @@
         }
       }
     },
+    "tldr": {
+      "type": "object",
+      "description": "TLDR semantic indexing settings",
+      "properties": {
+        "enableForHarness": {
+          "type": "boolean",
+          "default": false,
+          "description": "Index .allhands directory alongside the project root. Useful for harness development."
+        }
+      }
+    },
     "validation": {
       "type": "object",
       "description": "Validation and quality settings",

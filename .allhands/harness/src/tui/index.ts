@@ -32,6 +32,7 @@ import { readStatus, sanitizeBranchForDir, planningDirExists } from '../lib/plan
 import { loadAllSpecs, specsToModalItems, type SpecFile } from '../lib/specs.js';
 import { loadAllFlows, flowsToModalItems } from '../lib/flows.js';
 import { isTldrInstalled, hasSemanticIndex, needsSemanticRebuild, buildSemanticIndexAsync } from '../lib/tldr.js';
+import { loadProjectSettings } from '../hooks/shared.js';
 import { join } from 'path';
 
 export type PaneId = 'actions' | 'prompts' | 'status';
@@ -302,6 +303,31 @@ export class TUI {
             this.log('Semantic index failed');
           }
           this.render();
+        }
+
+        // Also index .allhands directory if enabled in settings (for harness development)
+        const settings = loadProjectSettings();
+        if (settings?.tldr?.enableForHarness) {
+          const allhandsDir = join(this.options.cwd, '.allhands');
+          const needsHarnessIndex = !hasSemanticIndex(allhandsDir);
+          const needsHarnessRebuild = needsSemanticRebuild(allhandsDir);
+
+          if (needsHarnessIndex || needsHarnessRebuild) {
+            this.log('Building semantic index for .allhands...');
+            this.render();
+            const harnessResult = await buildSemanticIndexAsync(allhandsDir, (msg) => {
+              this.log(msg);
+              this.render();
+            });
+            if (harnessResult.success) {
+              const langInfo = harnessResult.languages.length > 0 ? ` (${harnessResult.languages.join(', ')})` : '';
+              const countInfo = harnessResult.filesIndexed > 0 ? `${harnessResult.filesIndexed} files` : '';
+              this.log(`Harness index ready${countInfo ? `: ${countInfo}` : ''}${langInfo} ✓`);
+            } else {
+              this.log('Harness index failed');
+            }
+            this.render();
+          }
         }
       }
 
