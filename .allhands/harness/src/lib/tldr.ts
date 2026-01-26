@@ -8,9 +8,10 @@
  */
 
 import { execSync, spawnSync, spawn } from 'child_process';
-import { existsSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import { createHash } from 'crypto';
 import { join } from 'path';
+import { tmpdir } from 'os';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -22,6 +23,7 @@ export interface DaemonResponse {
   indexing?: boolean;
   message?: string;
   error?: string;
+  callers?: unknown[];  // For impact analysis responses
 }
 
 export interface SearchResult {
@@ -32,17 +34,28 @@ export interface SearchResult {
   signature?: string;
 }
 
+export interface ExtractSymbol {
+  name: string;
+  line_number: number;
+  signature?: string;
+  docstring?: string;
+  is_async?: boolean;
+  params?: string[];
+  return_type?: string;
+  decorators?: string[];
+}
+
 export interface ExtractResult {
-  file: string;
-  symbols: Array<{
-    name: string;
-    type: string;
-    line: number;
-    signature?: string;
-    docstring?: string;
-  }>;
-  imports: string[];
-  exports: string[];
+  file_path: string;
+  language: string;
+  docstring?: string;
+  imports: Array<{ module: string; names: string[]; is_from: boolean }>;
+  classes: ExtractSymbol[];
+  functions: ExtractSymbol[];
+  call_graph?: {
+    calls: Record<string, string[]>;
+    called_by: Record<string, string[]>;
+  };
 }
 
 export interface ContextResult {
@@ -124,19 +137,37 @@ export function isTldrInstalled(): boolean {
 
 /**
  * Get the socket path for the TLDR daemon.
- * Format: /tmp/tldr-{md5(projectDir).slice(0,8)}.sock
+ * Format: {tmpdir}/tldr-{md5(projectDir).slice(0,8)}.sock
+ * Uses system tmpdir to match TLDR daemon behavior on macOS.
  */
 export function getTldrSocketPath(projectDir: string): string {
   const hash = createHash('md5').update(projectDir).digest('hex').slice(0, 8);
-  return `/tmp/tldr-${hash}.sock`;
+  return join(tmpdir(), `tldr-${hash}.sock`);
 }
 
 /**
  * Check if the TLDR daemon is running for a project.
+ * Checks both socket-based daemon and status file.
  */
 export function isTldrDaemonRunning(projectDir: string): boolean {
+  // Check socket-based daemon first
   const socketPath = getTldrSocketPath(projectDir);
-  return existsSync(socketPath);
+  if (existsSync(socketPath)) {
+    return true;
+  }
+
+  // Fall back to status file check (used by newer TLDR versions)
+  const statusPath = join(projectDir, '.tldr', 'status');
+  if (existsSync(statusPath)) {
+    try {
+      const status = readFileSync(statusPath, 'utf-8').trim();
+      return status === 'ready';
+    } catch {
+      return false;
+    }
+  }
+
+  return false;
 }
 
 /**
@@ -429,13 +460,60 @@ export async function queryDaemon(
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
+ * Fallback search using ripgrep when daemon is unavailable or indexing.
+ */
+function ripgrepFallback(pattern: string, projectDir: string): SearchResult[] {
+  try {
+    const escaped = pattern.replace(/"/g, '\\"').replace(/\$/g, '\\$');
+    const result = spawnSync(
+      'rg',
+      ['--json', '-m', '20', '--no-heading', escaped, projectDir],
+      { encoding: 'utf-8', timeout: 5000 }
+    );
+
+    if (result.status !== 0 || !result.stdout) {
+      return [];
+    }
+
+    const results: SearchResult[] = [];
+    for (const line of result.stdout.split('\n')) {
+      if (!line.trim()) continue;
+      try {
+        const json = JSON.parse(line);
+        if (json.type === 'match') {
+          results.push({
+            file: json.data.path.text,
+            name: pattern,
+            type: 'match',
+            line: json.data.line_number,
+          });
+        }
+      } catch {
+        // Skip non-JSON lines
+      }
+    }
+    return results;
+  } catch {
+    return [];
+  }
+}
+
+/**
  * Search for symbols matching a pattern.
+ * Falls back to ripgrep when daemon is indexing or unavailable.
  */
 export function searchDaemon(pattern: string, projectDir: string): SearchResult[] {
   const response = queryDaemonSync({ cmd: 'search', pattern }, projectDir);
-  if (!response || response.status !== 'ok' || !response.result) {
-    return [];
+
+  // If daemon is indexing or unavailable, fall back to ripgrep
+  if (!response || response.indexing || response.status === 'indexing') {
+    return ripgrepFallback(pattern, projectDir);
   }
+
+  if (response.status !== 'ok' || !response.result) {
+    return ripgrepFallback(pattern, projectDir);
+  }
+
   return response.result as SearchResult[];
 }
 
@@ -503,6 +581,44 @@ export function diagnosticsDaemon(file: string, projectDir: string): Diagnostics
     return null;
   }
   return response.result as DiagnosticsResult;
+}
+
+/** Caller location for impact analysis */
+export interface ImpactCaller {
+  file: string;
+  function: string;
+  line: number;
+}
+
+/** Impact analysis result */
+export interface ImpactResult {
+  target: string;
+  callers: ImpactCaller[];
+}
+
+/**
+ * Get impact analysis for a function (reverse call graph).
+ * Returns all functions that call the target function.
+ */
+export function impactDaemon(funcName: string, projectDir: string): ImpactResult | null {
+  const response = queryDaemonSync({ cmd: 'impact', func: funcName }, projectDir);
+
+  // If daemon is indexing, return null (caller should handle gracefully)
+  if (!response || response.indexing || response.status === 'indexing') {
+    return null;
+  }
+
+  if (response.status !== 'ok') {
+    return null;
+  }
+
+  // Handle both response formats: { callers: [...] } or { result: { callers: [...] } }
+  const callers = (response.callers ?? (response.result as { callers?: ImpactCaller[] })?.callers ?? []) as ImpactCaller[];
+
+  return {
+    target: funcName,
+    callers,
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

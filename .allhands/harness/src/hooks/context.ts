@@ -33,6 +33,7 @@ import {
   searchDaemon,
   diagnosticsDaemon,
   notifyFileChanged,
+  impactDaemon,
 } from '../lib/tldr.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -48,6 +49,7 @@ const HOOK_IMPORT_VALIDATE = 'context import-validate';
 const HOOK_EDIT_NOTIFY = 'context edit-notify';
 const HOOK_READ_ENFORCER = 'context read-enforcer';
 const HOOK_SEARCH_ROUTER = 'context search-router';
+const HOOK_IMPACT_REFACTOR = 'context impact-refactor';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Intent Detection
@@ -238,8 +240,13 @@ function tldrContextInject(input: HookInput): void {
           const extract = extractDaemon(searchResults[0].file, projectDir);
           if (extract) {
             contextParts.push(`## Structure: ${searchResults[0].file}`);
-            for (const sym of extract.symbols.slice(0, 10)) {
-              contextParts.push(`- ${sym.type} ${sym.name} (line ${sym.line})`);
+            // Show classes first
+            for (const cls of (extract.classes || []).slice(0, 5)) {
+              contextParts.push(`- class ${cls.name} (line ${cls.line_number})`);
+            }
+            // Then functions
+            for (const fn of extract.functions.slice(0, 10)) {
+              contextParts.push(`- function ${fn.name} (line ${fn.line_number})`);
             }
           }
         }
@@ -287,21 +294,20 @@ function editContextInject(input: HookInput): void {
   }
 
   const extract = extractDaemon(filePath, projectDir);
-  if (!extract || extract.symbols.length === 0) {
+  if (!extract || extract.functions.length === 0) {
     allowTool(HOOK_EDIT_INJECT);
   }
 
   const contextParts: string[] = ['## File Structure', ''];
 
-  // Group by type
-  const classes = extract!.symbols.filter((s) => s.type === 'class');
-  const functions = extract!.symbols.filter((s) => s.type === 'function');
-  const methods = extract!.symbols.filter((s) => s.type === 'method');
+  // Classes come from separate array in extract
+  const classes = extract!.classes || [];
+  const functions = extract!.functions || [];
 
   if (classes.length > 0) {
     contextParts.push('### Classes');
     for (const c of classes) {
-      contextParts.push(`- ${c.name} (line ${c.line})`);
+      contextParts.push(`- ${c.name} (line ${c.line_number})`);
     }
   }
 
@@ -309,26 +315,16 @@ function editContextInject(input: HookInput): void {
     contextParts.push('\n### Functions');
     for (const f of functions.slice(0, 15)) {
       const sig = f.signature ? `: ${f.signature}` : '';
-      contextParts.push(`- ${f.name}${sig} (line ${f.line})`);
+      contextParts.push(`- ${f.name}${sig} (line ${f.line_number})`);
     }
     if (functions.length > 15) {
       contextParts.push(`... and ${functions.length - 15} more`);
     }
   }
 
-  if (methods.length > 0) {
-    contextParts.push('\n### Methods');
-    for (const m of methods.slice(0, 15)) {
-      contextParts.push(`- ${m.name} (line ${m.line})`);
-    }
-    if (methods.length > 15) {
-      contextParts.push(`... and ${methods.length - 15} more`);
-    }
-  }
-
   if (extract!.imports.length > 0) {
     contextParts.push('\n### Imports');
-    contextParts.push(extract!.imports.slice(0, 10).join(', '));
+    contextParts.push(extract!.imports.slice(0, 10).map(i => i.module).join(', '));
   }
 
   preToolContext(contextParts.join('\n'), HOOK_EDIT_INJECT);
@@ -519,29 +515,45 @@ function importValidator(input: HookInput): void {
 
   const invalidImports: string[] = [];
 
-  for (const imp of extract!.imports) {
-    // Extract module/symbol from import
-    const match = imp.match(/from\s+([\w.]+)\s+import|import\s+([\w.]+)/);
-    if (!match) continue;
+  // Python standard library modules to skip
+  const STDLIB_MODULES = new Set([
+    'os', 'sys', 'typing', 'pathlib', 'json', 're', 'io', 'abc', 'collections',
+    'itertools', 'functools', 'dataclasses', 'enum', 'datetime', 'time', 'math',
+    'random', 'copy', 'logging', 'warnings', 'contextlib', 'inspect', 'types',
+    'subprocess', 'shutil', 'tempfile', 'glob', 'fnmatch', 'hashlib', 'hmac',
+    'secrets', 'struct', 'codecs', 'unicodedata', 'string', 'textwrap', 'difflib',
+    'unittest', 'pytest', 'asyncio', 'concurrent', 'threading', 'multiprocessing',
+    'socket', 'ssl', 'http', 'urllib', 'email', 'html', 'xml', 'base64', 'binascii',
+    'pickle', 'shelve', 'sqlite3', 'csv', 'configparser', 'argparse', 'getopt',
+    'pprint', 'reprlib', 'traceback', 'gc', 'weakref', 'array', 'bisect', 'heapq',
+    'operator', 'decimal', 'fractions', 'statistics', 'cmath', 'numbers',
+  ]);
 
-    const module = match[1] || match[2];
+  for (const imp of extract!.imports) {
+    const moduleName = imp.module;
+
     // Skip standard library and common packages
-    if (
-      module.startsWith('os') ||
-      module.startsWith('sys') ||
-      module.startsWith('typing') ||
-      module.startsWith('pathlib') ||
-      module.startsWith('json') ||
-      module.startsWith('re')
-    ) {
+    // Module name is the root module (e.g., "os" from "os.path")
+    const rootModule = moduleName.split('.')[0];
+    if (STDLIB_MODULES.has(rootModule)) {
       continue;
     }
 
-    // Check if it's a local module
-    if (module.startsWith('.')) {
-      const results = searchDaemon(module.replace(/^\.+/, ''), projectDir);
-      if (results.length === 0) {
-        invalidImports.push(imp);
+    // Skip common third-party packages
+    const commonPackages = ['numpy', 'pandas', 'requests', 'flask', 'django', 'pytest', 'pydantic'];
+    if (commonPackages.includes(rootModule)) {
+      continue;
+    }
+
+    // Check if it's a local relative import (indicated by is_from with relative path)
+    if (imp.is_from && moduleName.startsWith('.')) {
+      // Try to find the module in the project
+      const searchPattern = moduleName.replace(/^\.+/, '');
+      if (searchPattern) {
+        const results = searchDaemon(searchPattern, projectDir);
+        if (results.length === 0) {
+          invalidImports.push(moduleName);
+        }
       }
     }
   }
@@ -654,49 +666,47 @@ function tldrReadEnforcer(input: HookInput): void {
 
   // Always allow if TLDR not available
   if (!isTldrInstalled() || !isTldrDaemonRunning(projectDir)) {
-    allowTool(HOOK_READ_ENFORCER);
+    return allowTool(HOOK_READ_ENFORCER);
   }
 
   const filePath = (input.tool_input?.file_path as string) || '';
   if (!filePath) {
-    allowTool(HOOK_READ_ENFORCER);
+    return allowTool(HOOK_READ_ENFORCER);
   }
 
   // Bypass: explicit offset/limit means user wants specific lines
   const offset = input.tool_input?.offset as number | undefined;
   const limit = input.tool_input?.limit as number | undefined;
   if (offset !== undefined || limit !== undefined) {
-    allowTool(HOOK_READ_ENFORCER);
+    return allowTool(HOOK_READ_ENFORCER);
   }
 
   // Bypass: not a code file
   if (!isCodeFile(filePath)) {
-    allowTool(HOOK_READ_ENFORCER);
+    return allowTool(HOOK_READ_ENFORCER);
   }
 
   // Bypass: file doesn't exist
   if (!existsSync(filePath)) {
-    allowTool(HOOK_READ_ENFORCER);
+    return allowTool(HOOK_READ_ENFORCER);
   }
 
   // Bypass: small file
   const lineCount = countFileLines(filePath);
   if (lineCount < MIN_LINES_FOR_TLDR) {
-    allowTool(HOOK_READ_ENFORCER);
+    return allowTool(HOOK_READ_ENFORCER);
   }
 
   // Check search context - if recent search targeted specific location, allow read
   const searchCtx = loadSearchContext(sessionId);
   if (searchCtx && searchCtx.definitionLocation) {
-    // Recent search found a specific location - allow targeted read
-    allowTool(HOOK_READ_ENFORCER);
+    return allowTool(HOOK_READ_ENFORCER);
   }
 
   // Get TLDR extract for the file
   const extract = extractDaemon(filePath, projectDir);
-  if (!extract || extract.symbols.length === 0) {
-    // TLDR extraction failed - allow normal read
-    allowTool(HOOK_READ_ENFORCER);
+  if (!extract || extract.functions.length === 0) {
+    return allowTool(HOOK_READ_ENFORCER);
   }
 
   // Build token-efficient summary instead of raw file
@@ -712,7 +722,7 @@ function tldrReadEnforcer(input: HookInput): void {
     parts.push('### Imports');
     parts.push('```');
     for (const imp of extract!.imports.slice(0, 20)) {
-      parts.push(imp);
+      parts.push(imp.module);
     }
     if (extract!.imports.length > 20) {
       parts.push(`... and ${extract!.imports.length - 20} more imports`);
@@ -721,48 +731,28 @@ function tldrReadEnforcer(input: HookInput): void {
     parts.push('');
   }
 
-  // Classes
-  const classes = extract!.symbols.filter((s) => s.type === 'class');
+  // Classes (from separate array)
+  const classes = extract!.classes || [];
   if (classes.length > 0) {
     parts.push('### Classes');
     for (const cls of classes) {
       const doc = cls.docstring ? ` - ${cls.docstring.slice(0, 60)}...` : '';
-      parts.push(`- **${cls.name}** (line ${cls.line})${doc}`);
+      parts.push(`- **${cls.name}** (line ${cls.line_number})${doc}`);
     }
     parts.push('');
   }
 
   // Functions
-  const functions = extract!.symbols.filter((s) => s.type === 'function');
+  const functions = extract!.functions;
   if (functions.length > 0) {
     parts.push('### Functions');
     for (const fn of functions.slice(0, 25)) {
       const sig = fn.signature ? `\`${fn.signature}\`` : '';
-      parts.push(`- **${fn.name}** (line ${fn.line}) ${sig}`);
+      parts.push(`- **${fn.name}** (line ${fn.line_number}) ${sig}`);
     }
     if (functions.length > 25) {
       parts.push(`... and ${functions.length - 25} more functions`);
     }
-    parts.push('');
-  }
-
-  // Methods (if any top-level)
-  const methods = extract!.symbols.filter((s) => s.type === 'method');
-  if (methods.length > 0) {
-    parts.push('### Methods');
-    for (const m of methods.slice(0, 20)) {
-      parts.push(`- ${m.name} (line ${m.line})`);
-    }
-    if (methods.length > 20) {
-      parts.push(`... and ${methods.length - 20} more methods`);
-    }
-    parts.push('');
-  }
-
-  // Exports
-  if (extract!.exports.length > 0) {
-    parts.push('### Exports');
-    parts.push(extract!.exports.slice(0, 15).join(', '));
     parts.push('');
   }
 
@@ -937,6 +927,125 @@ function smartSearchRouter(input: HookInput): void {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// UserPromptSubmit: impact-refactor
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Keywords that trigger impact analysis */
+const REFACTOR_KEYWORDS = [
+  /\brefactor\b/i,
+  /\brename\b/i,
+  /\bchange\b.*\bfunction\b/i,
+  /\bmodify\b.*\b(?:function|method|class)\b/i,
+  /\bupdate\b.*\bsignature\b/i,
+  /\bmove\b.*\bfunction\b/i,
+  /\bdelete\b.*\b(?:function|method)\b/i,
+  /\bremove\b.*\b(?:function|method)\b/i,
+  /\bextract\b.*\b(?:function|method)\b/i,
+  /\binline\b.*\b(?:function|method)\b/i,
+];
+
+/** Extract function/method names from prompt */
+const IMPACT_FUNCTION_PATTERNS = [
+  /(?:refactor|rename|change|modify|update|move|delete|remove)\s+(?:the\s+)?(?:function\s+)?[`"']?(\w+)[`"']?/gi,
+  /[`"'](\w+)[`"']\s+(?:function|method)/gi,
+  /(?:function|method|def|fn)\s+[`"']?(\w+)[`"']?/gi,
+];
+
+const IMPACT_EXCLUDE_WORDS = new Set([
+  'the', 'this', 'that', 'function', 'method', 'class', 'file',
+  'to', 'from', 'into', 'a', 'an', 'and', 'or', 'for', 'with',
+]);
+
+function shouldTriggerImpact(prompt: string): boolean {
+  return REFACTOR_KEYWORDS.some((pattern) => pattern.test(prompt));
+}
+
+function extractImpactFunctionNames(prompt: string): string[] {
+  const candidates: Set<string> = new Set();
+
+  for (const pattern of IMPACT_FUNCTION_PATTERNS) {
+    let match;
+    pattern.lastIndex = 0;
+    while ((match = pattern.exec(prompt)) !== null) {
+      const name = match[1];
+      if (name && name.length > 2 && !IMPACT_EXCLUDE_WORDS.has(name.toLowerCase())) {
+        candidates.add(name);
+      }
+    }
+  }
+
+  // Also look for snake_case and camelCase identifiers
+  const identifierPattern = /\b([a-z][a-z0-9_]*[a-z0-9])\b/gi;
+  let match;
+  while ((match = identifierPattern.exec(prompt)) !== null) {
+    const name = match[1];
+    if (name.length > 4 && !IMPACT_EXCLUDE_WORDS.has(name.toLowerCase())) {
+      if (name.includes('_') || /[a-z][A-Z]/.test(name)) {
+        candidates.add(name);
+      }
+    }
+  }
+
+  return Array.from(candidates);
+}
+
+/**
+ * Impact analysis for refactoring (UserPromptSubmit).
+ * When user mentions refactor/rename + function name, shows callers.
+ */
+function impactRefactor(input: HookInput): void {
+  const prompt = (input.tool_input?.prompt as string) || (input.tool_input?.message as string) || '';
+
+  if (!shouldTriggerImpact(prompt)) {
+    process.exit(0);
+  }
+
+  const functions = extractImpactFunctionNames(prompt);
+  if (functions.length === 0) {
+    process.exit(0);
+  }
+
+  const projectDir = getProjectDir();
+
+  if (!isTldrInstalled() || !isTldrDaemonRunning(projectDir)) {
+    process.exit(0);
+  }
+
+  const results: string[] = [];
+
+  for (const funcName of functions.slice(0, 3)) {
+    const impact = impactDaemon(funcName, projectDir);
+
+    if (!impact) {
+      continue;
+    }
+
+    const callers = impact.callers;
+    let callerText: string;
+
+    if (callers.length === 0) {
+      callerText = 'No callers found (entry point or unused)';
+    } else {
+      callerText = callers
+        .slice(0, 15)
+        .map((c) => `  - ${c.function || 'unknown'} in ${c.file}:${c.line}`)
+        .join('\n');
+      if (callers.length > 15) {
+        callerText += `\n  ... and ${callers.length - 15} more`;
+      }
+    }
+
+    results.push(`**Impact: ${funcName}**\nCallers:\n${callerText}`);
+  }
+
+  if (results.length > 0) {
+    console.log(`\n## REFACTORING IMPACT ANALYSIS\n\n${results.join('\n\n')}\n\nConsider all callers before making changes.\n`);
+  }
+
+  process.exit(0);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Command Registration
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -1065,6 +1174,20 @@ export function register(parent: Command): void {
         smartSearchRouter(input);
       } catch {
         allowTool(HOOK_SEARCH_ROUTER);
+      }
+    });
+
+  // UserPromptSubmit hooks
+  context
+    .command('impact-refactor')
+    .description('Show impact analysis for refactoring (UserPromptSubmit)')
+    .action(async () => {
+      try {
+        const input = await readHookInput();
+        logHookStart(HOOK_IMPACT_REFACTOR, { prompt: (input.tool_input?.prompt as string)?.slice(0, 50) });
+        impactRefactor(input);
+      } catch {
+        process.exit(0);
       }
     });
 }
