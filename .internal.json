@@ -21,7 +21,13 @@
     ".allhands/node_modules/**",
     ".allhands/package-lock.json",
     ".claude/envoy/**",
-    ".claude/backup-skills/**"
+    ".claude/backup-skills/**",
+    ".claude/settings.local.json",
+    ".tldr/**",
+    ".git/**",
+    "scripts/**",
+    "target-lines.json",
+    ".reposearch/**"
   ],
-  "$distribution_comment": "What DOES get distributed: .allhands/ (flows, harness, agents, skills, schemas, validation)"
+  "$distribution_comment": "What DOES get distributed: .allhands/ (flows, harness, agents, skills, schemas, validation), .claude/ (agents)"
 }

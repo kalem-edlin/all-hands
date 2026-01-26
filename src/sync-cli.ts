@@ -49,29 +49,6 @@ async function main() {
       syncBuilder,
       syncHandler
     )
-    // Backwards compatibility aliases
-    .command(
-      'init [target]',
-      false, // hidden from help
-      syncBuilder,
-      syncHandler
-    )
-    .command(
-      'update',
-      false, // hidden from help
-      (yargs) => {
-        return yargs.option('yes', {
-          alias: 'y',
-          type: 'boolean',
-          describe: 'Skip confirmation prompts',
-          default: false,
-        });
-      },
-      async (argv) => {
-        const code = await cmdSync('.', argv.yes as boolean);
-        process.exit(code);
-      }
-    )
     .command(
       'pull-manifest',
       'Create sync config for push customization',
