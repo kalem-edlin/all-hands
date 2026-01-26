@@ -42,8 +42,8 @@ export type PRActionState = 'create-pr' | 'greptile-reviewing' | 'address-pr';
 export interface TUIOptions {
   onAction: (action: string, data?: Record<string, unknown>) => void;
   onExit: () => void;
-  onSpawnExecutor?: (prompt: PromptFile, branch: string) => void;
-  onSpawnEmergent?: (prompt: PromptFile, branch: string) => void;
+  onSpawnExecutor?: (prompt: PromptFile, branch: string, specId: string) => void;
+  onSpawnEmergent?: (prompt: PromptFile, branch: string, specId: string) => void;
   cwd?: string;
 }
 
@@ -258,14 +258,14 @@ export class TUI {
         },
         onSpawnExecutor: (prompt) => {
           this.log(`Loop: Spawning executor for prompt ${prompt.frontmatter.number}`);
-          if (this.state.branch && this.options.onSpawnExecutor) {
-            this.options.onSpawnExecutor(prompt, this.state.branch);
+          if (this.state.branch && this.state.spec && this.options.onSpawnExecutor) {
+            this.options.onSpawnExecutor(prompt, this.state.branch, this.state.spec);
           }
         },
         onSpawnEmergent: (prompt) => {
           this.log(`Loop: Spawning emergent for prompt ${prompt.frontmatter.number}`);
-          if (this.state.branch && this.options.onSpawnEmergent) {
-            this.options.onSpawnEmergent(prompt, this.state.branch);
+          if (this.state.branch && this.state.spec && this.options.onSpawnEmergent) {
+            this.options.onSpawnEmergent(prompt, this.state.branch, this.state.spec);
           }
         },
         onLoopStatus: (message) => {

@@ -118,11 +118,11 @@ export async function launchTUI(options: { spec?: string } = {}): Promise<void> 
       console.log('\nExiting All Hands TUI...');
       process.exit(0);
     },
-    onSpawnExecutor: (prompt, executorBranch) => {
-      spawnExecutorForPrompt(tui, prompt, executorBranch);
+    onSpawnExecutor: (prompt, executorBranch, specId) => {
+      spawnExecutorForPrompt(tui, prompt, executorBranch, specId);
     },
-    onSpawnEmergent: (prompt, emergentBranch) => {
-      spawnEmergentForPrompt(tui, prompt, emergentBranch);
+    onSpawnEmergent: (prompt, emergentBranch, specId) => {
+      spawnEmergentForPrompt(tui, prompt, emergentBranch, specId);
     },
     cwd: process.cwd(),
   });
@@ -584,7 +584,7 @@ function updateRunningAgents(tui: TUI, branch: string): void {
   tui.updateState({ activeAgents });
 }
 
-function spawnExecutorForPrompt(tui: TUI, prompt: PromptFile, branch: string): void {
+function spawnExecutorForPrompt(tui: TUI, prompt: PromptFile, branch: string, specId: string): void {
   const promptNumber = prompt.frontmatter.number;
   const cwd = process.cwd();
   const planningKey = sanitizeBranchForDir(branch);
@@ -595,7 +595,7 @@ function spawnExecutorForPrompt(tui: TUI, prompt: PromptFile, branch: string): v
     // Build context with prompt-specific info (use sanitized planning key for paths)
     const context = buildTemplateContext(
       planningKey,
-      prompt.frontmatter.title,
+      specId,  // Use spec file name, not prompt title
       promptNumber,
       prompt.path,
       cwd
@@ -625,7 +625,7 @@ function spawnExecutorForPrompt(tui: TUI, prompt: PromptFile, branch: string): v
   }
 }
 
-function spawnEmergentForPrompt(tui: TUI, prompt: PromptFile, branch: string): void {
+function spawnEmergentForPrompt(tui: TUI, prompt: PromptFile, branch: string, specId: string): void {
   const promptNumber = prompt.frontmatter.number;
   const cwd = process.cwd();
   const planningKey = sanitizeBranchForDir(branch);
@@ -636,7 +636,7 @@ function spawnEmergentForPrompt(tui: TUI, prompt: PromptFile, branch: string): v
     // Build context with prompt-specific info (use sanitized planning key for paths)
     const context = buildTemplateContext(
       planningKey,
-      prompt.frontmatter.title,
+      specId,  // Use spec file name, not prompt title
       promptNumber,
       prompt.path,
       cwd
