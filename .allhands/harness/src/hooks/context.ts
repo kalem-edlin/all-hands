@@ -398,6 +398,9 @@ function archContextInject(input: HookInput): void {
 
 /**
  * Inject function signatures for called functions in edit context.
+ * Two-step approach (like Continuous-Claude-v3):
+ * 1. searchDaemon to find the file containing the function
+ * 2. extractDaemon on that file to get the signature
  */
 function signatureHelper(input: HookInput): void {
   const projectDir = getProjectDir();
@@ -420,10 +423,35 @@ function signatureHelper(input: HookInput): void {
   const signatures: string[] = [];
 
   for (const ref of refs.slice(0, 5)) {
-    const results = searchDaemon(ref, projectDir);
-    for (const result of results.slice(0, 1)) {
-      if (result.signature) {
-        signatures.push(`${ref}: ${result.signature}`);
+    // Step 1: Search for the function definition
+    // Try TypeScript/JS patterns first, then Python
+    const searchPatterns = [`function ${ref}`, `def ${ref}`, `${ref} =`];
+    let foundFile: string | null = null;
+
+    for (const pattern of searchPatterns) {
+      const searchResults = searchDaemon(pattern, projectDir);
+      if (searchResults.length > 0) {
+        const firstResult = searchResults[0];
+        foundFile = firstResult.file.startsWith('/')
+          ? firstResult.file
+          : `${projectDir}/${firstResult.file}`;
+        break;
+      }
+    }
+
+    if (!foundFile) continue;
+
+    // Step 2: Extract symbols from the file to get signature
+    const extracted = extractDaemon(foundFile, projectDir);
+    if (!extracted) continue;
+
+    // Look for the function in extracted symbols
+    for (const func of extracted.functions || []) {
+      if (func.name === ref || func.name === `async ${ref}`) {
+        if (func.signature) {
+          signatures.push(`${ref}: ${func.signature}`);
+          break;
+        }
       }
     }
   }

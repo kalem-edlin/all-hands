@@ -510,11 +510,13 @@ export function searchDaemon(pattern: string, projectDir: string): SearchResult[
     return ripgrepFallback(pattern, projectDir);
   }
 
-  if (response.status !== 'ok' || !response.result) {
+  // Daemon returns 'results' (plural) not 'result'
+  const results = (response as unknown as { results?: unknown[] }).results;
+  if (response.status !== 'ok' || !results) {
     return ripgrepFallback(pattern, projectDir);
   }
 
-  return response.result as SearchResult[];
+  return results as SearchResult[];
 }
 
 /**

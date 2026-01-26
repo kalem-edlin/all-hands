@@ -158,27 +158,20 @@ CONTINUE - Proceed from current state.
 export async function handleAgentCompact(input: HookInput): Promise<void> {
   const agentId = process.env.AGENT_ID;
   const promptNumber = process.env.PROMPT_NUMBER;
+  const isPromptScoped = process.env.PROMPT_SCOPED === 'true';
   const transcriptPath = input.transcript_path;
+
+  // Only process compaction for prompt-scoped agents with PROMPT_NUMBER.
+  // Non-prompt-scoped agents (like the main session) should just pass through
+  // without killing windows or attempting to write summaries.
+  if (!isPromptScoped || !promptNumber) {
+    // For non-prompt-scoped agents, just continue without intervention
+    return outputPreCompact(undefined, HOOK_AGENT_COMPACT);
+  }
 
   // Use current session (not hardcoded SESSION_NAME) since agents may be
   // spawned in whatever session is active, not necessarily 'ah-hub'
   const sessionName = getCurrentSession() || SESSION_NAME;
-
-  // If no prompt number, just kill the window (not a managed prompt execution)
-  if (!promptNumber) {
-    sendNotification({
-      title: 'Context Compaction',
-      message: 'Agent context limit reached, terminating',
-      type: 'banner',
-    });
-
-    if (agentId && windowExists(sessionName, agentId)) {
-      killWindow(sessionName, agentId);
-    }
-
-    outputPreCompact(undefined, HOOK_AGENT_COMPACT);
-    return;
-  }
 
   // Get the planning key from env or current branch
   let spec = process.env.SPEC_NAME;
@@ -194,8 +187,7 @@ export async function handleAgentCompact(input: HookInput): Promise<void> {
     if (agentId && windowExists(sessionName, agentId)) {
       killWindow(sessionName, agentId);
     }
-    outputPreCompact(undefined, HOOK_AGENT_COMPACT);
-    return;
+    return outputPreCompact(undefined, HOOK_AGENT_COMPACT);
   }
 
   // Get the prompt file
@@ -207,8 +199,7 @@ export async function handleAgentCompact(input: HookInput): Promise<void> {
     if (agentId && windowExists(sessionName, agentId)) {
       killWindow(sessionName, agentId);
     }
-    outputPreCompact(undefined, HOOK_AGENT_COMPACT);
-    return;
+    return outputPreCompact(undefined, HOOK_AGENT_COMPACT);
   }
 
   try {

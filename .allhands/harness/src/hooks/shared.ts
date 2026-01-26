@@ -116,6 +116,7 @@ export function denyTool(reason: string, hookName?: string): never {
  * Allow a tool use (silent exit).
  * Hooks that don't output anything allow the tool.
  * Optionally logs to trace-store if hookName is provided.
+ * @see denyTool for blocking with a reason
  */
 export function allowTool(hookName?: string): never {
   if (hookName) {

@@ -10,6 +10,7 @@
  */
 
 import { existsSync, readFileSync } from 'fs';
+import { loadProjectSettings } from '../hooks/shared.js';
 
 // ============================================================================
 // Types
@@ -62,12 +63,13 @@ const DEFAULT_TIMEOUT = 120000;
 // ============================================================================
 
 /**
- * Get the default provider from environment or fallback
+ * Get the default provider from settings or fallback
  */
 export function getDefaultProvider(): ProviderName {
-  const envProvider = process.env.ORACLE_DEFAULT_PROVIDER;
-  if (envProvider === 'openai' || envProvider === 'gemini') {
-    return envProvider;
+  const settings = loadProjectSettings();
+  const provider = settings?.oracle?.defaultProvider;
+  if (provider === 'openai' || provider === 'gemini') {
+    return provider;
   }
   return 'gemini';
 }

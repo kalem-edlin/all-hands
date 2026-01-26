@@ -8,13 +8,15 @@ import { existsSync, readFileSync, statSync } from "fs";
 import { join } from "path";
 import { logCommandStart, logCommandSuccess, logCommandError } from "../trace-store.js";
 import type { AgentConfig, AgentResult } from "./index.js";
+import { loadProjectSettings } from "../../hooks/shared.js";
 
 const MAX_EXPANSIONS = 3;
 const EXPANSION_PATTERN = /^EXPAND:\s*(.+)$/gm;
 const DEFAULT_TIMEOUT_MS = 60000;
 
-// Model from env, empty string means use opencode default
-const ENV_AGENT_MODEL = process.env.AGENT_MODEL?.trim() || undefined;
+// Model from settings, undefined means use opencode default
+const settings = loadProjectSettings();
+const SETTINGS_AGENT_MODEL = settings?.opencodeSdk?.model?.trim() || undefined;
 
 export class AgentRunner {
   private readonly projectRoot: string;
@@ -29,8 +31,8 @@ export class AgentRunner {
    */
   async run<T>(config: AgentConfig, userMessage: string): Promise<AgentResult<T>> {
     const startTime = Date.now();
-    // Use config.model if specified, else env AGENT_MODEL, else opencode default
-    const model = config.model ?? ENV_AGENT_MODEL;
+    // Use config.model if specified, else settings AGENT_MODEL, else opencode default
+    const model = config.model ?? SETTINGS_AGENT_MODEL;
     logCommandStart("opencode.agent.run", {
       agent: config.name,
       model: model ?? "opencode-default",

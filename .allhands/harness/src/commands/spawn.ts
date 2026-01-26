@@ -11,6 +11,7 @@ import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 import { AgentRunner } from "../lib/opencode/index.js";
 import { BaseCommand, type CommandResult } from "../lib/base-command.js";
+import { loadProjectSettings } from "../hooks/shared.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -64,10 +65,10 @@ class CodesearchCommand extends BaseCommand {
 
   async execute(args: Record<string, unknown>): Promise<CommandResult> {
     const query = args.query as string;
+    const settings = loadProjectSettings();
     const toolBudget = parseInt(
       (args.budget as string) ??
-        process.env.CODESEARCH_TOOL_BUDGET ??
-        String(DEFAULT_TOOL_BUDGET),
+        String(settings?.opencodeSdk?.codesearchToolBudget ?? DEFAULT_TOOL_BUDGET),
       10
     );
     const stepsLimit = parseInt((args.steps as string) ?? String(DEFAULT_STEPS_LIMIT), 10);

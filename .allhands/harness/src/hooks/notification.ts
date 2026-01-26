@@ -2,48 +2,19 @@
  * Notification Hooks
  *
  * Hooks that send desktop notifications for various Claude Code events:
- * - idle: Agent is idle/waiting for input (Notification:idle_prompt)
- * - elicitation: Agent is asking a question (PreToolUse:AskUserQuestion)
+ * - stop: Agent has stopped working (Stop:*)
+ * - compact: Context is being compacted (PreCompact:*)
  *
  * Uses jamf/Notifier for macOS notifications.
  */
 
 import type { Command } from 'commander';
-import { HookInput, readHookInput, allowTool } from './shared.js';
+import { HookInput, readHookInput } from './shared.js';
 import { sendGateNotification } from '../lib/notification.js';
 import { logHookStart, logHookSuccess } from '../lib/trace-store.js';
 
-const HOOK_ELICITATION = 'notification elicitation';
 const HOOK_STOP = 'notification stop';
 const HOOK_COMPACT = 'notification compact';
-
-// ─────────────────────────────────────────────────────────────────────────────
-// PreToolUse: AskUserQuestion
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * Handle elicitation notification (AskUserQuestion).
- *
- * Sends an alert notification when the agent is asking the user a question,
- * so the user knows they need to respond.
- *
- * Triggered by: PreToolUse matcher "AskUserQuestion"
- */
-function handleElicitationNotification(input: HookInput): void {
-  // Extract question preview from tool input
-  const questions = input.tool_input?.questions as Array<{ question?: string }> | undefined;
-  const firstQuestion = questions?.[0]?.question || 'Agent has a question';
-
-  // Truncate for notification display
-  const preview = firstQuestion.length > 60
-    ? firstQuestion.slice(0, 57) + '...'
-    : firstQuestion;
-
-  sendGateNotification('Question', preview);
-
-  // Allow the tool to proceed
-  allowTool(HOOK_ELICITATION);
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Stop: Agent stopped
@@ -96,21 +67,6 @@ export function register(parent: Command): void {
   const notification = parent
     .command('notification')
     .description('Notification hooks (desktop alerts for events)');
-
-  // ah hooks notification elicitation
-  notification
-    .command('elicitation')
-    .description('Handle question notification (PreToolUse:AskUserQuestion)')
-    .action(async () => {
-      try {
-        const input = await readHookInput();
-        logHookStart(HOOK_ELICITATION, { tool: input.tool_name });
-        handleElicitationNotification(input);
-      } catch {
-        // On error, allow tool
-        allowTool(HOOK_ELICITATION);
-      }
-    });
 
   // ah hooks notification stop
   notification
