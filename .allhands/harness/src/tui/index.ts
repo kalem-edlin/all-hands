@@ -555,36 +555,36 @@ export class TUI {
 
     // Vim navigation within panes
     this.screen.key(['j'], () => {
-      if (!this.activeModal) {
+      if (!this.activeModal && !this.activeFileViewer) {
         this.navigatePane(1);
       }
     });
     this.screen.key(['k'], () => {
-      if (!this.activeModal) {
+      if (!this.activeModal && !this.activeFileViewer) {
         this.navigatePane(-1);
       }
     });
     this.screen.key(['u'], () => {
-      if (!this.activeModal) {
+      if (!this.activeModal && !this.activeFileViewer) {
         this.navigatePane(-10); // Page up
       }
     });
     this.screen.key(['d'], () => {
-      if (!this.activeModal) {
+      if (!this.activeModal && !this.activeFileViewer) {
         this.navigatePane(10); // Page down
       }
     });
 
     // Space to select/toggle
     this.screen.key(['space'], () => {
-      if (!this.activeModal) {
+      if (!this.activeModal && !this.activeFileViewer) {
         this.selectCurrentItem();
       }
     });
 
     // Enter to activate
     this.screen.key(['enter'], () => {
-      if (!this.activeModal) {
+      if (!this.activeModal && !this.activeFileViewer) {
         this.selectCurrentItem();
       }
     });
