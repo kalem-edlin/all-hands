@@ -116,16 +116,53 @@ function runRuffDiagnostics(filePath: string): DiagnosticResult | null {
 // TypeScript Diagnostics
 // ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * Find the nearest tsconfig.json by walking up from the file's directory.
+ */
+function findTsConfig(filePath: string): string | null {
+  let dir = dirname(filePath);
+  const root = '/';
+
+  while (dir !== root) {
+    const candidate = join(dir, 'tsconfig.json');
+    if (existsSync(candidate)) {
+      return candidate;
+    }
+    const parent = dirname(dir);
+    if (parent === dir) break; // Reached filesystem root
+    dir = parent;
+  }
+
+  return null;
+}
+
 function runTscDiagnostics(filePath: string): DiagnosticResult | null {
   if (!isToolAvailable('tsc')) {
     return null;
   }
 
+  // Find the project's tsconfig.json to get correct compiler options
+  const tsconfig = findTsConfig(filePath);
+
   try {
-    execSync(`tsc --noEmit "${filePath}"`, {
+    // Run tsc on the whole project and filter for this file's errors
+    // This ensures we use the correct tsconfig settings (esModuleInterop, target, etc.)
+    const tscCmd = tsconfig
+      ? `tsc --noEmit -p "${tsconfig}" 2>&1 | grep -E "^${filePath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}" || true`
+      : `tsc --noEmit "${filePath}"`;
+
+    const output = execSync(tscCmd, {
       encoding: 'utf-8',
       stdio: ['pipe', 'pipe', 'pipe'],
+      cwd: tsconfig ? dirname(tsconfig) : undefined,
     });
+
+    if (output.trim()) {
+      const lines = output.trim().split('\n').filter(Boolean).slice(0, 5);
+      if (lines.length > 0) {
+        return { tool: 'tsc', errors: lines };
+      }
+    }
     return null; // No errors
   } catch (e: unknown) {
     const error = e as { stdout?: string; stderr?: string };

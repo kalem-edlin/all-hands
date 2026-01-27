@@ -12,7 +12,10 @@
 
 import { mkdirSync, appendFileSync, existsSync, writeFileSync } from 'fs';
 import { join, dirname } from 'path';
-import Database from 'better-sqlite3';
+import { createRequire } from 'module';
+import type BetterSqlite3 from 'better-sqlite3';
+const require = createRequire(import.meta.url);
+const Database = require('better-sqlite3') as typeof BetterSqlite3;
 
 // ============================================================================
 // Configuration (env-configurable)
@@ -223,9 +226,9 @@ function getStoragePaths(cwd?: string): { dbPath: string; jsonlPath: string } {
 // ============================================================================
 
 // Cache databases by path to support multiple projects in same process
-const dbCache = new Map<string, Database.Database>();
+const dbCache = new Map<string, BetterSqlite3.Database>();
 
-function getDb(cwd?: string): Database.Database {
+function getDb(cwd?: string): BetterSqlite3.Database {
   const { dbPath } = getStoragePaths(cwd);
 
   // Return cached connection for this path
@@ -676,9 +679,7 @@ export function getStats(since?: string, cwd?: string): TraceStats {
  * Close all database connections (for cleanup)
  */
 export function closeDb(): void {
-  for (const db of dbCache.values()) {
-    db.close();
-  }
+  Array.from(dbCache.values()).forEach((db) => db.close());
   dbCache.clear();
 }
 

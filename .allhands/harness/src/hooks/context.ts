@@ -8,6 +8,7 @@
  */
 
 import type { Command } from 'commander';
+import { spawnSync } from 'child_process';
 import { existsSync, statSync } from 'fs';
 import {
   HookInput,
@@ -146,7 +147,7 @@ function extractReferences(prompt: string): string[] {
     refs.push(match[1]);
   }
 
-  return [...new Set(refs)]; // Deduplicate
+  return Array.from(new Set(refs)); // Deduplicate
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -928,16 +929,169 @@ function suggestLayers(queryType: QueryType, targetType: TargetType): string[] {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// AST-grep and Semantic Search Helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface AstGrepMatch {
+  file: string;
+  line: number;
+  column: number;
+  text: string;
+  lines: string;
+  language: string;
+}
+
+interface SemanticMatch {
+  name: string;
+  qualified_name: string;
+  file: string;
+  line: number;
+  unit_type: string;
+  signature: string;
+  score: number;
+}
+
 /**
- * Smart Search Router - intercepts Grep and redirects to token-efficient tools.
+ * Try running ast-grep with the given pattern and path.
+ * Returns matches if successful, empty array if pattern is invalid or no matches.
+ */
+function tryAstGrep(pattern: string, searchPath: string, projectDir: string): AstGrepMatch[] {
+  try {
+    // Resolve relative paths against project directory
+    let absolutePath: string;
+    if (searchPath.startsWith('/')) {
+      absolutePath = searchPath;
+    } else if (searchPath === '.') {
+      absolutePath = projectDir;
+    } else {
+      absolutePath = `${projectDir}/${searchPath}`;
+    }
+    // Clean up path (remove double slashes, trailing slashes)
+    absolutePath = absolutePath.replace(/\/+/g, '/').replace(/\/$/, '');
+
+    const result = spawnSync(
+      'ast-grep',
+      ['run', '--pattern', pattern, '--json', '--no-ignore', 'hidden', absolutePath],
+      {
+        encoding: 'utf-8',
+        timeout: 10000,
+        maxBuffer: 1024 * 1024,
+        cwd: projectDir,
+      }
+    );
+
+    if (result.status !== 0 || !result.stdout) {
+      return [];
+    }
+
+    const parsed = JSON.parse(result.stdout);
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+
+    return parsed.map((match: Record<string, unknown>) => ({
+      file: match.file as string,
+      line: (match.range as { start: { line: number } })?.start?.line ?? 0,
+      column: (match.range as { start: { column: number } })?.start?.column ?? 0,
+      text: match.text as string,
+      lines: match.lines as string,
+      language: match.language as string,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Try running tldr semantic search with the given query.
+ * Returns matches if successful, empty array if unavailable or no matches.
+ */
+function trySemanticSearch(query: string, projectDir: string, limit: number = 10): SemanticMatch[] {
+  try {
+    const result = spawnSync(
+      'tldr',
+      ['semantic', 'search', query, '--path', projectDir, '--k', String(limit)],
+      {
+        encoding: 'utf-8',
+        timeout: 15000,
+        maxBuffer: 1024 * 1024,
+      }
+    );
+
+    if (result.status !== 0 || !result.stdout) {
+      return [];
+    }
+
+    const parsed = JSON.parse(result.stdout);
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+
+    return parsed as SemanticMatch[];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Format ast-grep matches for display.
+ */
+function formatAstGrepResults(matches: AstGrepMatch[], pattern: string): string {
+  const lines = matches.slice(0, 15).map((m) => {
+    const lineNum = m.line + 1; // ast-grep uses 0-indexed lines
+    return `  ${m.file}:${lineNum} - ${m.lines.trim().substring(0, 100)}`;
+  });
+
+  return `🎯 **AST-grep Results** for \`${pattern}\`:
+
+${lines.join('\n')}
+
+To get more context on a result:
+\`\`\`bash
+tldr context <function_name> --project .
+\`\`\`
+
+If results are wrong, try manually:
+\`\`\`bash
+ast-grep run --pattern "${pattern}" <path>
+\`\`\``;
+}
+
+/**
+ * Format semantic search matches for display.
+ */
+function formatSemanticResults(matches: SemanticMatch[], query: string): string {
+  const lines = matches.slice(0, 10).map((m) => {
+    const score = (m.score * 100).toFixed(0);
+    return `  ${m.file}:${m.line} - ${m.name} (${m.unit_type}, ${score}% match)`;
+  });
+
+  return `🧠 **Semantic Search Results** for \`${query}\`:
+
+${lines.join('\n')}
+
+To get more context on a result:
+\`\`\`bash
+tldr context <function_name> --project .
+\`\`\`
+
+If results are wrong, try manually:
+\`\`\`bash
+tldr semantic search "${query}" --path .
+\`\`\``;
+}
+
+/**
+ * Smart Search Router - intercepts Grep and executes token-efficient search.
  *
- * Classifies the search pattern and:
- * - For structural queries: redirects to AST-grep or TLDR
- * - For literal queries: redirects to TLDR search
- * - For semantic queries: runs TLDR semantic search and returns results
- * - Stores search context for downstream hooks (e.g., read enforcer)
+ * Strategy:
+ * 1. Try ast-grep first (works for code patterns, fast)
+ * 2. If no results, try tldr semantic search (conceptual matches)
+ * 3. Return actual results, not suggestions
  *
- * Matches Continuous-Claude-v3 approach for maximum token efficiency.
+ * This runs the tools and returns results directly instead of lecturing
+ * the agent about what commands to run.
  */
 function smartSearchRouter(input: HookInput): void {
   const projectDir = getProjectDir();
@@ -946,9 +1100,13 @@ function smartSearchRouter(input: HookInput): void {
   const pattern = (input.tool_input?.pattern as string) || '';
   if (!pattern) {
     allowTool(HOOK_SEARCH_ROUTER);
+    return;
   }
 
-  // Classify the query
+  // Get the search path from input, default to project dir
+  const searchPath = (input.tool_input?.path as string) || projectDir;
+
+  // Classify the query for context saving
   const { queryType, targetType } = classifySearchPattern(pattern);
   const suggestedLayers = suggestLayers(queryType, targetType);
 
@@ -969,124 +1127,38 @@ function smartSearchRouter(input: HookInput): void {
   // Save context for downstream hooks (read enforcer will use this)
   saveSearchContext(sessionId, searchContext);
 
-  // LITERAL: Redirect to TLDR search (finds + enriches in one call)
-  if (queryType === 'literal') {
-    // Determine if pattern looks like natural language vs code/symbol
-    const looksLikeNaturalLanguage = pattern.includes(' ') && // has spaces
-                                      !/[_(){}[\]<>:;]/.test(pattern) && // no code chars
-                                      pattern.split(' ').length >= 2; // multiple words
-
-    let reason: string;
-    if (looksLikeNaturalLanguage) {
-      // Natural language query → recommend semantic search first
-      reason = `🧠 Natural language query - Use semantic search:
-
-**Recommended - Semantic search:**
-\`\`\`bash
-tldr semantic search "${pattern}"
-\`\`\`
-
-**Alternative - Literal search (if looking for exact text):**
-\`\`\`bash
-tldr search "${pattern}"
-\`\`\`
-
-Semantic search uses embeddings to find conceptually related code.`;
-    } else {
-      // Code/symbol pattern → recommend literal search first
-      reason = `🔍 Use TLDR search for code exploration (95% token savings):
-
-**Recommended - Literal search:**
-\`\`\`bash
-tldr search "${pattern}"
-\`\`\`
-
-**Alternative - Semantic search (if looking for concepts):**
-\`\`\`bash
-tldr semantic search "${pattern}"
-\`\`\`
-
-**Or read specific file:**
-Read the file containing "${pattern}" - the read-enforcer will return structured context.
-
-TLDR finds location + provides call graph + docstrings in one call.`;
-    }
-
-    denyTool(reason, HOOK_SEARCH_ROUTER);
+  // Step 1: Try ast-grep first (good for code patterns)
+  const astGrepMatches = tryAstGrep(pattern, searchPath, projectDir);
+  if (astGrepMatches.length > 0) {
+    const resultMsg = formatAstGrepResults(astGrepMatches, pattern);
+    denyTool(resultMsg, HOOK_SEARCH_ROUTER);
+    return;
   }
 
-  // STRUCTURAL: Redirect to AST-grep or TLDR
-  if (queryType === 'structural') {
-    // Detect language using shared utility
-    const langHint = detectLanguage({
-      glob: input.tool_input?.glob as string,
-      type: input.tool_input?.type as string,
-      pattern,
-    });
-
-    const reason = `🎯 Structural query - Use AST-grep OR TLDR:
-
-**Option 1 - AST-grep (pattern matching):**
-\`\`\`bash
-ast-grep --pattern "${pattern}" --lang ${langHint}
-\`\`\`
-
-**Option 2 - TLDR (richer context):**
-\`\`\`bash
-tldr search "${target}"
-\`\`\`
-
-**Option 3 - TLDR context (call graph + complexity):**
-\`\`\`bash
-tldr context ${target} --project .
-\`\`\`
-
-AST-grep: precise pattern match, file:line only
-TLDR: finds + call graph + docstrings + complexity`;
-
-    denyTool(reason, HOOK_SEARCH_ROUTER);
+  // Step 2: Try semantic search (good for natural language / concepts)
+  const semanticMatches = trySemanticSearch(pattern, projectDir);
+  if (semanticMatches.length > 0) {
+    const resultMsg = formatSemanticResults(semanticMatches, pattern);
+    denyTool(resultMsg, HOOK_SEARCH_ROUTER);
+    return;
   }
 
-  // SEMANTIC: Try TLDR semantic search if available
-  if (queryType === 'semantic' && isTldrInstalled() && isTldrDaemonRunning(projectDir)) {
-    const results = searchDaemon(pattern, projectDir);
+  // Step 3: Both failed - give manual fallback commands
+  const fallbackMsg = `No results found for \`${pattern}\`.
 
-    if (results.length > 0) {
-      const resultsStr = results.slice(0, 10).map(r =>
-        `  - ${r.file}:${r.line} - ${r.name || 'match'}`
-      ).join('\n');
-
-      const reason = `🧠 **Semantic Search Results** (via TLDR):
-
-${resultsStr}
-
-To get more context on a result, use:
+Try manually:
 \`\`\`bash
-tldr context <function_name> --project .
+# AST-grep (precise pattern match):
+ast-grep run --pattern "${pattern}" ${searchPath}
+
+# Semantic search (conceptual match):
+tldr semantic search "${pattern}" --path ${projectDir}
+
+# Literal grep fallback:
+rg "${pattern}" ${searchPath}
 \`\`\``;
 
-      denyTool(reason, HOOK_SEARCH_ROUTER);
-    }
-  }
-
-  // Fallback: suggest TLDR for semantic queries without daemon
-  if (queryType === 'semantic') {
-    const reason = `🧠 Semantic query detected - Use TLDR semantic search:
-
-\`\`\`bash
-tldr semantic search "${pattern}"
-\`\`\`
-
-Or try structural search:
-\`\`\`bash
-tldr search "${pattern}" .
-\`\`\``;
-
-    denyTool(reason, HOOK_SEARCH_ROUTER);
-  }
-
-  // Should not reach here, but allow as fallback
-  allowTool(HOOK_SEARCH_ROUTER);
+  denyTool(fallbackMsg, HOOK_SEARCH_ROUTER);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
