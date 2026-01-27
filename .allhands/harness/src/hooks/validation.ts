@@ -15,8 +15,20 @@ import { fileURLToPath } from 'url';
 import { parse as parseYaml } from 'yaml';
 import { minimatch } from 'minimatch';
 import { detectSchemaType, type SchemaType } from '../lib/schema.js';
-import { allowTool, blockTool, denyTool, FormatConfig, getProjectDir, HookInput, loadProjectSettings, outputContext, readHookInput } from './shared.js';
-import { logHookStart } from '../lib/trace-store.js';
+import {
+  HookInput,
+  HookCategory,
+  RegisterFn,
+  allowTool,
+  blockTool,
+  denyTool,
+  FormatConfig,
+  getProjectDir,
+  loadProjectSettings,
+  outputContext,
+  registerCategory,
+  registerCategoryForDaemon,
+} from './shared.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Hook Names
@@ -578,6 +590,127 @@ export function runFormat(input: HookInput): void {
   allowTool(HOOK_FORMAT);
 }
 
+/**
+ * Validate schema-managed markdown files (PostToolUse).
+ *
+ * Triggered by: PostToolUse matcher "(Write|Edit)"
+ */
+export function validateSchema(input: HookInput): void {
+  const filePath = input.tool_input?.file_path as string | undefined;
+
+  if (!filePath) {
+    allowTool(HOOK_SCHEMA);
+  }
+
+  const errors = runSchemaValidation(filePath!);
+
+  if (errors && errors.length > 0) {
+    const schemaType = detectSchemaTypeLocal(filePath!) || 'unknown';
+    const context = formatSchemaErrors(errors, schemaType);
+    blockTool(context, HOOK_SCHEMA);
+  }
+
+  allowTool(HOOK_SCHEMA);
+}
+
+/**
+ * Validate schema-managed markdown files before write/edit (PreToolUse).
+ *
+ * Triggered by: PreToolUse matcher "(Write|Edit)"
+ */
+export function validateSchemaPre(input: HookInput): void {
+  const toolName = input.tool_name as string | undefined;
+  const filePath = input.tool_input?.file_path as string | undefined;
+
+  if (!filePath) {
+    return allowTool(HOOK_SCHEMA_PRE);
+  }
+
+  let contentToValidate: string | undefined;
+
+  if (toolName === 'Write') {
+    // Write tool provides content directly
+    contentToValidate = input.tool_input?.content as string | undefined;
+  } else if (toolName === 'Edit') {
+    // Edit tool provides old_string and new_string - we need to compute the result
+    const oldString = input.tool_input?.old_string as string | undefined;
+    const newString = input.tool_input?.new_string as string | undefined;
+    const replaceAll = input.tool_input?.replace_all as boolean | undefined;
+
+    if (oldString === undefined || newString === undefined) {
+      return allowTool(HOOK_SCHEMA_PRE);
+    }
+
+    // Read current file content
+    if (!existsSync(filePath)) {
+      return allowTool(HOOK_SCHEMA_PRE);
+    }
+
+    const currentContent = readFileSync(filePath, 'utf-8');
+
+    // Apply the edit to get the resulting content
+    if (replaceAll) {
+      contentToValidate = currentContent.split(oldString).join(newString);
+    } else {
+      contentToValidate = currentContent.replace(oldString, newString);
+    }
+  }
+
+  if (!contentToValidate) {
+    return allowTool(HOOK_SCHEMA_PRE);
+  }
+
+  const errors = runSchemaValidationOnContent(filePath, contentToValidate);
+
+  if (errors && errors.length > 0) {
+    const schemaType = detectSchemaTypeLocal(filePath) || 'unknown';
+    const context = formatSchemaErrors(errors, schemaType);
+    denyTool(context, HOOK_SCHEMA_PRE);
+  }
+
+  allowTool(HOOK_SCHEMA_PRE);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Hook Category Definition
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Validation hooks category */
+export const category: HookCategory = {
+  name: 'validation',
+  description: 'Validation hooks',
+  hooks: [
+    {
+      name: 'diagnostics',
+      description: 'Run diagnostics on edited files (PostToolUse)',
+      handler: runDiagnostics,
+      errorFallback: { type: 'allowTool' },
+      logPayload: (input) => ({ tool: input.tool_name, file: input.tool_input?.file_path }),
+    },
+    {
+      name: 'schema',
+      description: 'Validate schema-managed markdown files (PostToolUse)',
+      handler: validateSchema,
+      errorFallback: { type: 'allowTool' },
+      logPayload: (input) => ({ tool: input.tool_name, file: input.tool_input?.file_path }),
+    },
+    {
+      name: 'format',
+      description: 'Auto-format edited files (PostToolUse)',
+      handler: runFormat,
+      errorFallback: { type: 'allowTool' },
+      logPayload: (input) => ({ tool: input.tool_name, file: input.tool_input?.file_path }),
+    },
+    {
+      name: 'schema-pre',
+      description: 'Validate schema-managed markdown files before write/edit (PreToolUse)',
+      handler: validateSchemaPre,
+      errorFallback: { type: 'allowTool' },
+      logPayload: (input) => ({ tool: input.tool_name, file: input.tool_input?.file_path }),
+    },
+  ],
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Command Registration
 // ─────────────────────────────────────────────────────────────────────────────
@@ -586,126 +719,16 @@ export function runFormat(input: HookInput): void {
  * Register validation hook subcommands.
  */
 export function register(parent: Command): void {
-  const validation = parent
-    .command('validation')
-    .description('Validation hooks');
+  registerCategory(parent, category);
+}
 
-  validation
-    .command('diagnostics')
-    .description('Run diagnostics on edited files (PostToolUse)')
-    .action(async () => {
-      try {
-        const input = await readHookInput();
-        logHookStart(HOOK_DIAGNOSTICS, { tool: input.tool_name, file: input.tool_input?.file_path });
-        runDiagnostics(input);
-      } catch {
-        allowTool(HOOK_DIAGNOSTICS);
-      }
-    });
+// ─────────────────────────────────────────────────────────────────────────────
+// Daemon Handler Registration
+// ─────────────────────────────────────────────────────────────────────────────
 
-  validation
-    .command('schema')
-    .description('Validate schema-managed markdown files (PostToolUse)')
-    .action(async () => {
-      try {
-        const input = await readHookInput();
-        const filePath = input.tool_input?.file_path as string | undefined;
-        logHookStart(HOOK_SCHEMA, { tool: input.tool_name, file: filePath });
-
-        if (!filePath) {
-          allowTool(HOOK_SCHEMA);
-        }
-
-        const errors = runSchemaValidation(filePath!);
-
-        if (errors && errors.length > 0) {
-          const schemaType = detectSchemaTypeLocal(filePath!) || 'unknown';
-          const context = formatSchemaErrors(errors, schemaType);
-          blockTool(context, HOOK_SCHEMA);
-        }
-
-        allowTool(HOOK_SCHEMA);
-      } catch {
-        allowTool(HOOK_SCHEMA);
-      }
-    });
-
-  validation
-    .command('format')
-    .description('Auto-format edited files (PostToolUse)')
-    .action(async () => {
-      try {
-        const input = await readHookInput();
-        logHookStart(HOOK_FORMAT, { tool: input.tool_name, file: input.tool_input?.file_path });
-        runFormat(input);
-      } catch {
-        allowTool(HOOK_FORMAT);
-      }
-    });
-
-  validation
-    .command('schema-pre')
-    .description('Validate schema-managed markdown files before write/edit (PreToolUse)')
-    .action(async () => {
-      try {
-        const input = await readHookInput();
-        const toolName = input.tool_name as string | undefined;
-        const filePath = input.tool_input?.file_path as string | undefined;
-        logHookStart(HOOK_SCHEMA_PRE, { tool: toolName, file: filePath });
-
-        if (!filePath) {
-          allowTool(HOOK_SCHEMA_PRE);
-          return;
-        }
-
-        let contentToValidate: string | undefined;
-
-        if (toolName === 'Write') {
-          // Write tool provides content directly
-          contentToValidate = input.tool_input?.content as string | undefined;
-        } else if (toolName === 'Edit') {
-          // Edit tool provides old_string and new_string - we need to compute the result
-          const oldString = input.tool_input?.old_string as string | undefined;
-          const newString = input.tool_input?.new_string as string | undefined;
-          const replaceAll = input.tool_input?.replace_all as boolean | undefined;
-
-          if (oldString === undefined || newString === undefined) {
-            allowTool(HOOK_SCHEMA_PRE);
-            return;
-          }
-
-          // Read current file content
-          if (!existsSync(filePath)) {
-            allowTool(HOOK_SCHEMA_PRE);
-            return;
-          }
-
-          const currentContent = readFileSync(filePath, 'utf-8');
-
-          // Apply the edit to get the resulting content
-          if (replaceAll) {
-            contentToValidate = currentContent.split(oldString).join(newString);
-          } else {
-            contentToValidate = currentContent.replace(oldString, newString);
-          }
-        }
-
-        if (!contentToValidate) {
-          allowTool(HOOK_SCHEMA_PRE);
-          return;
-        }
-
-        const errors = runSchemaValidationOnContent(filePath, contentToValidate);
-
-        if (errors && errors.length > 0) {
-          const schemaType = detectSchemaTypeLocal(filePath) || 'unknown';
-          const context = formatSchemaErrors(errors, schemaType);
-          denyTool(context, HOOK_SCHEMA_PRE);
-        }
-
-        allowTool(HOOK_SCHEMA_PRE);
-      } catch {
-        allowTool(HOOK_SCHEMA_PRE);
-      }
-    });
+/**
+ * Register handlers for daemon mode.
+ */
+export function registerDaemonHandlers(register: RegisterFn): void {
+  registerCategoryForDaemon(category, register);
 }

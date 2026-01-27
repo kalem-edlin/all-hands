@@ -20,8 +20,15 @@
  */
 
 import type { Command } from 'commander';
-import { HookInput, readHookInput, allowTool, outputContext } from './shared.js';
-import { logEvent, logHookError, type TraceEventType } from '../lib/trace-store.js';
+import {
+  HookInput,
+  HookCategory,
+  RegisterFn,
+  allowTool,
+  registerCategory,
+  registerCategoryForDaemon,
+} from './shared.js';
+import { logEvent } from '../lib/trace-store.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Filtering Configuration
@@ -438,91 +445,80 @@ function handleAgentStop(input: HookInput): void {
   process.exit(0);
 }
 
+/**
+ * Handle pre-tool use (combined handler with Task routing)
+ */
+function handleToolPreWithTaskRouting(input: HookInput): void {
+  if (input.tool_name === 'Task') {
+    handleTaskSpawn(input);
+  } else {
+    handleToolPre(input);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Hook Category Definition
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Observability hooks category */
+export const category: HookCategory = {
+  name: 'observability',
+  description: 'Observability hooks for event tracking',
+  hooks: [
+    {
+      name: 'session-start',
+      description: 'Log session start event',
+      handler: handleSessionStart,
+      errorFallback: { type: 'silent' },
+    },
+    {
+      name: 'prompt-submit',
+      description: 'Log user prompt submit event',
+      handler: handlePromptSubmit,
+      errorFallback: { type: 'silent' },
+    },
+    {
+      name: 'tool-pre',
+      description: 'Log pre-tool use event (filtered)',
+      handler: handleToolPreWithTaskRouting,
+      errorFallback: { type: 'silent' },
+    },
+    {
+      name: 'tool-post',
+      description: 'Log post-tool use event (filtered)',
+      handler: handleToolPost,
+      errorFallback: { type: 'silent' },
+    },
+    {
+      name: 'tool-failure',
+      description: 'Log tool failure event',
+      handler: handleToolFailure,
+      errorFallback: { type: 'silent' },
+    },
+    {
+      name: 'agent-stop',
+      description: 'Log agent stop event',
+      handler: handleAgentStop,
+      errorFallback: { type: 'silent' },
+    },
+  ],
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Command Registration
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function register(parent: Command): void {
-  const observability = parent
-    .command('observability')
-    .description('Observability hooks for event tracking');
+  registerCategory(parent, category);
+}
 
-  observability
-    .command('session-start')
-    .description('Log session start event')
-    .action(async () => {
-      try {
-        const input = await readHookInput();
-        handleSessionStart(input);
-      } catch {
-        process.exit(0);
-      }
-    });
+// ─────────────────────────────────────────────────────────────────────────────
+// Daemon Handler Registration
+// ─────────────────────────────────────────────────────────────────────────────
 
-  observability
-    .command('prompt-submit')
-    .description('Log user prompt submit event')
-    .action(async () => {
-      try {
-        const input = await readHookInput();
-        handlePromptSubmit(input);
-      } catch {
-        process.exit(0);
-      }
-    });
-
-  observability
-    .command('tool-pre')
-    .description('Log pre-tool use event (filtered)')
-    .action(async () => {
-      try {
-        const input = await readHookInput();
-
-        // Special handling for Task - use dedicated handler
-        if (input.tool_name === 'Task') {
-          handleTaskSpawn(input);
-        } else {
-          handleToolPre(input);
-        }
-      } catch {
-        // On error, allow the tool
-        process.exit(0);
-      }
-    });
-
-  observability
-    .command('tool-post')
-    .description('Log post-tool use event (filtered)')
-    .action(async () => {
-      try {
-        const input = await readHookInput();
-        handleToolPost(input);
-      } catch {
-        process.exit(0);
-      }
-    });
-
-  observability
-    .command('tool-failure')
-    .description('Log tool failure event')
-    .action(async () => {
-      try {
-        const input = await readHookInput();
-        handleToolFailure(input);
-      } catch {
-        process.exit(0);
-      }
-    });
-
-  observability
-    .command('agent-stop')
-    .description('Log agent stop event')
-    .action(async () => {
-      try {
-        const input = await readHookInput();
-        handleAgentStop(input);
-      } catch {
-        process.exit(0);
-      }
-    });
+/**
+ * Register handlers for daemon mode.
+ */
+export function registerDaemonHandlers(register: RegisterFn): void {
+  registerCategoryForDaemon(category, register);
 }

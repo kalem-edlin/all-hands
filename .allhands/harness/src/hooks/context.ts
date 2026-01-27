@@ -12,7 +12,8 @@ import { spawnSync } from 'child_process';
 import { existsSync, statSync } from 'fs';
 import {
   HookInput,
-  readHookInput,
+  HookCategory,
+  RegisterFn,
   allowTool,
   outputContext,
   preToolContext,
@@ -22,9 +23,10 @@ import {
   saveSearchContext,
   loadSearchContext,
   denyTool,
-  detectLanguage,
+  registerCategory,
+  registerCategoryForDaemon,
 } from './shared.js';
-import { logHookStart, logHookSuccess } from '../lib/trace-store.js';
+import { logHookSuccess } from '../lib/trace-store.js';
 import {
   isTldrInstalled,
   isTldrDaemonRunning,
@@ -52,7 +54,6 @@ const HOOK_IMPORT_VALIDATE = 'context import-validate';
 const HOOK_EDIT_NOTIFY = 'context edit-notify';
 const HOOK_READ_ENFORCER = 'context read-enforcer';
 const HOOK_SEARCH_ROUTER = 'context search-router';
-const HOOK_IMPACT_REFACTOR = 'context impact-refactor';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Intent Detection
@@ -1281,6 +1282,91 @@ function impactRefactor(input: HookInput): void {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Hook Category Definition
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Context hooks category */
+export const category: HookCategory = {
+  name: 'context',
+  description: 'TLDR context injection hooks',
+  hooks: [
+    // PreToolUse hooks
+    {
+      name: 'tldr-inject',
+      description: 'Inject TLDR context for Task (PreToolUse:Task)',
+      handler: tldrContextInject,
+      errorFallback: { type: 'allowTool' },
+      logPayload: (input) => ({ tool: input.tool_name }),
+    },
+    {
+      name: 'edit-inject',
+      description: 'Inject file structure before edits (PreToolUse:Edit)',
+      handler: editContextInject,
+      errorFallback: { type: 'allowTool' },
+      logPayload: (input) => ({ tool: input.tool_name, file: input.tool_input?.file_path }),
+    },
+    {
+      name: 'arch-inject',
+      description: 'Inject architecture layers for planning (PreToolUse:Task)',
+      handler: archContextInject,
+      errorFallback: { type: 'allowTool' },
+      logPayload: (input) => ({ tool: input.tool_name }),
+    },
+    {
+      name: 'signature',
+      description: 'Inject function signatures for Edit (PreToolUse:Edit)',
+      handler: signatureHelper,
+      errorFallback: { type: 'allowTool' },
+      logPayload: (input) => ({ tool: input.tool_name, file: input.tool_input?.file_path }),
+    },
+    {
+      name: 'read-enforcer',
+      description: 'Enforce TLDR for large code files (PreToolUse:Read)',
+      handler: tldrReadEnforcer,
+      errorFallback: { type: 'allowTool' },
+      logPayload: (input) => ({ tool: input.tool_name, file: input.tool_input?.file_path }),
+    },
+    {
+      name: 'search-router',
+      description: 'Route searches to optimal tool (PreToolUse:Grep)',
+      handler: smartSearchRouter,
+      errorFallback: { type: 'allowTool' },
+      logPayload: (input) => ({ tool: input.tool_name, pattern: input.tool_input?.pattern }),
+    },
+    // PostToolUse hooks
+    {
+      name: 'diagnostics',
+      description: 'Run TLDR diagnostics after edits (PostToolUse:Edit|Write)',
+      handler: postEditDiagnostics,
+      errorFallback: { type: 'allowTool' },
+      logPayload: (input) => ({ tool: input.tool_name, file: input.tool_input?.file_path }),
+    },
+    {
+      name: 'import-validate',
+      description: 'Validate imports after edits (PostToolUse:Edit|Write)',
+      handler: importValidator,
+      errorFallback: { type: 'allowTool' },
+      logPayload: (input) => ({ tool: input.tool_name, file: input.tool_input?.file_path }),
+    },
+    {
+      name: 'edit-notify',
+      description: 'Notify TLDR daemon of file changes (PostToolUse:Edit|Write)',
+      handler: editNotify,
+      errorFallback: { type: 'allowTool' },
+      logPayload: (input) => ({ tool: input.tool_name, file: input.tool_input?.file_path }),
+    },
+    // UserPromptSubmit hooks
+    {
+      name: 'impact-refactor',
+      description: 'Show impact analysis for refactoring (UserPromptSubmit)',
+      handler: impactRefactor,
+      errorFallback: { type: 'silent' },
+      logPayload: (input) => ({ prompt: (input.tool_input?.prompt as string)?.slice(0, 50) }),
+    },
+  ],
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Command Registration
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -1288,141 +1374,17 @@ function impactRefactor(input: HookInput): void {
  * Register context hook subcommands.
  */
 export function register(parent: Command): void {
-  const context = parent
-    .command('context')
-    .description('TLDR context injection hooks');
+  registerCategory(parent, category);
+}
 
-  // PreToolUse hooks
-  context
-    .command('tldr-inject')
-    .description('Inject TLDR context for Task (PreToolUse:Task)')
-    .action(async () => {
-      try {
-        const input = await readHookInput();
-        logHookStart(HOOK_TLDR_INJECT, { tool: input.tool_name });
-        tldrContextInject(input);
-      } catch {
-        allowTool(HOOK_TLDR_INJECT);
-      }
-    });
+// ─────────────────────────────────────────────────────────────────────────────
+// Daemon Handler Registration
+// ─────────────────────────────────────────────────────────────────────────────
 
-  context
-    .command('edit-inject')
-    .description('Inject file structure before edits (PreToolUse:Edit)')
-    .action(async () => {
-      try {
-        const input = await readHookInput();
-        logHookStart(HOOK_EDIT_INJECT, { tool: input.tool_name, file: input.tool_input?.file_path });
-        editContextInject(input);
-      } catch {
-        allowTool(HOOK_EDIT_INJECT);
-      }
-    });
-
-  context
-    .command('arch-inject')
-    .description('Inject architecture layers for planning (PreToolUse:Task)')
-    .action(async () => {
-      try {
-        const input = await readHookInput();
-        logHookStart(HOOK_ARCH_INJECT, { tool: input.tool_name });
-        archContextInject(input);
-      } catch {
-        allowTool(HOOK_ARCH_INJECT);
-      }
-    });
-
-  context
-    .command('signature')
-    .description('Inject function signatures for Edit (PreToolUse:Edit)')
-    .action(async () => {
-      try {
-        const input = await readHookInput();
-        logHookStart(HOOK_SIGNATURE, { tool: input.tool_name, file: input.tool_input?.file_path });
-        signatureHelper(input);
-      } catch {
-        allowTool(HOOK_SIGNATURE);
-      }
-    });
-
-  // PostToolUse hooks
-  context
-    .command('diagnostics')
-    .description('Run TLDR diagnostics after edits (PostToolUse:Edit|Write)')
-    .action(async () => {
-      try {
-        const input = await readHookInput();
-        logHookStart(HOOK_DIAGNOSTICS, { tool: input.tool_name, file: input.tool_input?.file_path });
-        postEditDiagnostics(input);
-      } catch {
-        allowTool(HOOK_DIAGNOSTICS);
-      }
-    });
-
-  context
-    .command('import-validate')
-    .description('Validate imports after edits (PostToolUse:Edit|Write)')
-    .action(async () => {
-      try {
-        const input = await readHookInput();
-        logHookStart(HOOK_IMPORT_VALIDATE, { tool: input.tool_name, file: input.tool_input?.file_path });
-        importValidator(input);
-      } catch {
-        allowTool(HOOK_IMPORT_VALIDATE);
-      }
-    });
-
-  context
-    .command('edit-notify')
-    .description('Notify TLDR daemon of file changes (PostToolUse:Edit|Write)')
-    .action(async () => {
-      try {
-        const input = await readHookInput();
-        logHookStart(HOOK_EDIT_NOTIFY, { tool: input.tool_name, file: input.tool_input?.file_path });
-        await editNotify(input);
-      } catch {
-        allowTool(HOOK_EDIT_NOTIFY);
-      }
-    });
-
-  // TLDR enforcement hooks
-  context
-    .command('read-enforcer')
-    .description('Enforce TLDR for large code files (PreToolUse:Read)')
-    .action(async () => {
-      try {
-        const input = await readHookInput();
-        logHookStart(HOOK_READ_ENFORCER, { tool: input.tool_name, file: input.tool_input?.file_path });
-        tldrReadEnforcer(input);
-      } catch {
-        allowTool(HOOK_READ_ENFORCER);
-      }
-    });
-
-  context
-    .command('search-router')
-    .description('Route searches to optimal tool (PreToolUse:Grep)')
-    .action(async () => {
-      try {
-        const input = await readHookInput();
-        logHookStart(HOOK_SEARCH_ROUTER, { tool: input.tool_name, pattern: input.tool_input?.pattern });
-        smartSearchRouter(input);
-      } catch {
-        allowTool(HOOK_SEARCH_ROUTER);
-      }
-    });
-
-  // UserPromptSubmit hooks
-  context
-    .command('impact-refactor')
-    .description('Show impact analysis for refactoring (UserPromptSubmit)')
-    .action(async () => {
-      try {
-        const input = await readHookInput();
-        logHookStart(HOOK_IMPACT_REFACTOR, { prompt: (input.tool_input?.prompt as string)?.slice(0, 50) });
-        impactRefactor(input);
-      } catch {
-        process.exit(0);
-      }
-    });
+/**
+ * Register handlers for daemon mode.
+ * The daemon intercepts stdout and process.exit(), so handlers run unchanged.
+ */
+export function registerDaemonHandlers(register: RegisterFn): void {
+  registerCategoryForDaemon(category, register);
 }

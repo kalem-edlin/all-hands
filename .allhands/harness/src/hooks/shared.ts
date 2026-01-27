@@ -7,6 +7,7 @@
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
+import type { Command } from 'commander';
 import { logHookStart, logHookSuccess } from '../lib/trace-store.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -536,7 +537,12 @@ export interface SpawnSettings {
 }
 
 /** Project settings structure (.allhands/settings.json) */
+export interface DaemonSettings {
+  enabled?: boolean;
+}
+
 export interface ProjectSettings {
+  daemon?: DaemonSettings;
   validation?: ValidationSettings;
   git?: GitSettings;
   tldr?: TldrSettings;
@@ -631,6 +637,114 @@ export function loadSearchContext(sessionId: string): SearchContext | null {
     return context;
   } catch {
     return null;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Declarative Hook Definitions
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Error fallback strategies for when a hook throws */
+export type ErrorFallback =
+  | { type: 'allowTool' }
+  | { type: 'outputStopHook'; decision: 'approve' | 'block' }
+  | { type: 'outputPreCompact' }
+  | { type: 'continue' }
+  | { type: 'silent' };
+
+/** Single hook definition */
+export interface HookDefinition {
+  /** Hook name (e.g., 'agent-stop') */
+  name: string;
+  /** Description for CLI help */
+  description: string;
+  /** Handler function */
+  handler: (input: HookInput) => void | Promise<void>;
+  /** Error fallback strategy (default: silent exit) */
+  errorFallback?: ErrorFallback;
+  /** Optional payload generator for trace logging */
+  logPayload?: (input: HookInput) => Record<string, unknown>;
+}
+
+/** Category of related hooks */
+export interface HookCategory {
+  /** Category name (e.g., 'lifecycle') */
+  name: string;
+  /** Description for CLI help */
+  description: string;
+  /** Hooks in this category */
+  hooks: HookDefinition[];
+}
+
+/** Type for daemon handler registration function */
+export type RegisterFn = (category: string, name: string, handler: (input: HookInput) => void | Promise<void>) => void;
+
+/**
+ * Execute error fallback strategy.
+ */
+function executeErrorFallback(fallback: ErrorFallback | undefined, hookName: string): never {
+  if (!fallback) {
+    // Default: silent exit
+    process.exit(0);
+  }
+
+  switch (fallback.type) {
+    case 'allowTool':
+      logHookSuccess(hookName, { action: 'allow', error: true });
+      process.exit(0);
+    case 'outputStopHook':
+      logHookSuccess(hookName, { action: fallback.decision, error: true });
+      console.log(JSON.stringify({ decision: fallback.decision }));
+      process.exit(0);
+    case 'outputPreCompact':
+      logHookSuccess(hookName, { action: 'continue', error: true });
+      console.log(JSON.stringify({ continue: true }));
+      process.exit(0);
+    case 'continue':
+      logHookSuccess(hookName, { action: 'continue', error: true });
+      console.log(JSON.stringify({ continue: true }));
+      process.exit(0);
+    case 'silent':
+    default:
+      process.exit(0);
+  }
+}
+
+/**
+ * Register a hook category to Commander.js.
+ * Creates subcommands with consistent error handling and trace logging.
+ */
+export function registerCategory(parent: Command, category: HookCategory): void {
+  const cmd = parent
+    .command(category.name)
+    .description(category.description);
+
+  for (const hook of category.hooks) {
+    const hookName = `${category.name} ${hook.name}`;
+
+    cmd
+      .command(hook.name)
+      .description(hook.description)
+      .action(async () => {
+        try {
+          const input = await readHookInput();
+          const payload = hook.logPayload ? hook.logPayload(input) : { tool: input.tool_name };
+          logHookStart(hookName, payload);
+          await hook.handler(input);
+        } catch {
+          executeErrorFallback(hook.errorFallback, hookName);
+        }
+      });
+  }
+}
+
+/**
+ * Register a hook category for daemon mode.
+ * Handlers are called directly with input (daemon manages I/O).
+ */
+export function registerCategoryForDaemon(category: HookCategory, register: RegisterFn): void {
+  for (const hook of category.hooks) {
+    register(category.name, hook.name, hook.handler);
   }
 }
 

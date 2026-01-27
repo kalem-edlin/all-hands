@@ -9,7 +9,15 @@
 import { execSync } from 'child_process';
 import { appendFileSync, existsSync } from 'fs';
 import type { Command } from 'commander';
-import { HookInput, outputStopHook, outputPreCompact, readHookInput } from './shared.js';
+import {
+  HookInput,
+  HookCategory,
+  RegisterFn,
+  outputStopHook,
+  outputPreCompact,
+  registerCategory,
+  registerCategoryForDaemon,
+} from './shared.js';
 import { parseTranscript, buildCompactionMessage } from './transcript-parser.js';
 import { sendNotification } from '../lib/notification.js';
 import { killWindow, SESSION_NAME, windowExists, getCurrentSession } from '../lib/tmux.js';
@@ -17,7 +25,6 @@ import { getPromptByNumber } from '../lib/prompts.js';
 import { getCurrentBranch, sanitizeBranchForDir } from '../lib/planning.js';
 import { getSpecForBranch } from '../lib/specs.js';
 import { ask } from '../lib/llm.js';
-import { logHookStart, logHookSuccess } from '../lib/trace-store.js';
 
 const HOOK_AGENT_STOP = 'lifecycle agent-stop';
 const HOOK_AGENT_COMPACT = 'lifecycle agent-compact';
@@ -248,6 +255,35 @@ export async function handleAgentCompact(input: HookInput): Promise<void> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Hook Category Definition
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Lifecycle hooks category */
+export const category: HookCategory = {
+  name: 'lifecycle',
+  description: 'Lifecycle hooks (Stop, PreCompact)',
+  hooks: [
+    {
+      name: 'agent-stop',
+      description: 'Handle agent stop event',
+      handler: handleAgentStop,
+      errorFallback: { type: 'outputStopHook', decision: 'approve' },
+      logPayload: () => ({ agentId: process.env.AGENT_ID }),
+    },
+    {
+      name: 'agent-compact',
+      description: 'Handle pre-compaction event',
+      handler: handleAgentCompact,
+      errorFallback: { type: 'continue' },
+      logPayload: () => ({
+        agentId: process.env.AGENT_ID,
+        promptNumber: process.env.PROMPT_NUMBER,
+      }),
+    },
+  ],
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Command Registration
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -255,42 +291,16 @@ export async function handleAgentCompact(input: HookInput): Promise<void> {
  * Register lifecycle hook subcommands.
  */
 export function register(parent: Command): void {
-  const lifecycle = parent
-    .command('lifecycle')
-    .description('Lifecycle hooks (Stop, PreCompact)');
+  registerCategory(parent, category);
+}
 
-  lifecycle
-    .command('agent-stop')
-    .description('Handle agent stop event')
-    .action(async () => {
-      try {
-        const input = await readHookInput();
-        logHookStart(HOOK_AGENT_STOP, { agentId: process.env.AGENT_ID });
-        handleAgentStop(input);
-      } catch {
-        // On error, approve stop
-        logHookSuccess(HOOK_AGENT_STOP, { action: 'approve', error: true });
-        console.log(JSON.stringify({ decision: 'approve' }));
-        process.exit(0);
-      }
-    });
+// ─────────────────────────────────────────────────────────────────────────────
+// Daemon Handler Registration
+// ─────────────────────────────────────────────────────────────────────────────
 
-  lifecycle
-    .command('agent-compact')
-    .description('Handle pre-compaction event')
-    .action(async () => {
-      try {
-        const input = await readHookInput();
-        logHookStart(HOOK_AGENT_COMPACT, {
-          agentId: process.env.AGENT_ID,
-          promptNumber: process.env.PROMPT_NUMBER,
-        });
-        await handleAgentCompact(input);
-      } catch {
-        // On error, continue without context
-        logHookSuccess(HOOK_AGENT_COMPACT, { action: 'continue', error: true });
-        console.log(JSON.stringify({ continue: true }));
-        process.exit(0);
-      }
-    });
+/**
+ * Register handlers for daemon mode.
+ */
+export function registerDaemonHandlers(register: RegisterFn): void {
+  registerCategoryForDaemon(category, register);
 }

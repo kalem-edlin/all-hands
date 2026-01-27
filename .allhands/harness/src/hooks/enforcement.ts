@@ -8,8 +8,15 @@
  */
 
 import type { Command } from 'commander';
-import { logHookStart } from '../lib/trace-store.js';
-import { HookInput, allowTool, denyTool, readHookInput } from './shared.js';
+import {
+  HookInput,
+  HookCategory,
+  RegisterFn,
+  allowTool,
+  denyTool,
+  registerCategory,
+  registerCategoryForDaemon,
+} from './shared.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants
@@ -108,6 +115,39 @@ export function enforceResearchSearch(_input: HookInput): void {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Hook Category Definition
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Enforcement hooks category */
+export const category: HookCategory = {
+  name: 'enforcement',
+  description: 'Enforcement hooks (PreToolUse)',
+  hooks: [
+    {
+      name: 'github-url',
+      description: 'Block GitHub URLs in fetch commands',
+      handler: enforceGitHubUrl,
+      errorFallback: { type: 'allowTool' },
+      logPayload: (input) => ({ tool: input.tool_name }),
+    },
+    {
+      name: 'research-fetch',
+      description: 'Block WebFetch and suggest `ah tavily extract "<url>"` instead',
+      handler: enforceResearchFetch,
+      errorFallback: { type: 'allowTool' },
+      logPayload: (input) => ({ tool: input.tool_name }),
+    },
+    {
+      name: 'research-search',
+      description: 'Block WebSearch and suggest `ah perplexity research "<query>"` instead',
+      handler: enforceResearchSearch,
+      errorFallback: { type: 'allowTool' },
+      logPayload: (input) => ({ tool: input.tool_name }),
+    },
+  ],
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Command Registration
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -115,46 +155,16 @@ export function enforceResearchSearch(_input: HookInput): void {
  * Register enforcement hook subcommands.
  */
 export function register(parent: Command): void {
-  const enforcement = parent
-    .command('enforcement')
-    .description('Enforcement hooks (PreToolUse)');
+  registerCategory(parent, category);
+}
 
-  enforcement
-    .command('github-url')
-    .description('Block GitHub URLs in fetch commands')
-    .action(async () => {
-      try {
-        const input = await readHookInput();
-        logHookStart(HOOK_GITHUB_URL, { tool: input.tool_name });
-        enforceGitHubUrl(input);
-      } catch {
-        allowTool(HOOK_GITHUB_URL);
-      }
-    });
+// ─────────────────────────────────────────────────────────────────────────────
+// Daemon Handler Registration
+// ─────────────────────────────────────────────────────────────────────────────
 
-  enforcement
-    .command('research-fetch')
-    .description('Block WebFetch and suggest `ah tavily extract "<url>"` instead')
-    .action(async () => {
-      try {
-        const input = await readHookInput();
-        logHookStart(HOOK_RESEARCH_FETCH, { tool: input.tool_name });
-        enforceResearchFetch(input);
-      } catch {
-        allowTool(HOOK_RESEARCH_FETCH);
-      }
-    });
-
-  enforcement
-    .command('research-search')
-    .description('Block WebSearch and suggest `ah perplexity research "<query>"` instead')
-    .action(async () => {
-      try {
-        const input = await readHookInput();
-        logHookStart(HOOK_RESEARCH_SEARCH, { tool: input.tool_name });
-        enforceResearchSearch(input);
-      } catch {
-        allowTool(HOOK_RESEARCH_SEARCH);
-      }
-    });
+/**
+ * Register handlers for daemon mode.
+ */
+export function registerDaemonHandlers(register: RegisterFn): void {
+  registerCategoryForDaemon(category, register);
 }
