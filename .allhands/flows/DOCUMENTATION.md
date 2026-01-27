@@ -7,6 +7,7 @@ Engineering knowledge comes from prompts, commit messages, and alignment docs wh
 </goal>
 
 <constraints>
+- MUST verify clean working tree before proceeding (see Pre-flight Check)
 - MUST confirm domains with user before spawning discovery agents
 - MUST run `ah docs validate --json` at start of both modes to identify gaps
 - MUST run `ah knowledge docs reindex` on completion
@@ -14,6 +15,22 @@ Engineering knowledge comes from prompts, commit messages, and alignment docs wh
 - NEVER write command/installation guides - those belong in README.md files
 - NEVER write code snippets or examples - use `[ref:file:Symbol]` file references instead
 </constraints>
+
+## Pre-flight Check
+
+Before any documentation work, verify the git working tree is clean:
+
+```bash
+git status --porcelain
+```
+
+If output is non-empty, **abort with error**:
+> "Uncommitted changes detected. Documentation requires a clean working tree because file references use git commit hashes. Please commit or stash your changes before running documentation."
+
+**Why this matters:**
+- File references use `[ref:file:symbol:hash]` format where hash comes from git
+- Uncommitted files have no git hash → finalize fails
+- Modified files get stale hashes → refs become invalid immediately after commit
 
 ## Mode Detection
 
