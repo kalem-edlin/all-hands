@@ -1,7 +1,20 @@
 {
   "$schema": "./harness/src/schemas/settings.schema.json",
+  "daemon": {
+    "enabled": true
+  },
   "git": {
     "baseBranch": "main"
+  },
+  "emergent": {
+    "hypothesisDomains": [
+      "testing",
+      "stability",
+      "performance",
+      "feature",
+      "ux",
+      "integration"
+    ]
   },
   "validation": {
     "format": {

@@ -128,6 +128,37 @@
           "minimum": 1,
           "maximum": 10,
           "description": "Maximum concurrent executor agents when parallel mode is enabled"
+        },
+        "promptScopedAutocompactAt": {
+          "type": "integer",
+          "default": 65,
+          "description": "Autocompact threshold percentage for prompt-scoped agents"
+        }
+      }
+    },
+    "emergent": {
+      "type": "object",
+      "description": "Emergent refinement agent settings",
+      "properties": {
+        "hypothesisDomains": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Work domains available to emergent refinement agents. Agents diversify across these to discover valuable improvements.",
+          "examples": [
+            ["testing", "stability", "performance", "feature", "ux", "integration"],
+            ["reproduction", "diagnosis", "stability", "testing"]
+          ]
+        }
+      }
+    },
+    "daemon": {
+      "type": "object",
+      "description": "Background daemon settings",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable the MCP daemon for background services"
         }
       }
     }

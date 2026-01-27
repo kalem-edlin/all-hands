@@ -26,13 +26,14 @@ import { getHubWindowId, clearTuiSession, getSpawnedWindows } from '../lib/sessi
 import { KnowledgeService } from '../lib/knowledge.js';
 import { validateDocs } from '../lib/docs-validation.js';
 import { loadAllProfiles } from '../lib/opencode/index.js';
-import { logTuiError, clearLogs } from '../lib/trace-store.js';
+import { logTuiError, logTuiLifecycle, clearLogs } from '../lib/trace-store.js';
 import { loadAllPrompts, type PromptFile } from '../lib/prompts.js';
 import { readStatus, sanitizeBranchForDir, planningDirExists } from '../lib/planning.js';
 import { loadAllSpecs, specsToModalItems, type SpecFile } from '../lib/specs.js';
 import { loadAllFlows, flowsToModalItems } from '../lib/flows.js';
 import { isTldrInstalled, hasSemanticIndex, needsSemanticRebuild, buildSemanticIndexAsync } from '../lib/tldr.js';
 import { loadProjectSettings } from '../hooks/shared.js';
+import { CLIDaemon } from '../lib/cli-daemon.js';
 import { join } from 'path';
 
 export type PaneId = 'actions' | 'prompts' | 'status';
@@ -90,6 +91,9 @@ export class TUI {
 
   // Event loop daemon
   private eventLoop: EventLoop | null = null;
+
+  // CLI daemon for fast hook execution
+  private cliDaemon: CLIDaemon | null = null;
 
   // Original output functions for restoration on destroy
   private originalStdoutWrite: typeof process.stdout.write | null = null;
@@ -298,6 +302,19 @@ export class TUI {
       });
       this.eventLoop.start();
 
+      // Start CLI daemon for fast hook execution (if enabled in settings)
+      const settings = loadProjectSettings();
+      const daemonEnabled = settings?.daemon?.enabled !== false; // default true
+      if (daemonEnabled) {
+        this.cliDaemon = new CLIDaemon(options.cwd);
+        this.cliDaemon.start().then(() => {
+          this.log(`CLI daemon ready (${this.cliDaemon?.getHandlerCount() ?? 0} handlers)`);
+          this.render();
+        }).catch((e) => {
+          this.log(`CLI daemon failed: ${e instanceof Error ? e.message : e}`);
+        });
+      }
+
       // Start background indexing (non-blocking)
       this.startBackgroundIndexing();
     }
@@ -389,15 +406,24 @@ export class TUI {
       const roadmapExists = service.indexExists('roadmap');
       const docsExists = service.indexExists('docs');
 
+      // Log indexing decision to trace for debugging
+      logTuiLifecycle('indexing.start', {
+        roadmapExists,
+        docsExists,
+        strategy: (!roadmapExists || !docsExists) ? 'full' : 'incremental',
+      }, this.options.cwd);
+
       if (!roadmapExists || !docsExists) {
         // Cold start: full index required
         if (!roadmapExists) {
           this.log('Building roadmap index (first run)...');
+          logTuiLifecycle('indexing.full', { index: 'roadmap', reason: 'index_missing' }, this.options.cwd);
           this.render();
           await service.reindexAll('roadmap');
         }
         if (!docsExists) {
           this.log('Building docs index (first run)...');
+          logTuiLifecycle('indexing.full', { index: 'docs', reason: 'index_missing' }, this.options.cwd);
           this.render();
           await service.reindexAll('docs');
         }
@@ -406,22 +432,36 @@ export class TUI {
         const roadmapChanges = service.getChangesFromGit('roadmap');
         const docsChanges = service.getChangesFromGit('docs');
 
+        // Log change detection results
+        logTuiLifecycle('indexing.changes_detected', {
+          roadmapChanges: roadmapChanges.length,
+          docsChanges: docsChanges.length,
+          roadmapChangeFiles: roadmapChanges.slice(0, 10).map(c => c.path),
+          docsChangeFiles: docsChanges.slice(0, 10).map(c => c.path),
+        }, this.options.cwd);
+
         if (roadmapChanges.length > 0) {
           this.log(`Updating roadmap index (${roadmapChanges.length} changes)...`);
+          logTuiLifecycle('indexing.incremental', { index: 'roadmap', changeCount: roadmapChanges.length }, this.options.cwd);
           this.render();
           await service.reindexFromChanges('roadmap', roadmapChanges);
         } else {
           this.log('Roadmap index up to date ✓');
+          logTuiLifecycle('indexing.skip', { index: 'roadmap', reason: 'no_changes' }, this.options.cwd);
         }
 
         if (docsChanges.length > 0) {
           this.log(`Updating docs index (${docsChanges.length} changes)...`);
+          logTuiLifecycle('indexing.incremental', { index: 'docs', changeCount: docsChanges.length }, this.options.cwd);
           this.render();
           await service.reindexFromChanges('docs', docsChanges);
         } else {
           this.log('Docs index up to date ✓');
+          logTuiLifecycle('indexing.skip', { index: 'docs', reason: 'no_changes' }, this.options.cwd);
         }
       }
+
+      logTuiLifecycle('indexing.complete', {}, this.options.cwd);
 
       // Run docs validation
       this.log('Validating documentation...');
@@ -1291,6 +1331,11 @@ export class TUI {
   }
 
   public destroy(): void {
+    // Stop CLI daemon
+    if (this.cliDaemon) {
+      this.cliDaemon.stop();
+    }
+
     // Stop event loop daemon
     if (this.eventLoop) {
       this.eventLoop.stop();
