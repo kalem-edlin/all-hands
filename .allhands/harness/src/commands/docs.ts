@@ -1,14 +1,13 @@
 /**
- * Documentation commands - symbol reference formatting and validation.
+ * Documentation commands - validation and reference finalization.
  *
  * Uses ctags for symbol lookup (instead of AST parsing) for broader language support
  * and simpler implementation.
  *
  * Commands:
- *   ah docs format-reference <file> [symbol]  - Create a validated reference
- *   ah docs validate [--path <path>]          - Validate all refs in docs/
- *   ah docs complexity <path>                 - Get complexity metrics
- *   ah docs tree <path>                       - Get tree with doc coverage
+ *   ah docs validate [--path <path>]  - Validate all refs in docs/
+ *   ah docs finalize [--path <path>]  - Finalize placeholder refs with hashes
+ *   ah docs tree <path>               - Get tree with doc coverage
  */
 
 import { Command } from "commander";
@@ -25,112 +24,13 @@ import {
   checkCtagsAvailable,
   findSymbolInFile,
   generateCtagsIndex,
-  getFileSymbols,
 } from "../lib/ctags.js";
 import {
-  getMostRecentHashForFile,
   batchGetFileHashes,
+  findMarkdownFiles,
+  isCodeFile,
   validateDocs,
 } from "../lib/docs-validation.js";
-
-/**
- * Format a symbol or file reference with git hash.
- *
- * Output: [ref:file:symbol:hash] for symbol refs
- * Output: [ref:file::hash] for file-only refs
- */
-async function formatReference(
-  file: string,
-  symbol?: string
-): Promise<CommandResult> {
-  const projectRoot = getProjectRoot();
-  const absolutePath = file.startsWith("/") ? file : join(projectRoot, file);
-  const relativePath = relative(projectRoot, absolutePath);
-
-  // Check file exists
-  if (!existsSync(absolutePath)) {
-    return {
-      success: false,
-      error: `file_not_found: File not found: ${relativePath}`,
-    };
-  }
-
-  // Get file hash
-  const { hash: fileHash, success: hashSuccess } = getMostRecentHashForFile(
-    absolutePath,
-    projectRoot
-  );
-
-  if (!hashSuccess || fileHash === "0000000") {
-    return {
-      success: false,
-      error: `uncommitted_file: File ${relativePath} has uncommitted changes or no git history`,
-      details: "Commit all changes before generating references: git add -A && git commit",
-    };
-  }
-
-  // File-only reference (no symbol)
-  if (!symbol) {
-    const reference = `[ref:${relativePath}::${fileHash}]`;
-    return {
-      success: true,
-      data: {
-        reference,
-        file: relativePath,
-        symbol: null,
-        hash: fileHash,
-        type: "file-only",
-      },
-    };
-  }
-
-  // Symbol reference - check ctags is available
-  const ctagsCheck = checkCtagsAvailable();
-  if (!ctagsCheck.available) {
-    return {
-      success: false,
-      error: `ctags_unavailable: ${ctagsCheck.error}`,
-    };
-  }
-
-  // Find symbol in file
-  const entry = findSymbolInFile(absolutePath, symbol, projectRoot);
-
-  if (!entry) {
-    // List available symbols for helpful error
-    const { entries: allSymbols } = await import("../lib/ctags.js").then((m) =>
-      m.generateFileCtags(absolutePath, projectRoot)
-    );
-
-    const symbolList = allSymbols
-      .slice(0, 10)
-      .map((s) => `  - ${s.name} (${s.kind}, line ${s.line})`)
-      .join("\n");
-
-    return {
-      success: false,
-      error: `symbol_not_found: Symbol '${symbol}' not found in ${relativePath}`,
-      details: allSymbols.length > 0
-        ? `Available symbols:\n${symbolList}${allSymbols.length > 10 ? `\n  ... and ${allSymbols.length - 10} more` : ""}`
-        : "No symbols found in file (may be unsupported file type)",
-    };
-  }
-
-  const reference = `[ref:${relativePath}:${symbol}:${fileHash}]`;
-
-  return {
-    success: true,
-    data: {
-      reference,
-      file: relativePath,
-      symbol,
-      symbol_type: entry.kind,
-      line: entry.line,
-      hash: fileHash,
-      type: "symbol",
-    },
-  };
-}
 
 /**
  * Validate all documentation references.
@@ -157,142 +57,6 @@ async function validate(docsPath: string, options?: { useCache?: boolean }): Pro
 
   // Consider it a success even with issues (issues are in the data)
   return { success: true, data: result };
-}
-
-/**
- * Get complexity metrics for a file or directory.
- * Uses ctags to count symbols instead of AST parsing.
- */
-async function complexity(pathArg: string): Promise<CommandResult> {
-  const projectRoot = getProjectRoot();
-  const absolutePath = pathArg.startsWith("/")
-    ? pathArg
-    : join(projectRoot, pathArg);
-  const relativePath = relative(projectRoot, absolutePath);
-
-  if (!existsSync(absolutePath)) {
-    return {
-      success: false,
-      error: `path_not_found: Path not found: ${relativePath}`,
-    };
-  }
-
-  // Check ctags availability
-  const ctagsCheck = checkCtagsAvailable();
-  if (!ctagsCheck.available) {
-    return {
-      success: false,
-      error: `ctags_unavailable: ${ctagsCheck.error}`,
-    };
-  }
-
-  const stat = statSync(absolutePath);
-
-  if (stat.isFile()) {
-    // Single file complexity
-    const content = readFileSync(absolutePath, "utf-8");
-    const lines = content.split("\n").length;
-
-    // Get symbols via ctags
-    const { index } = generateCtagsIndex(projectRoot, { target: relativePath });
-    const symbols = getFileSymbols(index, relativePath);
-
-    const functions = symbols.filter(
-      (s) => s.kind === "function" || s.kind === "method"
-    ).length;
-    const classes = symbols.filter((s) => s.kind === "class").length;
-    const interfaces = symbols.filter(
-      (s) => s.kind === "interface" || s.kind === "type"
-    ).length;
-
-    // Count imports/exports with regex (simple heuristic)
-    const importMatches = content.match(/^import\s/gm);
-    const exportMatches = content.match(/^export\s/gm);
-
-    return {
-      success: true,
-      data: {
-        path: relativePath,
-        type: "file",
-        metrics: {
-          lines,
-          functions,
-          classes,
-          interfaces,
-          imports: importMatches?.length || 0,
-          exports: exportMatches?.length || 0,
-          total_symbols: symbols.length,
-        },
-        estimated_tokens: Math.ceil(lines * 10),
-      },
-    };
-  }
-
-  // Directory complexity
-  const { index, entryCount } = generateCtagsIndex(projectRoot, {
-    target: relativePath,
-  });
-
-  // Aggregate stats
-  let totalLines = 0;
-  let totalFunctions = 0;
-  let totalClasses = 0;
-  let totalInterfaces = 0;
-  let fileCount = 0;
-
-  // Find source files and count lines
-  const countDir = (dir: string): void => {
-    const entries = readdirSync(dir);
-    for (const entry of entries) {
-      if (entry.startsWith(".") || entry === "node_modules") continue;
-      const fullPath = join(dir, entry);
-      const entryStat = statSync(fullPath);
-      if (entryStat.isDirectory()) {
-        countDir(fullPath);
-      } else {
-        const ext = extname(entry);
-        if ([".ts", ".tsx", ".js", ".jsx", ".py", ".go", ".rs", ".java"].includes(ext)) {
-          fileCount++;
-          const content = readFileSync(fullPath, "utf-8");
-          totalLines += content.split("\n").length;
-        }
-      }
-    }
-  };
-
-  countDir(absolutePath);
-
-  // Count symbol types from index
-  for (const fileMap of index.values()) {
-    for (const entries of fileMap.values()) {
-      for (const entry of entries) {
-        if (entry.kind === "function" || entry.kind === "method") {
-          totalFunctions++;
-        } else if (entry.kind === "class") {
-          totalClasses++;
-        } else if (entry.kind === "interface" || entry.kind === "type") {
-          totalInterfaces++;
-        }
-      }
-    }
-  }
-
-  return {
-    success: true,
-    data: {
-      path: relativePath,
-      type: "directory",
-      file_count: fileCount,
-      metrics: {
-        lines: totalLines,
-        functions: totalFunctions,
-        classes: totalClasses,
-        interfaces: totalInterfaces,
-        total_symbols: entryCount,
-      },
-      estimated_tokens: Math.ceil(totalLines * 10),
-    },
-  };
 }
 
 /**
@@ -424,41 +188,25 @@ async function tree(pathArg: string, maxDepth: number): Promise<CommandResult> {
 /**
  * Placeholder ref pattern - matches [ref:file:symbol] without hash
  */
-const PLACEHOLDER_REF_PATTERN = /\[ref:([^:\]]+):([^\]]+)\]/g;
+// Matches both [ref:file:symbol] and [ref:file] (file-only refs)
+const PLACEHOLDER_REF_PATTERN = /\[ref:([^:\]]+)(?::([^\]]*))?\]/g;
 
 /**
- * Finalize a documentation file by replacing placeholder refs with full refs.
- * This allows writers to use [ref:file:symbol] syntax without hashes during writing,
- * then batch-process all refs in a single pass.
+ * Finalize a single documentation file by replacing placeholder refs with full refs.
  */
-async function finalize(docPath: string): Promise<CommandResult> {
-  const projectRoot = getProjectRoot();
-  const absolutePath = docPath.startsWith("/") ? docPath : join(projectRoot, docPath);
+function finalizeSingleFile(
+  absolutePath: string,
+  projectRoot: string,
+  hashCache: Map<string, { success: boolean; hash?: string; error?: string }>
+): { path: string; replacements: number; replaced: Array<{ from: string; to: string }>; errors: Array<{ placeholder: string; reason: string }> } {
   const relativePath = relative(projectRoot, absolutePath);
-
-  if (!existsSync(absolutePath)) {
-    return {
-      success: false,
-      error: `file_not_found: File not found: ${relativePath}`,
-    };
-  }
-
-  // Check ctags availability
-  const ctagsCheck = checkCtagsAvailable();
-  if (!ctagsCheck.available) {
-    return {
-      success: false,
-      error: `ctags_unavailable: ${ctagsCheck.error}`,
-    };
-  }
-
   const content = readFileSync(absolutePath, "utf-8");
 
-  // Find all placeholder refs
-  const placeholders: Array<{ match: string; file: string; symbol: string }> = [];
+  // Find all placeholder refs (symbol may be undefined for file-only refs)
+  const placeholders: Array<{ match: string; file: string; symbol: string | undefined }> = [];
   let match;
-  PLACEHOLDER_REF_PATTERN.lastIndex = 0;
-  while ((match = PLACEHOLDER_REF_PATTERN.exec(content)) !== null) {
+  const pattern = new RegExp(PLACEHOLDER_REF_PATTERN.source, "g");
+  while ((match = pattern.exec(content)) !== null) {
     // Skip if it already looks like a full ref (has 3 colons indicating hash)
     if (match[0].split(":").length > 3) continue;
     placeholders.push({
@@ -469,23 +217,8 @@ async function finalize(docPath: string): Promise<CommandResult> {
   }
 
   if (placeholders.length === 0) {
-    return {
-      success: true,
-      data: {
-        message: "No placeholder refs found",
-        path: relativePath,
-        replacements: 0,
-      },
-    };
+    return { path: relativePath, replacements: 0, replaced: [], errors: [] };
   }
-
-  // Batch get file hashes
-  const uniqueFiles = [...new Set(placeholders.map((p) => p.file))];
-  const absoluteFiles = uniqueFiles.map((f) => join(projectRoot, f));
-  const hashCache = batchGetFileHashes(absoluteFiles, projectRoot);
-
-  // Generate ctags index for symbol lookup (used by findSymbolInFile)
-  generateCtagsIndex(projectRoot);
 
   // Process each placeholder
   const errors: Array<{ placeholder: string; reason: string }> = [];
@@ -522,7 +255,15 @@ async function finalize(docPath: string): Promise<CommandResult> {
       continue;
     }
 
-    // For symbol refs, verify symbol exists
+    // For non-code files (markdown, yaml, json, etc.), treat symbol as a label (no ctags lookup)
+    if (!isCodeFile(placeholder.file)) {
+      const fullRef = `[ref:${placeholder.file}:${placeholder.symbol}:${hashResult.hash}]`;
+      finalizedContent = finalizedContent.replace(placeholder.match, fullRef);
+      replacements.push({ from: placeholder.match, to: fullRef });
+      continue;
+    }
+
+    // For code files with symbol refs, verify symbol exists via ctags
     const entry = findSymbolInFile(absoluteFilePath, placeholder.symbol, projectRoot);
     if (!entry) {
       errors.push({
@@ -543,13 +284,105 @@ async function finalize(docPath: string): Promise<CommandResult> {
     writeFileSync(absolutePath, finalizedContent, "utf-8");
   }
 
+  return { path: relativePath, replacements: replacements.length, replaced: replacements, errors };
+}
+
+/**
+ * Finalize documentation files by replacing placeholder refs with full refs.
+ * Supports both single file and directory (batch) operation.
+ * This allows writers to use [ref:file:symbol] syntax without hashes during writing,
+ * then batch-process all refs in a single pass.
+ */
+async function finalize(docsPath: string): Promise<CommandResult> {
+  const projectRoot = getProjectRoot();
+  const absolutePath = docsPath.startsWith("/") ? docsPath : join(projectRoot, docsPath);
+  const relativePath = relative(projectRoot, absolutePath);
+
+  if (!existsSync(absolutePath)) {
+    return {
+      success: false,
+      error: `path_not_found: Path not found: ${relativePath}`,
+    };
+  }
+
+  // Check ctags availability
+  const ctagsCheck = checkCtagsAvailable();
+  if (!ctagsCheck.available) {
+    return {
+      success: false,
+      error: `ctags_unavailable: ${ctagsCheck.error}`,
+    };
+  }
+
+  // Generate ctags index for symbol lookup
+  generateCtagsIndex(projectRoot);
+
+  // Determine if path is a file or directory
+  const stat = statSync(absolutePath);
+  const filesToProcess: string[] = stat.isDirectory()
+    ? findMarkdownFiles(absolutePath, false)
+    : [absolutePath];
+
+  if (filesToProcess.length === 0) {
+    return {
+      success: true,
+      data: {
+        message: "No markdown files found",
+        path: relativePath,
+        filesProcessed: 0,
+        totalReplacements: 0,
+      },
+    };
+  }
+
+  // Collect all placeholder refs across all files to batch hash lookup
+  const allPlaceholders: Array<{ file: string; docPath: string }> = [];
+  for (const docFile of filesToProcess) {
+    const content = readFileSync(docFile, "utf-8");
+    const pattern = new RegExp(PLACEHOLDER_REF_PATTERN.source, "g");
+    let match;
+    while ((match = pattern.exec(content)) !== null) {
+      if (match[0].split(":").length > 3) continue;
+      allPlaceholders.push({ file: match[1], docPath: docFile });
+    }
+  }
+
+  // Batch get file hashes for all referenced files
+  const uniqueFiles = [...new Set(allPlaceholders.map((p) => p.file))];
+  const absoluteFiles = uniqueFiles.map((f) => join(projectRoot, f));
+  const hashCache = batchGetFileHashes(absoluteFiles, projectRoot);
+
+  // Process each file
+  const results: Array<{ path: string; replacements: number; errors: number }> = [];
+  let totalReplacements = 0;
+  let totalErrors = 0;
+  const allErrors: Array<{ file: string; placeholder: string; reason: string }> = [];
+
+  for (const docFile of filesToProcess) {
+    const result = finalizeSingleFile(docFile, projectRoot, hashCache);
+    results.push({
+      path: result.path,
+      replacements: result.replacements,
+      errors: result.errors.length,
+    });
+    totalReplacements += result.replacements;
+    totalErrors += result.errors.length;
+    for (const err of result.errors) {
+      allErrors.push({ file: result.path, ...err });
+    }
+  }
+
+  const hasErrors = totalErrors > 0;
   return {
-    success: errors.length === 0,
+    success: !hasErrors,
+    error: hasErrors ? `Finalization had ${totalErrors} error(s) in ${allErrors.length} file(s)` : undefined,
     data: {
       path: relativePath,
-      replacements: replacements.length,
-      replaced: replacements,
-      errors: errors.length > 0 ? errors : undefined,
+      filesProcessed: filesToProcess.length,
+      totalReplacements,
+      totalErrors,
+      files: results.filter((r) => r.replacements > 0 || r.errors > 0),
+      errors: allErrors.length > 0 ? allErrors : undefined,
     },
   };
 }
@@ -559,22 +392,6 @@ async function finalize(docPath: string): Promise<CommandResult> {
  */
 export function register(program: Command): void {
   const docs = program.command("docs").description("Documentation management and validation");
-
-  // format-reference
-  const formatRefCmd = docs
-    .command("format-reference")
-    .description("Format a symbol or file reference with git hash")
-    .argument("<file>", "Path to source file")
-    .argument("[symbol]", "Symbol name (optional for file-only refs)");
-
-  addCommonOptions(formatRefCmd);
-
-  formatRefCmd.action(async (file: string, symbol: string | undefined, options) => {
-    const context = parseContext(options);
-    await executeCommand("docs:format-reference", context, () =>
-      formatReference(file, symbol)
-    );
-  });
 
   // validate
   const validateCmd = docs
@@ -590,19 +407,6 @@ export function register(program: Command): void {
     await executeCommand("docs:validate", context, () =>
       validate(options.path, { useCache: options.cache })
     );
-  });
-
-  // complexity
-  const complexityCmd = docs
-    .command("complexity")
-    .description("Get complexity metrics for file or directory")
-    .argument("<path>", "File or directory path");
-
-  addCommonOptions(complexityCmd);
-
-  complexityCmd.action(async (path: string, options) => {
-    const context = parseContext(options);
-    await executeCommand("docs:complexity", context, () => complexity(path));
   });
 
   // tree
@@ -624,12 +428,12 @@ export function register(program: Command): void {
   const finalizeCmd = docs
     .command("finalize")
     .description("Replace placeholder refs [ref:file:symbol] with full refs including hashes")
-    .argument("<doc-path>", "Path to documentation file to finalize");
+    .option("--path <path>", "Docs path (file or directory)", "docs/");
 
   addCommonOptions(finalizeCmd);
 
-  finalizeCmd.action(async (docPath: string, options) => {
+  finalizeCmd.action(async (options) => {
     const context = parseContext(options);
-    await executeCommand("docs:finalize", context, () => finalize(docPath));
+    await executeCommand("docs:finalize", context, () => finalize(options.path));
   });
 }

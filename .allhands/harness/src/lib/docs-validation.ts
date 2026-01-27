@@ -14,9 +14,40 @@
 import { spawnSync } from "child_process";
 import { createHash } from "crypto";
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "fs";
-import { join, relative } from "path";
+import { extname, join, relative } from "path";
 import matter from "gray-matter";
 import { CtagsIndex, generateCtagsIndex, lookupSymbol } from "./ctags.js";
+
+/**
+ * File extensions that ctags can process (programming languages).
+ * Files with other extensions are treated as non-code where symbols are just labels.
+ */
+const CODE_EXTENSIONS = new Set([
+  ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs",  // TypeScript/JavaScript
+  ".py", ".pyw",                                   // Python
+  ".go",                                           // Go
+  ".rs",                                           // Rust
+  ".java",                                         // Java
+  ".rb",                                           // Ruby
+  ".c", ".cpp", ".cc", ".cxx", ".h", ".hpp",      // C/C++
+  ".cs",                                           // C#
+  ".php",                                          // PHP
+  ".kt", ".kts",                                   // Kotlin
+  ".swift",                                        // Swift
+  ".scala",                                        // Scala
+  ".lua",                                          // Lua
+  ".sh", ".bash", ".zsh",                         // Shell scripts
+  ".vim",                                          // Vim script
+  ".el",                                           // Emacs Lisp
+]);
+
+/**
+ * Check if a file is a code file that ctags can process.
+ */
+export function isCodeFile(filePath: string): boolean {
+  const ext = extname(filePath).toLowerCase();
+  return CODE_EXTENSIONS.has(ext);
+}
 
 /**
  * Validation cache for faster repeated validation runs.
@@ -81,6 +112,12 @@ export const PLACEHOLDER_PATTERN =
   /\[ref:[^\]]+:(abc123[0-9]?|123456[0-9]?|000000[0-9]?|hash[a-f0-9]{0,4}|test[a-f0-9]{0,4})\]/gi;
 
 /**
+ * Unfinalized ref pattern - refs without hashes that need to be finalized.
+ * Matches [ref:file:symbol] or [ref:file] (no hash component).
+ */
+export const UNFINALIZED_REF_PATTERN = /\[ref:([^:\]]+)(?::([^\]]*))?\](?!:)/g;
+
+/**
  * Parsed reference from documentation.
  */
 export interface ParsedRef {
@@ -132,6 +169,7 @@ export interface DocFileIssues {
   }>;
   frontmatter_error: string | null;
   placeholder_errors: string[];
+  unfinalized_refs: string[];
   inline_code_block_count: number;
   has_capability_list_warning: boolean;
 }
@@ -150,6 +188,7 @@ export interface ValidationResult {
   stale_count: number;
   invalid_count: number;
   placeholder_error_count: number;
+  unfinalized_ref_count: number;
   inline_code_error_count: number;
   capability_list_warning_count: number;
   by_doc_file: Record<string, DocFileIssues>;
@@ -163,6 +202,12 @@ export interface ValidationResult {
   }>;
   invalid: Array<{ doc_file: string; reference: string; reason: string }>;
   placeholder_errors: Array<{
+    doc_file: string;
+    count: number;
+    examples: string[];
+    reason: string;
+  }>;
+  unfinalized_refs: Array<{
     doc_file: string;
     count: number;
     examples: string[];
@@ -366,7 +411,7 @@ export function validateFrontMatter(
 }
 
 /**
- * Detect placeholder hashes in content.
+ * Detect placeholder hashes in content (fake hashes like abc1234).
  */
 export function detectPlaceholders(content: string): string[] {
   // Reset regex state
@@ -374,6 +419,28 @@ export function detectPlaceholders(content: string): string[] {
 
   const matches = content.match(PLACEHOLDER_PATTERN);
   return matches || [];
+}
+
+/**
+ * Detect unfinalized refs in content (refs without hashes).
+ * These are refs like [ref:file:symbol] or [ref:file] that haven't been finalized.
+ */
+export function detectUnfinalizedRefs(content: string): string[] {
+  const results: string[] = [];
+  UNFINALIZED_REF_PATTERN.lastIndex = 0;
+
+  let match;
+  while ((match = UNFINALIZED_REF_PATTERN.exec(content)) !== null) {
+    const fullMatch = match[0];
+    // Check if this looks like a finalized ref (has 3+ colons with hash)
+    // Finalized refs have format [ref:file:symbol:hash] or [ref:file::hash]
+    const colonCount = (fullMatch.match(/:/g) || []).length;
+    const hasHash = /:[a-f0-9]{7,}\]$/.test(fullMatch);
+    if (!hasHash && colonCount < 3) {
+      results.push(fullMatch);
+    }
+  }
+  return results;
 }
 
 /**
@@ -483,7 +550,20 @@ export function validateRef(
     return { ...ref, state: "valid" };
   }
 
-  // Symbol reference: check symbol exists via ctags
+  // Non-code files (markdown, yaml, json, etc.): treat symbol as label, just check hash
+  if (!isCodeFile(ref.file)) {
+    if (currentHash !== ref.hash) {
+      return {
+        ...ref,
+        state: "stale",
+        reason: "File has been modified",
+        currentHash,
+      };
+    }
+    return { ...ref, state: "valid" };
+  }
+
+  // Code file symbol reference: check symbol exists via ctags
   const entries = lookupSymbol(ctagsIndex, ref.file, ref.symbol!);
 
   if (entries.length === 0) {
@@ -527,6 +607,7 @@ export function validateDocs(
     stale_count: 0,
     invalid_count: 0,
     placeholder_error_count: 0,
+    unfinalized_ref_count: 0,
     inline_code_error_count: 0,
     capability_list_warning_count: 0,
     by_doc_file: {},
@@ -534,6 +615,7 @@ export function validateDocs(
     stale: [],
     invalid: [],
     placeholder_errors: [],
+    unfinalized_refs: [],
     inline_code_errors: [],
     capability_list_warnings: [],
   };
@@ -570,6 +652,7 @@ export function validateDocs(
         invalid: [],
         frontmatter_error: null,
         placeholder_errors: [],
+        unfinalized_refs: [],
         inline_code_block_count: 0,
         has_capability_list_warning: false,
       };
@@ -628,7 +711,7 @@ export function validateDocs(
     const refs = extractRefs(content, relPath);
     allRefs.push(...refs);
 
-    // Detect placeholders
+    // Detect placeholders (fake hashes)
     const placeholders = detectPlaceholders(content);
     if (placeholders.length > 0) {
       result.placeholder_errors.push({
@@ -639,6 +722,19 @@ export function validateDocs(
       });
       getDocEntry(relPath).placeholder_errors = placeholders;
       result.placeholder_error_count++;
+    }
+
+    // Detect unfinalized refs (refs without hashes)
+    const unfinalizedRefs = detectUnfinalizedRefs(content);
+    if (unfinalizedRefs.length > 0) {
+      result.unfinalized_refs.push({
+        doc_file: relPath,
+        count: unfinalizedRefs.length,
+        examples: unfinalizedRefs.slice(0, 3),
+        reason: "Unfinalized refs detected - run 'ah docs finalize'",
+      });
+      getDocEntry(relPath).unfinalized_refs = unfinalizedRefs;
+      result.unfinalized_ref_count++;
     }
 
     // Count code blocks
@@ -718,6 +814,7 @@ export function validateDocs(
       issues.invalid.length > 0 ||
       issues.frontmatter_error !== null ||
       issues.placeholder_errors.length > 0 ||
+      issues.unfinalized_refs.length > 0 ||
       issues.inline_code_block_count > 0 ||
       issues.has_capability_list_warning;
     if (hasIssues) {
@@ -731,7 +828,8 @@ export function validateDocs(
     result.frontmatter_error_count > 0 ||
     result.stale_count > 0 ||
     result.invalid_count > 0 ||
-    result.placeholder_error_count > 0;
+    result.placeholder_error_count > 0 ||
+    result.unfinalized_ref_count > 0;
 
   if (hasErrors) {
     const parts: string[] = [];
@@ -742,6 +840,8 @@ export function validateDocs(
     if (result.stale_count > 0) parts.push(`${result.stale_count} stale refs`);
     if (result.placeholder_error_count > 0)
       parts.push(`${result.placeholder_error_count} placeholder hashes`);
+    if (result.unfinalized_ref_count > 0)
+      parts.push(`${result.unfinalized_ref_count} unfinalized refs`);
     result.message = `Validation found issues: ${parts.join(", ")}`;
   } else if (result.capability_list_warning_count > 0) {
     result.message = `Validated ${result.total_files} files with ${result.capability_list_warning_count} warnings`;

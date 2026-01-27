@@ -1,162 +1,160 @@
 <goal>
-Analyze codebase, design documentation structure, delegate writers, and finalize with READMEs. Per **Context is Precious**, view code as products with purpose, not paths to document.
+Orchestrate documentation creation and maintenance. Per **Knowledge Compounding**, docs expose engineering knowledge via file references and LSP symbols for semantic discovery. Per **Context is Precious**, delegate discovery and writing to sub-agents.
+
+Engineering knowledge comes from prompts, commit messages, and alignment docs when available (Incremental mode), otherwise inferred from the code itself (Fill-the-Gaps mode).
+
+**Execute immediately** - detect mode and proceed. Do not ask for clarification unless domain confirmation is needed.
 </goal>
 
 <constraints>
-- MUST name docs by PURPOSE ("all-hands-cli") NOT path ("src-lib")
-- MUST create directories BEFORE delegating to writers
-- MUST determine mode (Init vs Adjust) before any documentation work
-- NEVER document excluded paths (node_modules, dist, build, .next, .expo, .git, *.generated.ts, vendor)
-- NEVER assign more than 15 writer agents per run
+- MUST confirm domains with user before spawning discovery agents
+- MUST run `ah docs validate --json` at start of both modes to identify gaps
+- MUST run `ah knowledge docs reindex` on completion
+- NEVER spawn more than 10 writer agents per run
+- NEVER write command/installation guides - those belong in README.md files
+- NEVER write code snippets or examples - use `[ref:file:Symbol]` file references instead
 </constraints>
 
-## Mode Decision
+## Mode Detection
 
-Determine documentation intensity before proceeding:
+Check the message for template variables passed by the documentor agent:
 
 ```
-├─ Run `ls docs/` - no docs directory, empty, or lacking based on top level scan of codebase? → Init Mode (brownfield)
-└─ Existing docs with coverage? → Adjust Mode (incremental)
+├─ ALIGNMENT_PATH + PROMPTS_FOLDER provided? → Incremental Mode (feature branch)
+└─ Variables empty or not provided? → Fill-the-Gaps Mode (cold start or refresh)
 ```
 
-If Init Mode - read **Init Mode** section below
-If Adjust Mode - skip to **Adjust Mode** section below
+The documentor agent passes `SPEC_PATH`, `ALIGNMENT_PATH`, and `PROMPTS_FOLDER` when invoked from a spec context. Empty values mean no spec is selected.
+
+**Default behavior**: If no message/prompt is provided and no context variables are set, proceed directly with Fill-the-Gaps mode. Do not ask the user what to do - just start documenting.
 
 ---
 
-## Init Mode
+## Fill-the-Gaps Mode
 
-Full documentation effort for brownfield codebases.
+Full documentation effort for new repos or out-of-sync docs.
 
-### Detect Workspaces
-- Run `ls pnpm-workspace.yaml lerna.json package.json 2>/dev/null`
-- Parse workspace members as candidate main domains
+### Initialization
 
-### Analyze Each Domain
-- Run `ah docs tree <domain_path> --depth 3`
-- Run `ah docs complexity <domain_path>`
-- Run `ah knowledge docs search "<domain>" --metadata-only`
+1. **Initial Validation** - Run `ah docs validate --json` to identify:
+   - Invalid refs (gaps in documentation)
+   - Stale refs (out-of-sync with code)
+   - Missing frontmatter
 
-### Classify Complexity
+2. **Domain Detection**
+   - Read `.allhands/docs.json` for declared domains
+   - If not declared, infer:
+     - Run `tldr structure .` or `ah complexity .` on project root
+     - Check for monorepo markers: `pnpm-workspace.yaml`, `lerna.json`, `turbo.json`, `nx.json`
+     - If monorepo: each workspace package is a domain, plus root-level coordination docs
+     - Otherwise: identify main product areas from directory structure
+   - Present detected domains to user for confirmation
+   - If user adjusts, update `.allhands/docs.json` with confirmed domains
 
-| Type | Lines | Areas | Agents | Target Files |
-|------|-------|-------|--------|--------------|
-| Simple | <2k | few | 1 | 3-10 |
-| Medium | 2-10k | 2-4 | 1-2 | 10-30 |
-| Complex | >10k | 5+ | 2-3 | 30-60 |
-
-### Identify Subdomains
-Candidate subdomain if:
-- 5+ source files in directory
-- High complexity score
-- Distinct responsibility
-
-### Group by Feature, Not Path
-Before creating subdomain structure, identify cross-cutting features:
-
-1. **Detect feature clusters**
-   - Run `ah knowledge docs search "<feature-name>"` to find all related files
-   - A feature often spans: `commands/` (CLI surface) + `lib/` (implementation) + `hooks/` (lifecycle)
-   - These should become ONE subdomain, not three
-
-2. **Subdomain = Feature boundary**
-   - ❌ `docs/harness/commands/`, `docs/harness/lib/` (mirrors source paths)
-   - ✅ `docs/harness/semantic-search/`, `docs/harness/notifications/` (mirrors features)
-
-3. **Example clustering**
-   ```
-   Feature: "semantic-search"
-   Sources: commands/knowledge.ts, lib/semantic-search/, lib/embeddings/
-   → Subdomain: docs/harness/semantic-search/
-
-   Feature: "notifications"
-   Sources: commands/notify.ts, lib/system-notifications.ts, hooks/notifications/
-   → Subdomain: docs/harness/notifications/
+3. **Proceed to Core Flow** with:
+   ```yaml
+   mode: "fill-gaps"
+   domains: [<confirmed domains>]
+   validation_issues: <from initial validation>
+   existing_docs: []
+   session_knowledge: null
    ```
 
-4. **Within each feature subdomain**, writers create focused docs per aspect:
-   - `overview.md` - what problem this feature solves
-   - `architecture.md` - how components interact
-   - `patterns.md` - common usage patterns (if complex)
+---
 
-### Flag Critical Tech
-Check `package.json`. Flag if imported in 10+ files, defines architecture, is platform-specific, or is non-obvious choice.
+## Incremental Mode
 
-### Create Structure
-- Run `mkdir -p docs/<domain>/<subdomain>`
+Feature branch documentation with session knowledge.
 
-### Delegate Writers
-- Spawn subtask per assignment
-- Instruct each to read `.allhands/flows/shared/DOCUMENTATION_WRITING.md`
-- Track `uncovered_domains` if exceeding 15 agents
+### Initialization
 
-Provide each writer:
-```yaml
-domain: "<product-name>"
-feature: "<feature-name>"  # the cross-cutting feature this covers
-doc_directory: "docs/<domain>/<feature>/"
-source_directories: ["<path/to/src>", "<related/lib>", "<hooks/if-any>"]  # all sources for this feature
-critical_technologies: ["<tech>"]
-target_file_count: 1-2
-notes: "<what knowledge to capture about this feature>"
-```
+1. **Context Gathering**
+   - Read alignment doc at `ALIGNMENT_PATH` for milestone context and key decisions
+   - Read prompt files in `PROMPTS_FOLDER` for task details and learnings
+   - Run `git diff $(git merge-base HEAD main)..HEAD --name-only` for changed files
 
-### File Organization
+2. **Initial Validation** - Run `ah docs validate --json` to identify current staleness
 
-Target: 1-2 comprehensive files per major feature area, not 3-4 thin files per subdomain.
+3. **Impact Analysis**
+   - Run `ah knowledge docs search` with changed file paths to find related docs
+   - Categorize changes:
+     - **Edit**: existing docs reference changed code
+     - **Create**: new functionality without doc coverage
+     - **Stale**: validation found outdated refs
 
-| Approach | Files | Rationale |
-|----------|-------|-----------|
-| Many thin | hooks/context.md, hooks/enforcement.md, hooks/lifecycle.md | Fragments knowledge, harder to search |
-| Few rich | hooks.md (comprehensive) | Single search hit gives complete picture |
-
-Consolidation rules:
-- If 3+ files share the same conceptual parent, merge them
-- 150-line doc with clear sections > three 50-line docs
-- Subdirectories only when domains are truly distinct (not just different source paths)
-- Size docs by the questions they answer, not arbitrary file count
-
-### Validate
-After all writers complete:
-- Run `ah docs validate --json` to check all references
-- If validation returns `stale_refs` or `invalid_refs`:
-  - Spawn fix tasks for affected docs
-  - Instruct fixers to read `.allhands/flows/shared/DOCUMENTATION_WRITING.md` **Fix Mode** section
-  - Provide each fixer: `{ mode: "fix", doc_path: "<path>", stale_refs: [...], invalid_refs: [...] }`
-- Re-run validation until clean
-
-### Finalize
-After validation passes:
-- Read all produced docs
-- Write README.md per main domain with overview, mermaid diagram, navigation table, and entry points
-- Run `ah knowledge docs reindex` to update the docs knowledge index
+4. **Proceed to Core Flow** with:
+   ```yaml
+   mode: "incremental"
+   domains: [<affected domains only>]
+   validation_issues: <from initial validation>
+   existing_docs: [<docs needing edits>]
+   session_knowledge:
+     commit_messages: "<relevant commits>"
+     alignment_summary: "<key decisions>"
+     prompt_learnings: "<deviations and discoveries>"
+   ```
 
 ---
 
-## Adjust Mode
+## Core Flow
 
-Incremental documentation for changes only.
+Shared pipeline for both modes after initialization.
 
-### Scope Changes
-- Identify files changed from base branch
-- Run `ah docs tree <affected-path> --depth 4`
-- Run `ah docs complexity <affected-path>`
+### 1. Discovery Phase
 
-### Check Existing Coverage
-- Run `ah knowledge docs search "<changed-feature>" --metadata-only`
+Per **Context is Precious**, spawn discovery sub-agents:
 
-### Delegate
-- Follow Init Mode delegation but only for affected areas
+- One sub-agent per domain
+- Instruct each to read `.allhands/flows/shared/DOCUMENTATION_DISCOVERY.md`
+- Provide each:
+  ```yaml
+  domain: "<domain-name>"
+  source_paths: ["<path/to/domain>"]  # or changed files in incremental
+  mode: "<fill-gaps|incremental>"
+  session_context: "<summary from alignment doc>"  # incremental only
+  ```
+- Await all discovery results
 
-### Validate & Finalize
-- Follow Init Mode **Validate** and **Finalize** steps
+### 2. Aggregate and Plan
+
+- Merge approach lists from all discovery agents
+- Filter out approaches with `existing_coverage: "full"`
+- Group approaches into writer assignments:
+  - Each writer handles **5-15 approaches** (one domain or related subset)
+  - Group by domain and subdirectory
+- Use `ah knowledge docs search` to verify no redundant coverage
+- Target 5-10 writers total; if discovery returned too many approaches, push back
+
+### 3. Writing Phase
+
+- Spawn writer sub-agents per assignment (each handles **multiple approaches**)
+- Instruct each to read `.allhands/flows/shared/DOCUMENTATION_WRITER.md`
+- Provide each:
+  ```yaml
+  domain: "<domain-name>"
+  approaches:  # Multiple approaches per writer
+    - { name: "<approach>", group: "<subdir or null>", files: [...], symbols: [...] }
+  doc_directory: "docs/<domain>/"
+  existing_docs: [<paths to edit>]  # from initialization
+  session_knowledge: <from initialization>  # null in fill-gaps
+  ```
+- Use `group` field to determine file paths:
+  - `group: "cli"` → `docs/<domain>/cli/<approach>.md`
+  - `group: null` → `docs/<domain>/<approach>.md`
+
+### 4. Post-Processing
+
+- Run `ah docs finalize` (finalizes all docs in docs/)
+- Run `ah docs validate --json`
+- If issues exist:
+  - Spawn writer sub-agents to fix (provide stale/invalid refs)
+  - Re-run finalize and validate until clean
+- Run `ah knowledge docs reindex`
 
 ---
 
-## Allowed vs Excluded
+## Completion
 
-| Document | Never Document |
-|----------|----------------|
-| `.github/workflows/` | `node_modules/`, `dist/`, `build/` |
-| Root config files | `.next/`, `.expo/`, `.git/` |
-| DX artifacts | `*.generated.ts`, `*.d.ts`, `vendor/` |
+- Verify `ah docs validate` returns clean
+- Run `ah knowledge docs reindex`
+- Report summary: docs created, edited, domains covered
