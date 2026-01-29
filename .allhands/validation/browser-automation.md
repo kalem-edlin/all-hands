@@ -34,64 +34,105 @@ Per **Agentic Validation Tooling**, this suite meets the existence threshold: th
 ### agent-browser (stochastic dimension)
 
 - **Installation**: `npm install -g agent-browser && agent-browser install`
-- **Architecture**: Rust CLI + Node.js daemon on Playwright. Daemon persists between commands for fast subsequent operations.
-- **Snapshot+Refs system**: `agent-browser snapshot -i` returns compact element references (`@e1`, `@e2`). Subsequent commands use refs directly (`agent-browser click @e1`). Refs invalidate on page changes — always re-snapshot after navigation.
-- **Session management**: `--session <name>` for isolated parallel sessions. `agent-browser state save/load <path>` for auth state persistence.
+- **Command reference**: `agent-browser --help` for all commands; `agent-browser <command> --help` for detailed usage. The CLI is the authoritative reference — this suite documents motivation, not syntax.
+- **Architecture**: Rust CLI + Node.js daemon built on Playwright. The daemon persists between commands, making subsequent operations fast. This architecture means the agent interacts through discrete CLI commands rather than a persistent API — each command is a self-contained action.
+- **Snapshot+Refs**: The tool provides an accessibility tree snapshot that assigns compact element references (like `@e1`). These refs are how the agent targets elements for interaction. Refs invalidate when page state changes — this is why re-snapshotting after any navigation or significant DOM change is fundamental to reliable stochastic exploration.
+- **Session isolation**: The tool supports named sessions for running parallel explorations without interference. Auth state can be persisted and reloaded across sessions — useful when exploration requires authenticated access without re-authenticating each time.
 
 ### Playwright (deterministic dimension)
 
 - **Installation**: `npm install -D @playwright/test @axe-core/playwright && npx playwright install chromium --with-deps`
 - Used directly for scripted tests — not via MCP. Token efficiency for CI; no LLM reasoning needed for deterministic tests.
-- **Visual regression**: `toHaveScreenshot()` with pixel thresholds
-- **Accessibility**: `@axe-core/playwright` with WCAG 2.1 AA tags
+- Playwright provides visual regression (`toHaveScreenshot()`), accessibility scanning (`@axe-core/playwright` with WCAG 2.1 AA), and scripted e2e flows as deterministic assertions.
 
 ## Stochastic Validation
 
-Agent-driven exploratory validation playbook. The agent uses model intuition to explore and validate browser-based implementations. All commands use the `agent-browser` CLI.
+Agent-driven exploratory validation. Per **Frontier Models are Capable**, this section teaches the agent HOW TO THINK about browser exploration — the tool's `--help` system teaches specific commands.
 
-### Navigation & Flow Verification
+### Core Loop
 
-- Navigate end-user flows: `agent-browser open <url>`, snapshot, interact through critical paths
-- Verify navigation works: back/forward, deep links, redirects
-- Test form submissions: fill, submit, verify success/error states
-- Pattern: snapshot → interact → wait → re-snapshot → verify state change
+The fundamental stochastic cycle for browser automation:
 
-### UX Edge Cases & Quality
+**Navigate → Snapshot → Identify targets → Interact → Wait for result → Verify outcome → Check for errors**
 
-- Viewport emulation: `agent-browser set device "iPhone 14"` / `agent-browser set viewport 375 667`
-- Dark mode testing: `agent-browser set media dark`
-- Reduced motion: `agent-browser set media light reduced-motion`
-- Offline simulation: `agent-browser network route "**" --abort` then test graceful degradation
-- Geolocation: via `agent-browser eval` to set navigator.geolocation
+This is the thinking pattern to internalize, not a command sequence. Key principles:
 
-### Visual State Exploration
+- **Always snapshot before interacting** — the accessibility tree is how the agent sees the page. Without a current snapshot, the agent is operating blind.
+- **Re-snapshot after any state change** — navigation, form submission, modal appearance, tab switch, or any interaction that modifies the DOM. Stale refs cause cascading failures.
+- **Wait before verifying** — page state changes are asynchronous. The agent must wait for expected outcomes (element appearance, text change, URL update, network settlement) before checking results.
+- **Verify before proceeding** — confirm the expected outcome actually occurred. Did the form submit? Did the URL change? Did the error message appear? Never assume an interaction succeeded.
+- **Check for errors after interactions** — console errors and network failures surface bugs that are invisible in the visual state. Checking the error state is part of every loop iteration.
 
-- Screenshot key states: `agent-browser screenshot <path>`
-- Compare across breakpoints: set different viewports, screenshot each
-- Check loading states, empty states, error states
-- Verify responsive layouts at mobile (375px), tablet (768px), desktop (1280px), wide (1920px)
+### Verification Primitives
 
-### Interaction Testing
+How the agent programmatically confirms outcomes during exploration. The tool provides primitives for:
 
-- Form validation: fill invalid data, verify error messages
-- Keyboard navigation: `agent-browser press Tab`, verify focus order
-- Click targets: verify interactive elements are reachable
-- Hover states: `agent-browser hover @ref`, screenshot to verify
+- **Reading element content** — confirm text changed after an interaction, verify success/error messages appeared, check that dynamic content loaded correctly
+- **Checking element state** — determine if elements are visible, enabled, or checked. Essential for verifying that UI responded to interaction (button disabled after submit, checkbox toggled, modal became visible)
+- **Reading input values** — confirm form fields contain expected data after fill operations, verify that programmatic changes took effect
+- **Monitoring URL changes** — verify navigation succeeded, redirects landed correctly, deep links resolved to expected pages
+- **Detecting console errors** — surface JavaScript exceptions that indicate broken functionality. An interaction may appear to succeed visually while throwing errors underneath
+- **Inspecting network activity** — verify API calls were made, check for failed requests, confirm expected data exchanges between client and server
 
-### Console & Network Monitoring
+Per **Frontier Models are Capable**, the agent discovers specific verification commands via `--help`. These motivations tell the agent WHEN and WHY to verify — the tool tells it HOW.
 
-- Check for JS errors: `agent-browser errors` — fail if unexpected errors
-- Monitor console warnings: `agent-browser console`
-- Verify API calls: `agent-browser network requests --filter api`
-- Check for failed network requests
+### Evidence Capture
 
-### Death-Spiral Escape Hatches
+Artifacts the agent collects DURING exploration to inform its own decision-making. These are in-loop tools for the agent's reasoning — not deliverables for human review.
 
-- Maximum 3 retries on any single interaction before reporting failure
-- If element not found after re-snapshot, take a full-page screenshot for debugging: `agent-browser screenshot --full debug-state.png`
-- If stuck on OAuth/complex auth flow: save state (`agent-browser state save`), report the blocker, move on
-- If page is completely unresponsive: `agent-browser close`, restart session, try alternative path
-- Reference architecture: Stagehand's "multidimensional self-healing" pattern — when an element disappears entirely, fall back to full-page analysis rather than retrying the same selector
+- **Screenshots at key states** — capture before/after an interaction to compare visual changes, screenshot across different viewports to spot responsive breakpoints, save error states for reference when documenting findings
+- **Console log snapshots** — when errors appear, capture the console state to inform the agent's next exploration decision. A console error after clicking a button changes what the agent should investigate next.
+- **Network request logs** — when investigating API behavior, capture request/response patterns to understand what the frontend expects from the backend
+
+Evidence capture is opportunistic — the agent screenshots and logs when something interesting happens, not on a predetermined schedule. Per **Frontier Models are Capable**, model intuition decides what constitutes an interesting state worth capturing.
+
+This subsection explicitly excludes video recording. Video is an **Evidence for Engineer** artifact (see subsection 6), not an in-loop decision tool.
+
+### Exploration Patterns
+
+Open-ended categories of stochastic exploration. Per **Frontier Models are Capable**, these are starting points — the agent's intuition drives deeper exploration based on what it discovers.
+
+- **Flow verification** — navigate critical user paths end-to-end: registration, login, checkout, settings changes. Test form submissions with valid data and verify success states. Follow redirects and confirm they land correctly. Exercise back/forward navigation. The goal is confirming that the happy path works before probing edges.
+
+- **Responsive & device testing** — explore across viewports and device emulations to reveal layout breakpoints and responsive design failures that only appear at specific screen sizes. Test media preferences (dark mode, reduced motion) to verify the application respects user settings. Layout bugs at mobile widths are among the most common front-end regressions.
+
+- **Edge case probing** — test with invalid input to verify error handling (empty fields, too-long strings, special characters, SQL injection patterns). Simulate degraded network conditions to check graceful degradation. Explore keyboard navigation and focus management — can a user complete the flow without a mouse? These edge cases reveal robustness gaps that happy-path testing misses.
+
+- **UX quality assessment** — evaluate the quality of transitional and boundary states: loading indicators during async operations, empty states when no data exists, error states when operations fail, hover and focus visual feedback on interactive elements. These states are where polish separates production-quality UI from prototypes.
+
+- **Accessibility exploration** — probe keyboard navigability (Tab order, Enter/Space activation, Escape dismissal), focus management (does focus move to modals? return after closing?), and semantic structure via the accessibility tree snapshot. The snapshot is inherently an accessibility tool — it reveals how assistive technology would perceive the page.
+
+### Resilience
+
+Stochastic exploration is inherently unpredictable. These patterns prevent the agent from getting stuck.
+
+- **Wait as the core reliability primitive** — the agent must wait for expected outcomes before proceeding. Elements appearing, text changing, URLs updating, network settling — without explicit waiting, stochastic exploration is flaky. Every interaction that triggers async behavior needs a corresponding wait. The tool provides primitives for waiting on elements, text, URLs, network state, and JavaScript conditions.
+
+- **Maximum 3 retries** on any single interaction before reporting failure. Retrying the same action that failed 3 times is a death spiral — report the failure and move on.
+
+- **Screenshot on failure** — when an interaction fails, capture a full-page screenshot before attempting recovery. This provides context for understanding what went wrong, whether the agent recovers or not.
+
+- **Session restart** — if a page becomes completely unresponsive, close the browser and start a fresh session. Try an alternative path to the same destination rather than repeating the failed route.
+
+- **Auth bail-out** — if stuck on an OAuth flow, complex multi-factor authentication, or CAPTCHA, save the browser state, report the blocker, and move on to other exploration. Auth flows often require human credentials that the agent cannot fabricate.
+
+- **Dialog handling** — real applications surface confirmation dialogs, alerts, and permission prompts. The agent must accept or dismiss dialogs to avoid blocking the exploration loop. Unhandled dialogs freeze all page interaction.
+
+- **Frame handling** — iframes exist in real applications (embedded content, third-party widgets, payment forms). The agent must switch context into frames when exploration targets embedded content, and return to the main frame afterward.
+
+- **Reference architecture**: Stagehand's "multidimensional self-healing" pattern — when an element disappears entirely, fall back to full-page analysis (re-snapshot the entire page) rather than retrying the same selector. The page may have changed in a way that invalidates the original approach.
+
+### Evidence for Engineer
+
+Artifacts produced specifically for human review after stochastic exploration is complete. Per **Quality Engineering**, these close the trust gap — proof the agent validated what it claims.
+
+- **Video recording** — the primary evidence artifact. The agent explores stochastically first (discovering flows, finding issues, verifying behavior), then starts recording and replays discovered flows cleanly for human consumption. Pattern: **explore first (no recording), record second (clean evidence)**. Recording creates a fresh browser context but preserves session state, so the agent can replay a clean walkthrough of any flow it discovered during exploration. This two-phase approach produces focused, watchable recordings rather than noisy exploration footage.
+
+- **Curated screenshots** — screenshots captured during exploration (subsection 3) that document specific findings: before/after comparisons showing a bug, responsive breakpoints where layout breaks, error states that surfaced during probing. Include these in findings with context about what they show.
+
+- **Console error exports** — when exploration discovers JavaScript errors, export the console log as evidence. Console errors tied to specific user flows are high-value bug reports.
+
+- **Trace recordings** — detailed execution traces for post-mortem analysis when exploration reveals complex interaction bugs. Traces capture network activity, DOM changes, and screenshots at each step — useful when a bug report needs more context than a video provides.
 
 ## Deterministic Integration
 
