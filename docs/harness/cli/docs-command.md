@@ -32,7 +32,7 @@ Writers create placeholder refs during authoring (file path and symbol name, wit
 3. Find all markdown files in the docs path ([ref:.allhands/harness/src/lib/docs-validation.ts:findMarkdownFiles:79b9873])
 4. For each file, run [ref:.allhands/harness/src/lib/docs-validation.ts:validateDocs:79b9873] which:
    - Validates frontmatter (requires `description` field) via [ref:.allhands/harness/src/lib/docs-validation.ts:validateFrontMatter:79b9873]
-   - Extracts all `[ref:...]` patterns via [ref:.allhands/harness/src/lib/docs-validation.ts:extractRefs:79b9873]
+   - Extracts all ref patterns via [ref:.allhands/harness/src/lib/docs-validation.ts:extractRefs:79b9873]
    - Validates each ref via [ref:.allhands/harness/src/lib/docs-validation.ts:validateRef:79b9873]
    - Detects placeholder hashes via [ref:.allhands/harness/src/lib/docs-validation.ts:detectPlaceholders:79b9873]
    - Detects unfinalized refs via [ref:.allhands/harness/src/lib/docs-validation.ts:detectUnfinalizedRefs:79b9873]
