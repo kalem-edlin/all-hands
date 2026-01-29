@@ -169,15 +169,17 @@ Per **Knowledge Compounding**, write README.md files that expose cross-domain re
 - Write `docs/README.md` — top-level overview:
   - List all domains with one-line descriptions
   - Explain cross-domain relationships (e.g., type pipeline from backend → frontend)
-  - Reference domain README.md files via `[ref:docs/<domain>/README.md]`
+  - Link to domain READMEs via backtick paths (e.g., `docs/<domain>/README.md`)
 - Write `docs/<domain>/README.md` for each domain:
   - Overview of the domain's purpose and scope
   - List approaches grouped by subdirectory
   - Cross-references to related domains
-  - Reference approach docs via `[ref:docs/<domain>/<approach>.md]`
+  - Link to approach docs via backtick paths (e.g., `docs/<domain>/<approach>.md`)
 - Write `docs/<domain>/<group>/README.md` for each subdirectory with 3+ docs:
   - Brief overview of the group's scope
   - List contained approach docs
+
+README.md files MUST use plain backtick relative paths (e.g., `docs/harness/README.md`) instead of `[ref:...]` references when linking to other docs. Per **Knowledge Compounding**, the knowledge index would recursively include referenced docs inside READMEs, inflating search results with duplicate content.
 
 All README.md files MUST have frontmatter with `description` (per `ah schema documentation`) for semantic indexing.
 
