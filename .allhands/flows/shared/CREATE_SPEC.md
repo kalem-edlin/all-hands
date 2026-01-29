@@ -6,6 +6,21 @@ Write a spec file with proper schema, create its branch, and persist to base. Si
 
 Run `ah schema spec` for the schema format. Write `specs/roadmap/{name}.spec.md` following the schema.
 
+## Branch Prefix Convention
+
+Per **Frontier Models are Capable**, derive the default branch prefix from the spec `type` field:
+
+| Spec Type | Branch Prefix |
+|-----------|---------------|
+| `milestone` (or missing) | `feature/` |
+| `investigation` | `fix/` |
+| `optimization` | `optimize/` |
+| `refactor` | `refactor/` |
+| `documentation` | `docs/` |
+| `triage` | `triage/` |
+
+The `branch` field on the spec is always the source of truth — this convention applies to the default suggestion when the spec doesn't specify one.
+
 ## Persist
 
 Run: `ah specs persist specs/roadmap/{name}.spec.md --json`
