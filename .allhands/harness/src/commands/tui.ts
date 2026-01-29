@@ -118,7 +118,6 @@ export async function launchTUI(options: { spec?: string } = {}): Promise<void> 
     branch,
     baseBranch,
     prActionState: initialPRActionState,
-    compoundRun: status?.compound_run ?? false,
     customFlowCounter: 0,
   };
 
@@ -245,7 +244,6 @@ async function spawnAgentsForAction(
   // Track compound_run in status when compound action is triggered
   if (action === 'compound' && planningKey && status) {
     updateStatus({ compound_run: true }, planningKey, cwd);
-    tui.updateState({ compoundRun: true });
   }
 
   updateRunningAgents(tui, branch);
@@ -783,6 +781,65 @@ async function handleAction(
         tui.log(`Error: ${message}`);
         logTuiError('clear-spec', e instanceof Error ? e : message, {
           spec: currentSpec?.id,
+          branch,
+        }, cwd);
+      }
+      break;
+    }
+
+    case 'new-initiative': {
+      const specType = data?.specType as string | undefined;
+      if (!specType) {
+        tui.log('Error: No spec type selected.');
+        break;
+      }
+
+      // Map spec types to scoping flow filenames
+      // Milestone uses the ideation agent's default flow (IDEATION_SESSION.md)
+      const scopingFlowMap: Record<string, string | null> = {
+        milestone: null,
+        investigation: 'INVESTIGATION_SCOPING.md',
+        optimization: 'OPTIMIZATION_SCOPING.md',
+        refactor: 'REFACTOR_SCOPING.md',
+        documentation: 'DOCUMENTATION_SCOPING.md',
+        triage: 'TRIAGE_SCOPING.md',
+      };
+
+      const flowFile = scopingFlowMap[specType];
+      const flowOverride = flowFile
+        ? join(getFlowsDirectory(), flowFile)
+        : undefined;
+
+      tui.log(`New Initiative: ${specType}${flowOverride ? ` (${flowFile})` : ''}`);
+
+      // Spawn ideation agent with optional flow override
+      try {
+        const context = buildTemplateContext(
+          planningKey || 'default',
+          status?.name,
+          undefined,
+          undefined,
+          cwd
+        );
+
+        const result = spawnAgentFromProfile(
+          {
+            agentName: 'ideation',
+            context,
+            focusWindow: true,
+            flowOverride,
+          },
+          branch,
+          cwd
+        );
+
+        tui.log(`Spawned ideation in ${result.sessionName}:${result.windowName}`);
+        updateRunningAgents(tui, branch);
+      } catch (e) {
+        const message = e instanceof Error ? e.message : String(e);
+        tui.log(`Error spawning ideation: ${message}`);
+        logTuiError('new-initiative', e instanceof Error ? e : message, {
+          specType,
           branch,
         }, cwd);
       }
