@@ -1425,20 +1425,16 @@ ${transcript.slice(0, 3000)}
   }
 }
 
+/** Size threshold (chars) above which TaskOutput results are summarized to prevent context explosion */
+const TASK_OUTPUT_SUMMARIZE_THRESHOLD = 50000; // 50KB
+
 /**
- * Transcript Safeguard - intercepts TaskOutput with transcript dumps.
+ * Transcript Safeguard - intercepts oversized TaskOutput results.
  *
- * Claude Code has a bug where TaskOutput sometimes returns the full JSONL
- * conversation transcript instead of just the agent's final result. This
- * can cause context explosion in the parent agent.
- *
- * This hook:
- * 1. Detects transcript dumps in TaskOutput results
- * 2. Summarizes them using Gemini (compaction provider)
- * 3. Returns the summary instead of the raw transcript
- * 4. Logs the occurrence as a bug for tracking
- *
- * When the bug is fixed, we'll see these log entries stop appearing.
+ * TaskOutput regularly returns massive results (hundreds of KB to over 1MB)
+ * that explode the parent agent's context. This hook summarizes any result
+ * exceeding TASK_OUTPUT_SUMMARIZE_THRESHOLD via the compaction provider,
+ * regardless of content shape (transcript dumps, large agent output, etc.).
  */
 async function transcriptSafeguard(input: HookInput): Promise<void> {
   // Only process TaskOutput
@@ -1457,38 +1453,38 @@ async function transcriptSafeguard(input: HookInput): Promise<void> {
     ? toolResult
     : JSON.stringify(toolResult);
 
-  // Check if this looks like a transcript dump
-  if (!isTranscriptDump(resultStr)) {
+  // Allow small results through without summarization
+  if (resultStr.length <= TASK_OUTPUT_SUMMARIZE_THRESHOLD) {
     return allowTool(HOOK_TRANSCRIPT_SAFEGUARD);
   }
+
+  const isTranscript = isTranscriptDump(resultStr);
 
   // Guard logging + notification so they cannot crash the handler before summarization
   try {
     logEvent('harness.error', {
       source: 'context.transcript-safeguard',
-      bug: 'claude-code-taskoutput-transcript-dump',
+      action: 'summarize',
+      isTranscript,
       resultLength: resultStr.length,
-      markerSample: TRANSCRIPT_MARKERS.slice(0, 3).map(m => ({
-        marker: m,
-        found: resultStr.includes(`"${m}"`)
-      })),
     });
 
     logHookSuccess(HOOK_TRANSCRIPT_SAFEGUARD, {
       action: 'summarize',
       originalLength: resultStr.length,
+      isTranscript,
     });
 
     sendNotification({
       title: 'Transcript Safeguard',
-      message: `Caught transcript dump (${Math.round(resultStr.length / 1024)}KB) — summarizing...`,
+      message: `Compacting oversized TaskOutput (${Math.round(resultStr.length / 1024)}KB) — summarizing...`,
       type: 'alert',
     });
   } catch {
     // Logging/notification failure must not prevent summarization
   }
 
-  // Summarize the transcript using Gemini
+  // Summarize using compaction provider
   const originalPrompt = extractOriginalPrompt(input);
   const summary = await summarizeTranscriptDump(resultStr, originalPrompt);
 
@@ -1496,9 +1492,8 @@ async function transcriptSafeguard(input: HookInput): Promise<void> {
   const parts: string[] = [
     '## TaskOutput Result (Summarized)',
     '',
-    '**Note**: The agent returned a full transcript dump instead of its result.',
-    'This has been automatically summarized to prevent context explosion.',
-    '(This is a known Claude Code bug - occurrence logged for tracking)',
+    `**Note**: The agent result was ${Math.round(resultStr.length / 1024)}KB and has been`,
+    'automatically summarized to prevent context explosion.',
     '',
     '---',
     '',
