@@ -1,6 +1,6 @@
 ---
 name: browser-automation
-description: "Browser-based validation for front-end implementations — exploratory UX testing, visual regression, accessibility scanning, and end-to-end flow verification"
+description: "Browser-based validation for front-end web implementations — exploratory UX testing, visual regression, accessibility scanning, and end-to-end flow verification"
 globs:
   - "**/*.tsx"
   - "**/*.jsx"
