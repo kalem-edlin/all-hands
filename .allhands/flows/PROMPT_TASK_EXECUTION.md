@@ -18,6 +18,7 @@ Execute prompt tasks with full context, validate thoroughly, and document your w
 - Only if additional context is needed (likely not needed):
   - Run `ah knowledge docs search <descriptive_query>` for codebase information as needed
   - Run `ah solutions search "<keywords>"` for relevant past solutions
+  - Run `ah memories search "<keywords>"` for relevant learnings and engineer preferences
 
 ## Implementation
 
@@ -48,15 +49,19 @@ If architectural deviation is needed, document the blocker and set `status: bloc
 
 ## Completion
 
-- Commit your work
-- Run `ah schema prompt` for summary format
-- Append success summary to prompt file
-  - Include any deviations handled during implementation
-  - If blockers required engineer steering, document as learnings to prevent recurrence
-- Run `ah schema alignment body` for alignment doc summary format
-- Append prompt summary to alignment doc's "## Prompt Summaries" section
-  - Per **Knowledge Compounding**, this enables other agents to see completed work without reading each prompt
-  - If section doesn't exist, create it
-- Set frontmatter `status: done`
-- Rename prompt file to include `-DONE` suffix
-- Stop
+**CRITICAL: Follow this exact order to prevent race conditions with parallel agents.**
+
+1. Run `ah schema prompt` for summary format
+2. Append success summary to prompt file
+   - Include any deviations handled during implementation
+   - If blockers required engineer steering, document as learnings to prevent recurrence
+3. Run `ah schema alignment body` for alignment doc summary format
+4. Append prompt summary to alignment doc's "## Prompt Summaries" section
+   - Per **Knowledge Compounding**, this enables other agents to see completed work without reading each prompt
+   - If section doesn't exist, create it
+5. Commit all changes (implementation only - alignment and prompt files are NOT git tracked)
+6. Set frontmatter `status: done` - **MUST be after summaries are written**
+7. Rename prompt file to include `-DONE` suffix
+8. Stop
+
+**Note**: Alignment files and prompt files are NOT git tracked. Only commit implementation changes. Do not mention prompts or prompt numbers in commit messages.

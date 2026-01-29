@@ -23,6 +23,7 @@ Transform the spec into executable prompts with validated approaches. Per **Qual
 - Read codebase files referenced in spec for initial grounding
 - Ensure your branch is up to date with base branch
 - Search documented solutions with `ah solutions search "<keywords>"` for relevant past learnings in this domain
+- Search memories with `ah memories search "<keywords>"` for engineer preferences and prior spec insights
 
 ## Deep Research
 

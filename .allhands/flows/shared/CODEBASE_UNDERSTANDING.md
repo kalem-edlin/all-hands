@@ -20,6 +20,7 @@ Choose the right tool for the query type:
 | **Find relevant codebase patterns when knowledge search is not enough** | `tldr semantic search` or grep | Known string, error message, literal pattern |
 | **Find symbol definition - usually from symbols given by knowledge search** | LSP | Class, function, type by name |
 | **Past solutions** | `ah solutions search` | Similar problem solved before |
+| **Past learnings** | `ah memories search` | Engineer preferences, validation gaps, prior insights |
 | **Grep but better** | `ast-grep` | Known string, error message, literal pattern |
 
 ### Search Flow
@@ -57,7 +58,7 @@ Need codebase context?
     └─ Direct result? → relevant_files + [ref:...] blocks → LSP on symbols
 ├─ Know exact symbol? → LSP directly
 ├─ Know semantic idea? → tldr semantic search / grep
-├─ Suspect a similar problem faced before? → ah solutions search first
+├─ Suspect a similar problem faced before? → ah solutions search + ah memories search first
 └─ ast-grep if still struggling
 ```
 
