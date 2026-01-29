@@ -468,7 +468,7 @@ export function hasCapabilityList(content: string): boolean {
 /**
  * Recursively find all markdown files in a directory.
  */
-export function findMarkdownFiles(dir: string, excludeReadme = true, excludePaths: string[] = []): string[] {
+export function findMarkdownFiles(dir: string, excludeReadme = false, excludePaths: string[] = []): string[] {
   const files: string[] = [];
 
   if (!existsSync(dir)) {
@@ -627,7 +627,7 @@ export function validateDocs(
   };
 
   // Find markdown files
-  const mdFiles = findMarkdownFiles(docsPath, true, options?.excludePaths ?? []);
+  const mdFiles = findMarkdownFiles(docsPath, false, options?.excludePaths ?? []);
   result.total_files = mdFiles.length;
 
   if (mdFiles.length === 0) {

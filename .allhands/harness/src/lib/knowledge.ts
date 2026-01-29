@@ -281,8 +281,8 @@ export class KnowledgeService {
         }
         this.walkDir(fullPath, extensions, files, projectRoot);
       } else if (entry.isFile() && extensions.includes(extname(entry.name))) {
-        // Exclude README.md from docs indexing
-        if (entry.name === "README.md") continue;
+        // Exclude memories.md from docs indexing - project-specific learnings, not indexed for semantic search
+        if (entry.name === "memories.md") continue;
         files.push(relative(projectRoot, fullPath));
       }
     }
@@ -484,10 +484,10 @@ export class KnowledgeService {
     for (const change of changes) {
       const { path, added, deleted, modified } = change;
 
-      // Check if file matches config (excluding README.md)
+      // Check if file matches config (excluding memories.md)
       const matchesConfig = config.paths.some((p: string) => path.startsWith(p)) &&
         config.extensions.includes(extname(path)) &&
-        basename(path) !== "README.md";
+        basename(path) !== "memories.md";
 
       if (!matchesConfig) continue;
 
@@ -561,8 +561,8 @@ export class KnowledgeService {
   }
 
   /**
-   * Get file changes from git since last index update for a specific index.
-   * Returns files that have been added, modified, or deleted.
+   * Get file changes since last index update for a specific index.
+   * Compares file modification times against last index update timestamp.
    */
   getChangesFromGit(indexName: IndexName): FileChange[] {
     const config = this.getIndexConfig(indexName);
@@ -580,73 +580,43 @@ export class KnowledgeService {
       return [];
     }
 
-    // Get git changes since last update for the relevant paths
+    const lastUpdateTime = new Date(lastUpdated).getTime();
     const changes: FileChange[] = [];
-
-    for (const configPath of config.paths) {
-      // Get files changed since last update
-      const result = spawnSync(
-        "git",
-        ["diff", "--name-status", `--since=${lastUpdated}`, "HEAD", "--", configPath],
-        { encoding: "utf-8", cwd: this.projectRoot }
-      );
-
-      if (result.status !== 0) {
-        // Fallback: check what files differ from index
-        const diffResult = spawnSync(
-          "git",
-          ["status", "--porcelain", "--", configPath],
-          { encoding: "utf-8", cwd: this.projectRoot }
-        );
-
-        if (diffResult.status === 0 && diffResult.stdout) {
-          for (const line of diffResult.stdout.trim().split("\n")) {
-            if (!line) continue;
-            const status = line.substring(0, 2).trim();
-            const filePath = line.substring(3);
-
-            if (!config.extensions.some(ext => filePath.endsWith(ext))) continue;
-
-            changes.push({
-              path: filePath,
-              added: status === "A" || status === "?",
-              modified: status === "M",
-              deleted: status === "D",
-            });
-          }
-        }
-        continue;
-      }
-
-      // Parse git diff --name-status output
-      for (const line of result.stdout.trim().split("\n")) {
-        if (!line) continue;
-        const [status, filePath] = line.split("\t");
-
-        if (!filePath || !config.extensions.some(ext => filePath.endsWith(ext))) continue;
-
-        changes.push({
-          path: filePath,
-          added: status === "A",
-          modified: status === "M",
-          deleted: status === "D",
-        });
-      }
-    }
-
-    // Also check for new files not yet in the index
     const indexedPaths = new Set(Object.keys(meta.path_to_id));
+
+    // Check each configured path for changes
     for (const configPath of config.paths) {
       const fullConfigPath = join(this.projectRoot, configPath);
       if (!existsSync(fullConfigPath)) continue;
 
+      // Find all matching files and check their modification times
       this.findFilesRecursive(fullConfigPath, config.extensions).forEach(filePath => {
         const relativePath = relative(this.projectRoot, filePath);
-        if (!indexedPaths.has(relativePath) && !changes.some(c => c.path === relativePath)) {
-          changes.push({ path: relativePath, added: true });
+
+        try {
+          const stats = statSync(filePath);
+          const fileModTime = stats.mtimeMs;
+
+          if (!indexedPaths.has(relativePath)) {
+            // New file not in index
+            changes.push({ path: relativePath, added: true });
+          } else if (fileModTime > lastUpdateTime) {
+            // File modified since last index
+            changes.push({ path: relativePath, modified: true });
+          }
+        } catch {
+          // File access error - skip
         }
       });
     }
+
+    // Check for deleted files (in index but not on disk)
+    Array.from(indexedPaths).forEach(indexedPath => {
+      const fullPath = join(this.projectRoot, indexedPath);
+      if (!existsSync(fullPath)) {
+        changes.push({ path: indexedPath, deleted: true });
+      }
+    });
 
     return changes;
   }
@@ -662,7 +632,7 @@ export class KnowledgeService {
       const fullPath = join(dir, entry.name);
       if (entry.isDirectory()) {
         files.push(...this.findFilesRecursive(fullPath, extensions));
-      } else if (extensions.some(ext => entry.name.endsWith(ext)) && entry.name !== "README.md") {
+      } else if (extensions.some(ext => entry.name.endsWith(ext)) && entry.name !== "memories.md") {
         files.push(fullPath);
       }
     }

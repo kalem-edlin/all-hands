@@ -14,6 +14,7 @@ Engineering knowledge comes from prompts, commit messages, and alignment docs wh
 - NEVER spawn more than 10 writer agents per run
 - NEVER write command/installation guides - those belong in README.md files
 - NEVER write code snippets or examples - use `[ref:file:Symbol]` file references instead
+- NEVER write to `docs/solutions/` or `docs/memories.md` - those are owned by the Compounding flow
 </constraints>
 
 ## Pre-flight Check
@@ -59,14 +60,14 @@ Full documentation effort for new repos or out-of-sync docs.
    - Missing frontmatter
 
 2. **Domain Detection**
-   - Read `.allhands/docs.json` for declared domains
+   - Read `docs.json` at project root for declared domains (optional - projects don't need this file)
    - If not declared, infer:
      - Run `tldr structure .` or `ah complexity .` on project root
      - Check for monorepo markers: `pnpm-workspace.yaml`, `lerna.json`, `turbo.json`, `nx.json`
      - If monorepo: each workspace package is a domain, plus root-level coordination docs
      - Otherwise: identify main product areas from directory structure
    - Present detected domains to user for confirmation
-   - If user adjusts, update `.allhands/docs.json` with confirmed domains
+   - Persist confirmed domains to `docs.json` at project root (using the schema from `ah schema docs-config`). Always write this file, whether user adjusted or accepted defaults — it codifies the domain map for future incremental runs.
 
 3. **Proceed to Core Flow** with:
    ```yaml
@@ -160,6 +161,27 @@ Per **Context is Precious**, spawn discovery sub-agents:
   - `group: null` → `docs/<domain>/<approach>.md`
 
 ### 4. Post-Processing
+
+#### README Generation
+
+Per **Knowledge Compounding**, write README.md files that expose cross-domain relationships for semantic discovery. The orchestrator writes these directly — writers lack cross-domain context.
+
+- Write `docs/README.md` — top-level overview:
+  - List all domains with one-line descriptions
+  - Explain cross-domain relationships (e.g., type pipeline from backend → frontend)
+  - Reference domain README.md files via `[ref:docs/<domain>/README.md]`
+- Write `docs/<domain>/README.md` for each domain:
+  - Overview of the domain's purpose and scope
+  - List approaches grouped by subdirectory
+  - Cross-references to related domains
+  - Reference approach docs via `[ref:docs/<domain>/<approach>.md]`
+- Write `docs/<domain>/<group>/README.md` for each subdirectory with 3+ docs:
+  - Brief overview of the group's scope
+  - List contained approach docs
+
+All README.md files MUST have frontmatter with `description` (per `ah schema documentation`) for semantic indexing.
+
+#### Finalize and Validate
 
 - Run `ah docs finalize` (finalizes all docs in docs/)
 - Run `ah docs validate --json`

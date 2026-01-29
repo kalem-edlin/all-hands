@@ -88,8 +88,8 @@ function getChangesFromGit(indexName: IndexName): FileChange[] {
     const ext = "." + filePath.split(".").pop();
     if (!config.extensions.includes(ext)) continue;
 
-    // Skip README.md files (navigation only, not indexed)
-    if (filePath.endsWith("README.md")) continue;
+    // Skip memories.md (project-specific learnings, not indexed)
+    if (filePath.endsWith("memories.md")) continue;
 
     if (status === "A") {
       changes.push({ path: filePath, added: true });

@@ -26,7 +26,7 @@ Engineering knowledge sources: prompts, commit messages, and alignment docs when
 - MUST use LSP symbols (function names, class names) in refs for searchability
 - MUST create directories before writing files
 - NEVER write command/installation guides - those belong in README.md
-- NEVER use restrictive templates - freestyle format that serves the content
+- NEVER use a uniform template across docs - each doc's structure must be driven by its content type. Two docs about different topics should look different.
 </constraints>
 
 ## Doc Quality Goals
@@ -36,6 +36,21 @@ Per **Knowledge Compounding**, each doc should:
 1. **Expose engineering knowledge** - Use cases, intent, key decisions, trade-offs
 2. **Enable semantic discovery** - Descriptions that match how someone would search
 3. **Minimize token count** - Right-sized for indexing, not bloated
+
+## Format Selection
+
+Per **Frontier Models are Capable**, select the format that communicates the content best:
+
+| Content Type | Format |
+|---|---|
+| State transitions, lifecycles | Mermaid state diagram |
+| Multi-step processes, request flows | Mermaid sequence diagram |
+| Component relationships, data flow | Mermaid flowchart |
+| Feature comparisons, option matrices | Table |
+| Algorithm steps, retry/backoff logic | Numbered list with formula notation |
+| Conditional behavior, branching logic | Decision tree or nested bullets |
+
+Do NOT default to the same section pattern for every doc. A retry-backoff doc needs a delay formula table. An optimistic UI doc needs a state diagram. A CI pipeline doc needs a job dependency graph. Let the content drive the structure.
 
 ## Writing Approach
 
