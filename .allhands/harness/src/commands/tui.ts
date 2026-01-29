@@ -110,7 +110,6 @@ export async function launchTUI(options: { spec?: string } = {}): Promise<void> 
 
   const initialState: Partial<TUIState> = {
     loopEnabled: false, // Always start disabled, regardless of saved status
-    emergentEnabled: status?.loop.emergent ?? false,
     parallelEnabled: status?.loop?.parallel ?? false,
     prompts: promptItems,
     activeAgents,
@@ -140,8 +139,8 @@ export async function launchTUI(options: { spec?: string } = {}): Promise<void> 
     onSpawnExecutor: (prompt, executorBranch, specId) => {
       spawnExecutorForPrompt(tui, prompt, executorBranch, specId);
     },
-    onSpawnEmergent: (prompt, emergentBranch, specId) => {
-      spawnEmergentForPrompt(tui, prompt, emergentBranch, specId);
+    onSpawnHypothesisPlanner: (hpBranch, specId) => {
+      spawnHypothesisPlannerAgent(tui, hpBranch, specId);
     },
     cwd: process.cwd(),
   });
@@ -676,15 +675,6 @@ async function handleAction(
       break;
     }
 
-    case 'toggle-emergent': {
-      const enabled = data?.enabled as boolean;
-      if (planningKey && status) {
-        updateStatus({ loop: { ...status.loop, emergent: enabled } }, planningKey, cwd);
-      }
-      tui.log(`Emergent: ${enabled ? 'Enabled' : 'Disabled'}`);
-      break;
-    }
-
     case 'toggle-parallel': {
       const enabled = data?.enabled as boolean;
       if (planningKey && status) {
@@ -854,44 +844,37 @@ function spawnExecutorForPrompt(tui: TUI, prompt: PromptFile, branch: string, sp
   }
 }
 
-function spawnEmergentForPrompt(tui: TUI, prompt: PromptFile, branch: string, specId: string): void {
+function spawnHypothesisPlannerAgent(tui: TUI, branch: string, specId: string): void {
   const cwd = process.cwd();
   const planningKey = sanitizeBranchForDir(branch);
 
-  // Get next available prompt number for the emergent agent to create
-  const nextPromptNumber = getNextPromptNumber(planningKey, cwd);
-
-  tui.log(`Spawning emergent (will create prompt ${nextPromptNumber}) after: ${prompt.frontmatter.title}`);
+  tui.log('Spawning hypothesis planner');
 
   try {
-    // Build context with the NEXT prompt number (emergent will create this prompt)
     const context = buildTemplateContext(
       planningKey,
       specId,
-      nextPromptNumber,
-      undefined,  // No prompt path yet - emergent will create it
+      undefined,  // Not prompt-scoped
+      undefined,
       cwd
     );
 
     const result = spawnAgentFromProfile(
       {
-        agentName: 'emergent',
+        agentName: 'hypothesis-planner',
         context,
-        promptNumber: nextPromptNumber,
         focusWindow: false, // Don't steal focus from TUI
       },
       branch,
       cwd
     );
 
-    tui.log(`Spawned emergent in ${result.sessionName}:${result.windowName}`);
+    tui.log(`Spawned hypothesis planner in ${result.sessionName}:${result.windowName}`);
     updateRunningAgents(tui, branch);
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
-    tui.log(`Error spawning emergent: ${message}`);
-    logTuiError('spawn-emergent', e instanceof Error ? e : message, {
-      promptNumber: nextPromptNumber,
-      promptTitle: `emergent-${nextPromptNumber}`,
+    tui.log(`Error spawning hypothesis planner: ${message}`);
+    logTuiError('spawn-hypothesis-planner', e instanceof Error ? e : message, {
       branch,
     }, cwd);
   }

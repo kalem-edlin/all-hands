@@ -44,13 +44,12 @@ export interface TUIOptions {
   onAction: (action: string, data?: Record<string, unknown>) => void;
   onExit: () => void;
   onSpawnExecutor?: (prompt: PromptFile, branch: string, specId: string) => void;
-  onSpawnEmergent?: (prompt: PromptFile, branch: string, specId: string) => void;
+  onSpawnHypothesisPlanner?: (branch: string, specId: string) => void;
   cwd?: string;
 }
 
 export interface TUIState {
   loopEnabled: boolean;
-  emergentEnabled: boolean;
   parallelEnabled: boolean;
   prompts: PromptItem[];
   activeAgents: AgentInfo[];
@@ -105,7 +104,6 @@ export class TUI {
     this.options = options;
     this.state = {
       loopEnabled: false,
-      emergentEnabled: false,
       parallelEnabled: false,
       prompts: [],
       activeAgents: [],
@@ -238,19 +236,16 @@ export class TUI {
                   path: p.path,
                 }));
                 // Don't restore loopEnabled from status - always requires manual enable
-                this.state.emergentEnabled = status?.loop?.emergent ?? false;
                 this.state.parallelEnabled = status?.loop?.parallel ?? false;
                 this.state.compoundRun = status?.compound_run ?? false;
               } else {
                 this.state.prompts = [];
                 this.state.loopEnabled = false;
-                this.state.emergentEnabled = false;
                 this.state.parallelEnabled = false;
                 this.state.compoundRun = false;
               }
 
               // Sync toggle states to event loop
-              this.eventLoop?.setEmergentEnabled(this.state.emergentEnabled);
               this.eventLoop?.setParallelEnabled(this.state.parallelEnabled);
             }
 
@@ -276,12 +271,11 @@ export class TUI {
             this.options.onSpawnExecutor(prompt, this.state.branch, specId);
           }
         },
-        onSpawnEmergent: (prompt) => {
-          this.log(`Loop: Spawning emergent for prompt ${prompt.frontmatter.number}`);
-          if (this.state.branch && this.options.onSpawnEmergent) {
-            // Use spec if available, otherwise fall back to planning key
+        onSpawnHypothesisPlanner: () => {
+          this.log('Loop: Spawning hypothesis planner');
+          if (this.state.branch && this.options.onSpawnHypothesisPlanner) {
             const specId = this.state.spec || sanitizeBranchForDir(this.state.branch);
-            this.options.onSpawnEmergent(prompt, this.state.branch, specId);
+            this.options.onSpawnHypothesisPlanner(this.state.branch, specId);
           }
         },
         onLoopStatus: (message) => {
@@ -533,7 +527,6 @@ export class TUI {
 
     return {
       loopEnabled: this.state.loopEnabled,
-      emergentEnabled: this.state.emergentEnabled,
       parallelEnabled: this.state.parallelEnabled,
       prActionState: this.state.prActionState,
       prReviewUnlocked: this.state.prReviewUnlocked,
@@ -574,7 +567,6 @@ export class TUI {
       { id: 'custom-flow', label: 'Custom Flow', key: '-', type: 'action' },
       { id: 'separator-toggles', label: '─ Toggles ─', type: 'separator' },
       { id: 'toggle-loop', label: 'Loop', key: 'O', type: 'toggle', checked: this.state.loopEnabled },
-      { id: 'toggle-emergent', label: 'Emergent', key: 'E', type: 'toggle', checked: this.state.emergentEnabled },
       { id: 'toggle-parallel', label: 'Parallel', key: 'P', type: 'toggle', checked: this.state.parallelEnabled },
       { id: 'separator-controls', label: '─ Controls ─', type: 'separator' },
       { id: 'view-logs', label: 'View Logs', key: 'V', type: 'action' },
@@ -674,15 +666,10 @@ export class TUI {
       });
     });
 
-    // Toggle hotkeys (O for lOop, E for Emergent, P for Parallel)
+    // Toggle hotkeys (O for lOop, P for Parallel)
     this.screen.key(['o'], () => {
       if (!this.activeModal) {
         this.handleAction('toggle-loop');
-      }
-    });
-    this.screen.key(['e'], () => {
-      if (!this.activeModal) {
-        this.handleAction('toggle-emergent');
       }
     });
     this.screen.key(['p'], () => {
@@ -896,15 +883,6 @@ export class TUI {
           this.eventLoop.setLoopEnabled(this.state.loopEnabled);
         }
         this.options.onAction('toggle-loop', { enabled: this.state.loopEnabled });
-        this.render();
-        break;
-      case 'toggle-emergent':
-        this.state.emergentEnabled = !this.state.emergentEnabled;
-        this.buildActionItems();
-        if (this.eventLoop) {
-          this.eventLoop.setEmergentEnabled(this.state.emergentEnabled);
-        }
-        this.options.onAction('toggle-emergent', { enabled: this.state.emergentEnabled });
         this.render();
         break;
       case 'toggle-parallel':
@@ -1303,9 +1281,6 @@ export class TUI {
     this.state = { ...this.state, ...updates };
 
     // Sync toggle states to event loop if they were updated
-    if ('emergentEnabled' in updates && this.eventLoop) {
-      this.eventLoop.setEmergentEnabled(this.state.emergentEnabled);
-    }
     if ('parallelEnabled' in updates && this.eventLoop) {
       this.eventLoop.setParallelEnabled(this.state.parallelEnabled);
     }

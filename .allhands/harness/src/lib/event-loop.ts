@@ -45,7 +45,6 @@ export interface EventLoopState {
   activeAgents: string[];
   lastCheckTime: number;
   loopEnabled: boolean;
-  emergentEnabled: boolean;
   parallelEnabled: boolean;  // Parallel execution mode
   /** Active executor prompt numbers (supports parallel execution) */
   activeExecutorPrompts: number[];
@@ -62,8 +61,8 @@ export interface EventLoopCallbacks {
   onBranchChange?: (newBranch: string, spec: SpecFile | null) => void;
   onAgentsChange?: (agents: string[]) => void;
   onSpawnExecutor?: (prompt: PromptFile) => void;
-  /** Called when emergent agent should be spawned (prompts done + emergent enabled) */
-  onSpawnEmergent?: (donePrompt: PromptFile) => void;
+  /** Called when hypothesis planner should be spawned (no pending + no in_progress) */
+  onSpawnHypothesisPlanner?: () => void;
   onLoopStatus?: (message: string) => void;
   /** Called when prompts are added, removed, or their status changes */
   onPromptsChange?: (prompts: PromptFile[], snapshot: PromptSnapshot) => void;
@@ -118,7 +117,6 @@ export class EventLoop {
       activeAgents: [],
       lastCheckTime: Date.now(),
       loopEnabled: false,
-      emergentEnabled: false,
       parallelEnabled: false,
       activeExecutorPrompts: [],
       lastExecutorSpawnTime: null,
@@ -189,13 +187,6 @@ export class EventLoop {
    */
   async forceTick(): Promise<void> {
     await this.tick();
-  }
-
-  /**
-   * Enable or disable emergent refinement
-   */
-  setEmergentEnabled(enabled: boolean): void {
-    this.state.emergentEnabled = enabled;
   }
 
   /**
@@ -463,7 +454,7 @@ export class EventLoop {
           // If an executor exited, remove it from activeExecutorPrompts
           // Extract prompt number from window name (e.g., "executor-03" -> 3)
           for (const name of disappeared) {
-            if (name.startsWith('executor') || name.startsWith('emergent')) {
+            if (name.startsWith('executor')) {
               const match = name.match(/-(\d+)$/);
               if (match) {
                 const promptNum = parseInt(match[1], 10);
@@ -474,7 +465,7 @@ export class EventLoop {
             }
           }
           // Clear spawn timestamp to allow new spawns
-          if (disappeared.some((name) => name.startsWith('executor') || name.startsWith('emergent'))) {
+          if (disappeared.some((name) => name.startsWith('executor') || name.startsWith('hypothesis-planner'))) {
             this.state.lastExecutorSpawnTime = null;
           }
         }
@@ -489,7 +480,7 @@ export class EventLoop {
       if (this.state.activeExecutorPrompts.length > 0) {
         const runningPromptNums = new Set<number>();
         for (const name of agentWindows) {
-          if (name.startsWith('executor') || name.startsWith('emergent')) {
+          if (name.startsWith('executor')) {
             const match = name.match(/-(\d+)$/);
             if (match) {
               runningPromptNums.add(parseInt(match[1], 10));
@@ -527,13 +518,14 @@ export class EventLoop {
   }
 
   /**
-   * Check if we should spawn an executor for the next prompt.
+   * Unified prompt loop — single decision path:
    *
-   * Parallel execution rules:
-   * 1. Emergent: Only ONE at a time; only starts when ALL prompts are done
-   * 2. Executors: Respect dependencies; spawn up to maxParallel when parallel enabled
-   * 3. One per tick: Only spawn ONE agent per event loop tick
-   * 4. Lowest first: Always choose the lowest prompt number among candidates
+   * 1. loop enabled + pending prompts → pick next, spawn executor
+   * 2. loop enabled + no pending + no in_progress → spawn hypothesis planner
+   * 3. loop enabled + no pending + in_progress exist → wait (executors still working)
+   * 4. loop disabled → nothing
+   *
+   * Parallel rules: spawn up to maxParallel executors; only ONE hypothesis planner at a time.
    */
   private async checkPromptLoop(): Promise<void> {
     if (!this.state.loopEnabled) {
@@ -547,22 +539,22 @@ export class EventLoop {
     }
 
     try {
-      // 1. Block if emergent is running (only ONE emergent ever)
-      const hasEmergent = this.state.activeAgents.some((name) => name.startsWith('emergent'));
-      if (hasEmergent) {
+      // Block if hypothesis planner is running (only ONE at a time)
+      const hasHypothesisPlanner = this.state.activeAgents.some((name) => name.startsWith('hypothesis-planner'));
+      if (hasHypothesisPlanner) {
         return;
       }
 
-      // 2. Count active executors
+      // Count active executors
       const activeExecutors = this.state.activeAgents.filter((name) => name.startsWith('executor'));
 
-      // 3. Determine max parallel based on toggle
+      // Determine max parallel based on toggle
       const settings = loadProjectSettings();
       const maxParallel = this.state.parallelEnabled
         ? (settings?.spawn?.maxParallelPrompts ?? 3)
         : 1;
 
-      // 4. Check capacity - if at max, don't spawn
+      // Check capacity - if at max, don't spawn
       if (activeExecutors.length >= maxParallel) {
         return;
       }
@@ -574,58 +566,45 @@ export class EventLoop {
         this.state.lastExecutorSpawnTime &&
         Date.now() - this.state.lastExecutorSpawnTime < SPAWN_COOLDOWN_MS
       ) {
-        // Recently spawned, wait for it to appear in activeAgents or exit
         return;
       }
 
-      // 5. Pick next prompt from planning directory
-      // Pass activeExecutorPrompts to exclude prompts already being worked on
+      // Pick next prompt from planning directory
       const result = pickNextPrompt(
         this.state.planningKey,
         this.cwd,
         this.state.activeExecutorPrompts
       );
 
-      if (!result.prompt) {
-        // 6. Emergent condition: NO pending/in_progress, at least 1 done
-        // This ensures emergent only runs when ALL prompts are completed
-        if (
-          this.state.emergentEnabled &&
-          result.stats &&
-          result.stats.pending === 0 &&
-          result.stats.inProgress === 0 &&
-          result.stats.done > 0
-        ) {
-          // Get all prompts and find a done one to refine
-          const allPrompts = loadAllPrompts(this.state.planningKey, this.cwd);
-          const donePrompt = allPrompts.find((p) => p.frontmatter.status === 'done');
+      if (result.prompt) {
+        // Pending prompt available → spawn executor
+        markPromptInProgress(result.prompt.path);
+        this.state.activeExecutorPrompts.push(result.prompt.frontmatter.number);
+        this.state.lastExecutorSpawnTime = Date.now();
 
-          if (donePrompt) {
-            this.state.activeExecutorPrompts.push(donePrompt.frontmatter.number);
-            this.state.lastExecutorSpawnTime = Date.now();
-
-            this.callbacks.onLoopStatus?.(
-              `Spawning emergent for prompt ${donePrompt.frontmatter.number}: ${donePrompt.frontmatter.title}`
-            );
-            this.callbacks.onSpawnEmergent?.(donePrompt);
-            return;
-          }
-        }
-
-        // No actionable prompts and no emergent to spawn
-        this.callbacks.onLoopStatus?.(result.reason);
+        this.callbacks.onLoopStatus?.(
+          `Spawning executor for prompt ${result.prompt.frontmatter.number}: ${result.prompt.frontmatter.title}`
+        );
+        this.callbacks.onSpawnExecutor?.(result.prompt);
         return;
       }
 
-      // 7. Mark prompt as in_progress and spawn executor (only ONE per tick)
-      markPromptInProgress(result.prompt.path);
-      this.state.activeExecutorPrompts.push(result.prompt.frontmatter.number);
-      this.state.lastExecutorSpawnTime = Date.now();
+      // No pending prompts — check if we should spawn hypothesis planner
+      if (
+        result.stats &&
+        result.stats.pending === 0 &&
+        result.stats.inProgress === 0
+      ) {
+        // No pending, no in_progress → spawn hypothesis planner to create new prompts
+        this.state.lastExecutorSpawnTime = Date.now();
 
-      this.callbacks.onLoopStatus?.(
-        `Spawning executor for prompt ${result.prompt.frontmatter.number}: ${result.prompt.frontmatter.title}`
-      );
-      this.callbacks.onSpawnExecutor?.(result.prompt);
+        this.callbacks.onLoopStatus?.('Spawning hypothesis planner — no pending or in-progress prompts');
+        this.callbacks.onSpawnHypothesisPlanner?.();
+        return;
+      }
+
+      // In-progress prompts still running — wait
+      this.callbacks.onLoopStatus?.(result.reason);
     } catch (err) {
       console.error('[EventLoop] checkPromptLoop failed:', err);
     }
