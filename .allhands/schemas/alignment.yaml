@@ -27,7 +27,7 @@ body:
 
     - name: "Hard User Requirements"
       required: true
-      description: "Concise, immutable user requirements. Guidelines for emergent mode."
+      description: "Concise, immutable user requirements. Guidelines for emergent work."
 
     - name: "Engineer Decisions"
       required: false

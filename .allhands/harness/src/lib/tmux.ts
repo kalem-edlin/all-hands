@@ -17,7 +17,7 @@
  *
  * Environment Variables passed to agents:
  * - AGENT_ID: Unique agent identifier (= window name, used for MCP daemon isolation)
- * - AGENT_TYPE: executor, coordinator, planner, judge, ideation, documentor, pr-reviewer
+ * - AGENT_TYPE: executor, coordinator, planner, judge, ideation, pr-reviewer
  * - PROMPT_NUMBER: Current prompt number (when applicable)
  * - SPEC_NAME: Current spec name
  * - BRANCH: Current git branch
@@ -34,7 +34,6 @@ import {
 } from './opencode/index.js';
 import { getCurrentBranch, getPlanningPaths } from './planning.js';
 import { getBaseBranch } from './git.js';
-import { formatHypothesisDomains, DEFAULT_WORKFLOW } from './workflows.js';
 import { addSpawnedWindow, removeSpawnedWindow, getSpawnedWindows } from './session.js';
 import { loadProjectSettings } from '../hooks/shared.js';
 
@@ -688,6 +687,8 @@ export interface ProfileSpawnConfig {
   promptNumber?: number;
   /** If true, switch focus to the new window (default: true) */
   focusWindow?: boolean;
+  /** Optional flow path override — when provided, use this instead of the profile's default flow */
+  flowOverride?: string;
 }
 
 /**
@@ -722,11 +723,11 @@ export function spawnAgentFromProfile(
   // Build the invocation (validates template vars)
   const invocation = buildAgentInvocation(profile, config.context);
 
-  // Convert to SpawnConfig
+  // Convert to SpawnConfig (flowOverride takes precedence over profile's default flow)
   const spawnConfig: SpawnConfig = {
     name: profile.name,
     agentType: profile.name,
-    flowPath: invocation.flowPath,
+    flowPath: config.flowOverride || invocation.flowPath,
     preamble: invocation.preamble,
     promptNumber: config.promptNumber,
     specName: config.context.SPEC_NAME ?? undefined,
@@ -883,8 +884,7 @@ export function buildTemplateContext(
   specName?: string,
   promptNumber?: number,
   promptPath?: string,
-  cwd?: string,
-  workflowType?: string
+  cwd?: string
 ): TemplateContext {
   // Use spec for planning paths (directory key)
   const paths = getPlanningPaths(spec, cwd);
@@ -909,10 +909,11 @@ export function buildTemplateContext(
     context.PROMPT_PATH = promptPath;
   }
 
-  // Add hypothesis domains for emergent agents from settings.json
-  const workflow = workflowType || DEFAULT_WORKFLOW;
-  context.HYPOTHESIS_DOMAINS = formatHypothesisDomains(workflow, cwd);
-  context.WORKFLOW_TYPE = workflow;
+  // Add hypothesis domains from settings.json
+  const settings = loadProjectSettings();
+  const defaultDomains = ['testing', 'stability', 'performance', 'feature', 'ux', 'integration'];
+  const domains = settings?.emergent?.hypothesisDomains ?? defaultDomains;
+  context.HYPOTHESIS_DOMAINS = domains.join(', ');
 
   // Try to read spec path from status (YAML format)
   if (existsSync(paths.status)) {

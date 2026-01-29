@@ -57,8 +57,6 @@ export interface TUIState {
   branch?: string;
   baseBranch?: string;
   prActionState: PRActionState;
-  prReviewUnlocked: boolean;  // true after first PR review detected
-  compoundRun: boolean;
   customFlowCounter: number;
 }
 
@@ -108,8 +106,6 @@ export class TUI {
       prompts: [],
       activeAgents: [],
       prActionState: 'create-pr',
-      prReviewUnlocked: false,
-      compoundRun: false,
       customFlowCounter: 0,
     };
 
@@ -207,7 +203,6 @@ export class TUI {
         onPRReviewFeedback: (available: boolean) => {
           if (available && this.state.prActionState === 'awaiting-review') {
             this.state.prActionState = 'rerun-pr-review';
-            this.state.prReviewUnlocked = true;  // Unlock Review PR action
             this.buildActionItems();
             this.log('PR review feedback available - ready to review or rerun');
             this.render();
@@ -237,12 +232,10 @@ export class TUI {
                 }));
                 // Don't restore loopEnabled from status - always requires manual enable
                 this.state.parallelEnabled = status?.loop?.parallel ?? false;
-                this.state.compoundRun = status?.compound_run ?? false;
               } else {
                 this.state.prompts = [];
                 this.state.loopEnabled = false;
                 this.state.parallelEnabled = false;
-                this.state.compoundRun = false;
               }
 
               // Sync toggle states to event loop
@@ -522,48 +515,26 @@ export class TUI {
   }
 
   private getToggleState(): ToggleState {
-    // Check if any prompts are completed
-    const hasCompletedPrompts = this.state.prompts.some(p => p.status === 'done');
-
     return {
       loopEnabled: this.state.loopEnabled,
       parallelEnabled: this.state.parallelEnabled,
       prActionState: this.state.prActionState,
-      prReviewUnlocked: this.state.prReviewUnlocked,
-      hasSpec: !!this.state.spec,
-      hasCompletedPrompts,
-      compoundRun: this.state.compoundRun,
     };
   }
 
   private buildActionItems(): void {
-    const hasSpec = !!this.state.spec;
-    const hasCompletedPrompts = this.state.prompts.some(p => p.status === 'done');
-    const prDisabled = this.state.prActionState === 'awaiting-review';
-
-    // Dynamic label for switch/choose spec
-    const specLabel = hasSpec ? 'Switch Spec' : 'Choose Spec';
-
     this.actionItems = [
-      // Agent spawners - coordinator and ideation always available
+      // Agent spawners — all always visible
       { id: 'coordinator', label: 'Coordinator', key: '1', type: 'action' },
-      { id: 'ideation', label: 'Ideation', key: '2', type: 'action' },
-      // Planner requires spec
-      { id: 'planner', label: 'Planner', key: '3', type: 'action', disabled: !hasSpec },
-      // These require at least 1 completed prompt
-      { id: 'e2e-test-planner', label: 'Build E2E Test', key: '4', type: 'action', hidden: !hasCompletedPrompts },
-      { id: 'review-jury', label: 'Review Jury', key: '5', type: 'action', hidden: !hasCompletedPrompts },
-      // PR action row (Create PR / Awaiting Review... / Rerun PR Review)
-      { id: 'pr-action', label: this.getPRActionLabel(), key: '6', type: 'action', disabled: prDisabled, hidden: !hasCompletedPrompts },
-      // Review PR - only visible after first PR review detected
-      { id: 'review-pr', label: 'Review PR', key: '7', type: 'action', hidden: !this.state.prReviewUnlocked },
-      // Compound (shifted from 7 to 8)
-      { id: 'compound', label: 'Compound', key: '8', type: 'action', hidden: !hasCompletedPrompts },
-      // Mark completed - only visible if compound has been run (shifted from 8 to 9)
-      { id: 'mark-completed', label: 'Mark Completed', key: '9', type: 'action', hidden: !this.state.compoundRun },
-      // Switch/Choose spec - always visible, label changes (shifted from 9 to 0)
-      { id: 'switch-spec', label: specLabel, key: '0', type: 'action' },
-      // Custom Flow - always visible, allows running any flow with custom message
+      { id: 'new-initiative', label: 'New Initiative', key: '2', type: 'action' },
+      { id: 'planner', label: 'Planner', key: '3', type: 'action' },
+      { id: 'review-jury', label: 'Review Jury', key: '4', type: 'action' },
+      { id: 'e2e-test-planner', label: 'E2E Test Plan', key: '5', type: 'action' },
+      { id: 'pr-action', label: this.getPRActionLabel(), key: '6', type: 'action' },
+      { id: 'review-pr', label: 'Address PR Review', key: '7', type: 'action' },
+      { id: 'compound', label: 'Compound', key: '8', type: 'action' },
+      { id: 'mark-completed', label: 'Complete', key: '9', type: 'action' },
+      { id: 'switch-spec', label: 'Switch Workspace', key: '0', type: 'action' },
       { id: 'custom-flow', label: 'Custom Flow', key: '-', type: 'action' },
       { id: 'separator-toggles', label: '─ Toggles ─', type: 'separator' },
       { id: 'toggle-loop', label: 'Loop', key: 'O', type: 'toggle', checked: this.state.loopEnabled },
@@ -585,9 +556,7 @@ export class TUI {
   }
 
   private getSelectableActionItems(): ActionItem[] {
-    return this.actionItems.filter(item =>
-      item.type !== 'separator' && !item.disabled && !item.hidden
-    );
+    return this.actionItems.filter(item => item.type !== 'separator');
   }
 
   private setupKeyBindings(): void {
@@ -655,9 +624,9 @@ export class TUI {
     hotkeys.forEach((key) => {
       this.screen.key([key], () => {
         if (!this.activeModal && !this.activeFileViewer) {
-          // Find the action item with this key that is visible and enabled
+          // Find the action item with this key
           const matchingItem = this.actionItems.find(
-            (item) => item.key === key && !item.hidden && !item.disabled && item.type === 'action'
+            (item) => item.key === key && item.type === 'action'
           );
           if (matchingItem) {
             this.handleAction(matchingItem.id);
@@ -920,9 +889,44 @@ export class TUI {
       case 'review-pr':
         this.options.onAction('review-pr');
         break;
+      case 'new-initiative':
+        this.openNewInitiativeModal();
+        break;
       default:
         this.options.onAction(actionId);
     }
+  }
+
+  /**
+   * Open a modal for selecting the spec type for a new initiative.
+   * Routes to the appropriate scoping flow based on selection.
+   */
+  private openNewInitiativeModal(): void {
+    const specTypes: Array<{ id: string; label: string }> = [
+      { id: 'milestone', label: 'Milestone — Feature development with deep ideation' },
+      { id: 'investigation', label: 'Investigation — Debug / diagnose issues' },
+      { id: 'optimization', label: 'Optimization — Performance / efficiency work' },
+      { id: 'refactor', label: 'Refactor — Cleanup / tech debt' },
+      { id: 'documentation', label: 'Documentation — Coverage gaps' },
+      { id: 'triage', label: 'Triage — External signal analysis (coming soon)' },
+    ];
+
+    this.activeModal = createModal(this.screen, {
+      title: 'New Initiative — Select Type',
+      items: specTypes.map((t) => ({
+        id: t.id,
+        label: t.label,
+        type: 'item' as const,
+      })),
+      onSelect: (specType: string) => {
+        this.closeModal();
+        this.options.onAction('new-initiative', { specType });
+      },
+      onCancel: () => {
+        this.closeModal();
+      },
+    });
+    this.screen.render();
   }
 
   private openSpecModal(): void {

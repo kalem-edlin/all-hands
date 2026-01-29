@@ -35,11 +35,10 @@ export const TemplateVars = {
     .string()
     .describe('Spec type from frontmatter (milestone, investigation, optimization, refactor, documentation, triage)'),
 
-  // Workflow configuration variables
+  // Hypothesis planner variables
   HYPOTHESIS_DOMAINS: z
     .string()
-    .describe('Comma-separated list of hypothesis domains available to emergent agents'),
-  WORKFLOW_TYPE: z.string().describe('Workflow type for the current spec (milestone, debugging, etc.)'),
+    .describe('Comma-separated list of hypothesis domains from settings.json'),
 } as const;
 
 /**

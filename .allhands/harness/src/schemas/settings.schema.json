@@ -144,12 +144,12 @@
     },
     "emergent": {
       "type": "object",
-      "description": "Emergent refinement agent settings",
+      "description": "Emergent work settings (default domain pool for hypothesis planner)",
       "properties": {
         "hypothesisDomains": {
           "type": "array",
           "items": { "type": "string" },
-          "description": "Work domains available to emergent refinement agents. Agents diversify across these to discover valuable improvements.",
+          "description": "Default pool of hypothesis domains available to the hypothesis planner. Agents diversify across these to discover valuable improvements.",
           "examples": [
             ["testing", "stability", "performance", "feature", "ux", "integration"],
             ["reproduction", "diagnosis", "stability", "testing"]

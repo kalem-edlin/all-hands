@@ -564,6 +564,11 @@ export interface DaemonSettings {
   enabled?: boolean;
 }
 
+/** Emergent work settings (hypothesis domains for planner agents) */
+export interface EmergentSettings {
+  hypothesisDomains?: string[];
+}
+
 export interface ProjectSettings {
   daemon?: DaemonSettings;
   validation?: ValidationSettings;
@@ -575,6 +580,7 @@ export interface ProjectSettings {
   spawn?: SpawnSettings;
   eventLoop?: EventLoopSettings;
   prReview?: PRReviewSettings;
+  emergent?: EmergentSettings;
   disabledHooks?: string[];
 }
 

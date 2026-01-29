@@ -50,6 +50,7 @@ import type { PromptFile } from '../lib/prompts.js';
 import { findSpecById, getSpecForBranch, type SpecFile } from '../lib/specs.js';
 import { updateSpecStatus, reindexAfterMove } from './specs.js';
 import { logTuiError, logTuiAction, logTuiLifecycle } from '../lib/trace-store.js';
+import { getFlowsDirectory } from '../lib/flows.js';
 
 /**
  * Launch the TUI - can be called directly or via command
@@ -172,7 +173,7 @@ export async function launchTUI(options: { spec?: string } = {}): Promise<void> 
  * Spawn agents for a TUI action using profile definitions
  *
  * Looks up all agent profiles with matching tui_action and spawns them.
- * Multiple profiles can share the same tui_action (e.g., compound spawns both documentor and compounder).
+ * Multiple profiles can share the same tui_action (e.g., compound can spawn multiple agents).
  */
 async function spawnAgentsForAction(
   tui: TUI,

@@ -36,7 +36,7 @@ Guide maintainers in preserving and improving the harness architecture. This doc
 | **Frontier Models are Capable** | Flows provide "why", agents deduce "how"; control flows not micromanagement |
 | **Agentic Validation Tooling** | Schema validation on edit; diagnostics hooks; validation suites as acceptance criteria |
 | **Knowledge Compounding** | Compaction summaries preserve learnings; skills/validation improve with use |
-| **Quality Engineering** | Workflow configs define hypothesis domains; emergent agents diversify work to discover valuable variants |
+| **Quality Engineering** | Settings define hypothesis domains; hypothesis planner diversifies work to discover valuable variants |
 
 ---
 
@@ -81,7 +81,7 @@ Format config: `enabled`, `command` (default), `patterns` (file-specific overrid
 Per **Context is Precious** and **Prompt Files as Units of Work**, the TUI orchestrates agents with bounded context.
 
 ### Structure
-- **Actions Pane (left)**: Agent spawners, toggles (loop, emergent), utilities
+- **Actions Pane (left)**: Agent spawners, toggles (loop, parallel), utilities
 - **Prompts Pane (center)**: Work-in-progress by status (pending, in_progress, done)
 - **Status Pane (right)**: Active agent grid, milestone info, activity log
 
@@ -154,17 +154,13 @@ Zod schemas for harness configuration. NOT exposed to agents:
 **Template Variables Registry** (`template-vars.ts`)
 - Single source of truth for valid template variables
 - Each has Zod schema + description
-- Variables: `SPEC_PATH`, `ALIGNMENT_PATH`, `MILESTONE_NAME`, `PROMPT_NUMBER`, `BRANCH`, `HYPOTHESIS_DOMAINS`, `WORKFLOW_TYPE`, etc.
+- Variables: `SPEC_PATH`, `ALIGNMENT_PATH`, `MILESTONE_NAME`, `PROMPT_NUMBER`, `BRANCH`, `HYPOTHESIS_DOMAINS`, `SPEC_TYPE`, etc.
 
 **Agent Profile Schema** (`agent-profile.ts`)
 - Raw schema (snake_case from YAML) + normalized interface (camelCase)
 - Semantic validation: template vars in `message_template` must match `template_vars` list
 - Pattern validation: `PROMPT_NUMBER` must match `^\d{2}$`
 
-**Workflow Schema** (`workflow.ts`)
-- Validates workflow configs from `.allhands/workflows/`
-- Used by `workflows.ts` loader to parse and validate configs
-- Domains defined in `settings.json`, not hardcoded
 
 ### Why Zod for Internal
 - Type safety with compile-time checks
@@ -204,13 +200,13 @@ template_vars:              # Required context variables
 
 ---
 
-## Workflow Configuration
+## Hypothesis Domains
 
-Per **Quality Engineering**, workflows define what hypothesis domains are available to emergent refinement agents.
+Per **Quality Engineering**, hypothesis domains define the available work areas for the hypothesis planner.
 
-### Hypothesis Domains
+### Configuration
 
-Defined in `settings.json` under `emergent.hypothesisDomains`:
+Defined in `settings.json` under `emergent.hypothesisDomains` (the key name describes the work type, not an agent):
 ```json
 {
   "emergent": {
@@ -221,29 +217,14 @@ Defined in `settings.json` under `emergent.hypothesisDomains`:
 
 Per **Frontier Models are Capable**, agents understand domain meanings from names alone—no descriptions needed.
 
-### Workflow Configs (`workflows/*.yaml`)
-
-Optional configs can restrict which domains are available for specific workflow types:
-```yaml
-name: debugging
-description: Issue diagnosis and resolution
-hypothesis_domains:
-  - reproduction
-  - diagnosis
-  - stability
-  - testing
-```
-
-If no workflow config exists, all domains from `settings.json` are available.
-
 ### Integration with Agent Spawning
-1. `buildTemplateContext()` loads domains from `settings.json` (or workflow config if specified)
+1. `buildTemplateContext()` loads domains from `settings.json`
 2. Domains formatted as `HYPOTHESIS_DOMAINS` template variable
-3. Emergent agent receives available domains in spawn message
-4. Agent selects domain and documents work type in summary
+3. Hypothesis planner receives available domains in spawn message
+4. Planner selects domain and creates `type: emergent` prompts for executors
 
 ### Diversification Rule
-Per **Knowledge Compounding**, emergent agents track work types in alignment doc summaries. If prior prompts cluster on one domain, subsequent agents should break the trend by selecting an underrepresented domain.
+Per **Knowledge Compounding**, the hypothesis planner tracks work types in alignment doc summaries. If prior prompts cluster on one domain, subsequent prompts should diversify by selecting an underrepresented domain.
 
 ---
 
@@ -335,10 +316,9 @@ Sub-flows use `<inputs>` and `<outputs>` tags for execution-agnostic subtasks.
 2. Create flow file in `flows/`
 3. Run `ah validate agents`
 
-### Adding New Workflows
-1. Define available domains in `settings.json` under `emergent.hypothesisDomains`
-2. Optionally create YAML config in `workflows/` to restrict domains for specific workflow types
-3. Future: Add `workflow` field to spec frontmatter to select workflow type
+### Updating Hypothesis Domains
+1. Edit available domains in `settings.json` under `emergent.hypothesisDomains`
+2. Domains are passed to hypothesis planner via `HYPOTHESIS_DOMAINS` template variable
 
 ### Adding New Template Variables
 1. Add to `TemplateVars` registry in `src/lib/schemas/template-vars.ts`
