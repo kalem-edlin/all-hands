@@ -494,6 +494,9 @@ async function handleAction(
           tui.log('Warning: Could not push completion commit.');
         }
 
+        // Discard uncommitted changes so checkout doesn't fail
+        execSync('git checkout -- . && git clean -fd', { stdio: 'pipe', cwd });
+
         // Checkout local base branch
         const localBase = getLocalBaseBranch();
         const baseBranch = getBaseBranch();
