@@ -36,7 +36,7 @@ The compaction pipeline captures git diff state through [ref:.allhands/harness/s
 
 ## Observability
 
-[ref:.allhands/harness/src/hooks/observability.ts::d7e4a93] provides structured logging across every hook event type. Each handler logs to the trace store via [ref:.allhands/harness/src/lib/trace-store.ts:logEvent].
+[ref:.allhands/harness/src/hooks/observability.ts::d7e4a93] provides structured logging across every hook event type. Each handler logs to the trace store via [ref:.allhands/harness/src/lib/trace-store.ts:logEvent:79b9873].
 
 ### Event Coverage
 
@@ -68,7 +68,7 @@ Enforcement hooks use [ref:.allhands/harness/src/hooks/shared.ts:denyTool:d7e4a9
 
 ## Notifications
 
-[ref:.allhands/harness/src/hooks/notification.ts:handleStopNotification:d7e4a93] and [ref:.allhands/harness/src/hooks/notification.ts:handleCompactNotification:d7e4a93] send system notifications when agents stop or compact. They use [ref:.allhands/harness/src/lib/notification.ts:sendGateNotification] to deliver alerts, keeping operators informed of agent lifecycle events without requiring TUI visibility.
+[ref:.allhands/harness/src/hooks/notification.ts:handleStopNotification:d7e4a93] and [ref:.allhands/harness/src/hooks/notification.ts:handleCompactNotification:d7e4a93] send system notifications when agents stop or compact. They use [ref:.allhands/harness/src/lib/notification.ts:sendGateNotification:79b9873] to deliver alerts, keeping operators informed of agent lifecycle events without requiring TUI visibility.
 
 ## Transcript Parsing
 

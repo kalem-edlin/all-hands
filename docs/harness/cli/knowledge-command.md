@@ -39,9 +39,9 @@ Files named `memories.md` are excluded from indexing -- they contain project-spe
 
 ## Embedding and Search
 
-[ref:.allhands/harness/src/lib/knowledge.ts:KnowledgeService] exposes an `embed` method that generates 768-dimensional embeddings using the `gtr-t5-quant` model from `@visheratin/web-ai-node`. The model is lazy-loaded on first use and cached for the process lifetime.
+[ref:.allhands/harness/src/lib/knowledge.ts:KnowledgeService:79b9873] exposes an `embed` method that generates 768-dimensional embeddings using the `gtr-t5-quant` model from `@visheratin/web-ai-node`. The model is lazy-loaded on first use and cached for the process lifetime.
 
-The `search` method on [ref:.allhands/harness/src/lib/knowledge.ts:KnowledgeService] executes similarity search with several filtering layers:
+The `search` method on [ref:.allhands/harness/src/lib/knowledge.ts:KnowledgeService:79b9873] executes similarity search with several filtering layers:
 
 | Filter | Threshold | Purpose |
 |--------|-----------|---------|
@@ -63,7 +63,7 @@ The aggregation can be disabled with `--no-aggregate` for raw results, or `--met
 
 ### Full Reindex
 
-The `reindexAll` method on [ref:.allhands/harness/src/lib/knowledge.ts:KnowledgeService] rebuilds an index from scratch:
+The `reindexAll` method on [ref:.allhands/harness/src/lib/knowledge.ts:KnowledgeService:79b9873] rebuilds an index from scratch:
 
 1. Discovers all files matching the index configuration (paths + extensions)
 2. Parses frontmatter from markdown files for metadata (description, relevant_files)
@@ -73,7 +73,7 @@ The `reindexAll` method on [ref:.allhands/harness/src/lib/knowledge.ts:Knowledge
 
 ### Incremental Reindex
 
-The `reindexFromChanges` method on [ref:.allhands/harness/src/lib/knowledge.ts:KnowledgeService] updates an existing index based on a list of file changes:
+The `reindexFromChanges` method on [ref:.allhands/harness/src/lib/knowledge.ts:KnowledgeService:79b9873] updates an existing index based on a list of file changes:
 
 - **Added/Modified files**: Re-embed and upsert into the index
 - **Deleted files**: Remove from metadata (vector remains in index but is filtered during search)
@@ -84,7 +84,7 @@ The `reindexFromChanges` method on [ref:.allhands/harness/src/lib/knowledge.ts:K
 
 ### Document Indexing
 
-The `indexDocument` method on [ref:.allhands/harness/src/lib/knowledge.ts:KnowledgeService] handles individual document insertion. It assigns or reuses numeric IDs, removes old entries before re-adding (USearch requires unique keys), generates embeddings, and stores metadata including description, relevant files, and estimated token count.
+The `indexDocument` method on [ref:.allhands/harness/src/lib/knowledge.ts:KnowledgeService:79b9873] handles individual document insertion. It assigns or reuses numeric IDs, removes old entries before re-adding (USearch requires unique keys), generates embeddings, and stores metadata including description, relevant files, and estimated token count.
 
 ## Status Checking
 
