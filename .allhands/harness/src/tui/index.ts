@@ -17,7 +17,7 @@
 import blessed from 'blessed';
 import { createActionsPane, ActionItem, ToggleState } from './actions.js';
 import { createPromptsPane, PromptItem } from './prompts-pane.js';
-import { createStatusPane, AgentInfo, FileStates, StatusPaneOptions } from './status-pane.js';
+import { createStatusPane, AgentInfo, FileStates, StatusPaneOptions, getSelectableItems } from './status-pane.js';
 import { createModal, Modal } from './modal.js';
 import { createFileViewer, FileViewer, getPlanningFilePath, getSpecFilePath } from './file-viewer-modal.js';
 import { EventLoop } from '../lib/event-loop.js';
@@ -31,14 +31,14 @@ import { loadAllPrompts, type PromptFile } from '../lib/prompts.js';
 import { readStatus, sanitizeBranchForDir, planningDirExists } from '../lib/planning.js';
 import { loadAllSpecs, specsToModalItems, type SpecFile } from '../lib/specs.js';
 import { loadAllFlows, flowsToModalItems } from '../lib/flows.js';
-import { isTldrInstalled, hasSemanticIndex, needsSemanticRebuild, buildSemanticIndexAsync } from '../lib/tldr.js';
+import { isTldrInstalled, hasSemanticIndex, needsSemanticRebuild, buildSemanticIndexAsync, warmCallGraph, ensureTldrDaemon } from '../lib/tldr.js';
 import { loadProjectSettings } from '../hooks/shared.js';
 import { CLIDaemon } from '../lib/cli-daemon.js';
 import { join } from 'path';
 
 export type PaneId = 'actions' | 'prompts' | 'status';
 
-export type PRActionState = 'create-pr' | 'greptile-reviewing' | 'address-pr';
+export type PRActionState = 'create-pr' | 'awaiting-review' | 'rerun-pr-review';
 
 export interface TUIOptions {
   onAction: (action: string, data?: Record<string, unknown>) => void;
@@ -58,6 +58,7 @@ export interface TUIState {
   branch?: string;
   baseBranch?: string;
   prActionState: PRActionState;
+  prReviewUnlocked: boolean;  // true after first PR review detected
   compoundRun: boolean;
   customFlowCounter: number;
 }
@@ -110,6 +111,7 @@ export class TUI {
       prompts: [],
       activeAgents: [],
       prActionState: 'create-pr',
+      prReviewUnlocked: false,
       compoundRun: false,
       customFlowCounter: 0,
     };
@@ -205,11 +207,12 @@ export class TUI {
     // Initialize event loop daemon
     if (options.cwd) {
       this.eventLoop = new EventLoop(options.cwd, {
-        onGreptileFeedback: (available) => {
-          if (available && this.state.prActionState === 'greptile-reviewing') {
-            this.state.prActionState = 'address-pr';
+        onPRReviewFeedback: (available: boolean) => {
+          if (available && this.state.prActionState === 'awaiting-review') {
+            this.state.prActionState = 'rerun-pr-review';
+            this.state.prReviewUnlocked = true;  // Unlock Review PR action
             this.buildActionItems();
-            this.log('Greptile feedback available - ready to address PR review');
+            this.log('PR review feedback available - ready to review or rerun');
             this.render();
           }
         },
@@ -268,14 +271,18 @@ export class TUI {
         },
         onSpawnExecutor: (prompt) => {
           this.log(`Loop: Spawning executor for prompt ${prompt.frontmatter.number}`);
-          if (this.state.branch && this.state.spec && this.options.onSpawnExecutor) {
-            this.options.onSpawnExecutor(prompt, this.state.branch, this.state.spec);
+          if (this.state.branch && this.options.onSpawnExecutor) {
+            // Use spec if available, otherwise fall back to planning key
+            const specId = this.state.spec || sanitizeBranchForDir(this.state.branch);
+            this.options.onSpawnExecutor(prompt, this.state.branch, specId);
           }
         },
         onSpawnEmergent: (prompt) => {
           this.log(`Loop: Spawning emergent for prompt ${prompt.frontmatter.number}`);
-          if (this.state.branch && this.state.spec && this.options.onSpawnEmergent) {
-            this.options.onSpawnEmergent(prompt, this.state.branch, this.state.spec);
+          if (this.state.branch && this.options.onSpawnEmergent) {
+            // Use spec if available, otherwise fall back to planning key
+            const specId = this.state.spec || sanitizeBranchForDir(this.state.branch);
+            this.options.onSpawnEmergent(prompt, this.state.branch, specId);
           }
         },
         onLoopStatus: (message) => {
@@ -334,8 +341,16 @@ export class TUI {
     this.render();
 
     try {
-      // Build TLDR semantic index if missing or stale (non-blocking with progress)
+      // Ensure TLDR daemon is running first (required for dirty file tracking)
       if (isTldrInstalled()) {
+        const daemonStarted = await ensureTldrDaemon(this.options.cwd);
+        if (daemonStarted) {
+          this.log('TLDR daemon ready');
+        } else {
+          this.log('TLDR daemon failed to start');
+        }
+        this.render();
+
         const needsIndex = !hasSemanticIndex(this.options.cwd);
         const needsRebuild = needsSemanticRebuild(this.options.cwd);
 
@@ -356,30 +371,19 @@ export class TUI {
           this.render();
         }
 
-        // Also index .allhands directory if enabled in settings (for harness development)
-        const settings = loadProjectSettings();
-        if (settings?.tldr?.enableForHarness) {
-          const allhandsDir = join(this.options.cwd, '.allhands');
-          const needsHarnessIndex = !hasSemanticIndex(allhandsDir);
-          const needsHarnessRebuild = needsSemanticRebuild(allhandsDir);
-
-          if (needsHarnessIndex || needsHarnessRebuild) {
-            this.log('Building semantic index for .allhands...');
-            this.render();
-            const harnessResult = await buildSemanticIndexAsync(allhandsDir, (msg) => {
-              this.log(msg);
-              this.render();
-            });
-            if (harnessResult.success) {
-              const langInfo = harnessResult.languages.length > 0 ? ` (${harnessResult.languages.join(', ')})` : '';
-              const countInfo = harnessResult.filesIndexed > 0 ? `${harnessResult.filesIndexed} files` : '';
-              this.log(`Harness index ready${countInfo ? `: ${countInfo}` : ''}${langInfo} ✓`);
-            } else {
-              this.log('Harness index failed');
-            }
-            this.render();
-          }
+        // Always run warm to build/update call graph cache
+        this.log('Warming call graph cache...');
+        this.render();
+        const warmResult = await warmCallGraph(this.options.cwd, (msg) => {
+          this.log(msg);
+          this.render();
+        });
+        if (warmResult.success) {
+          this.log(`Call graph ready: ${warmResult.files} files, ${warmResult.edges} edges ✓`);
+        } else {
+          this.log('Call graph warm skipped or failed');
         }
+        this.render();
       }
 
       // Validate agent profiles first
@@ -471,12 +475,21 @@ export class TUI {
 
       if (validation.frontmatter_error_count > 0) {
         this.log(`⚠ ${validation.frontmatter_error_count} frontmatter errors`);
+        for (const err of validation.frontmatter_errors) {
+          this.log(`  → ${err.doc_file}: ${err.reason}`);
+        }
       }
       if (validation.stale_count > 0) {
         this.log(`⚠ ${validation.stale_count} stale references`);
+        for (const ref of validation.stale) {
+          this.log(`  → ${ref.doc_file}: ${ref.reference}`);
+        }
       }
       if (validation.invalid_count > 0) {
         this.log(`⚠ ${validation.invalid_count} invalid references`);
+        for (const ref of validation.invalid) {
+          this.log(`  → ${ref.doc_file}: ${ref.reference} (${ref.reason})`);
+        }
       }
 
       this.log('Index ready ✓');
@@ -522,6 +535,7 @@ export class TUI {
       emergentEnabled: this.state.emergentEnabled,
       parallelEnabled: this.state.parallelEnabled,
       prActionState: this.state.prActionState,
+      prReviewUnlocked: this.state.prReviewUnlocked,
       hasSpec: !!this.state.spec,
       hasCompletedPrompts,
       compoundRun: this.state.compoundRun,
@@ -531,7 +545,7 @@ export class TUI {
   private buildActionItems(): void {
     const hasSpec = !!this.state.spec;
     const hasCompletedPrompts = this.state.prompts.some(p => p.status === 'done');
-    const prDisabled = this.state.prActionState === 'greptile-reviewing';
+    const prDisabled = this.state.prActionState === 'awaiting-review';
 
     // Dynamic label for switch/choose spec
     const specLabel = hasSpec ? 'Switch Spec' : 'Choose Spec';
@@ -545,14 +559,18 @@ export class TUI {
       // These require at least 1 completed prompt
       { id: 'e2e-test-planner', label: 'Build E2E Test', key: '4', type: 'action', hidden: !hasCompletedPrompts },
       { id: 'review-jury', label: 'Review Jury', key: '5', type: 'action', hidden: !hasCompletedPrompts },
+      // PR action row (Create PR / Awaiting Review... / Rerun PR Review)
       { id: 'pr-action', label: this.getPRActionLabel(), key: '6', type: 'action', disabled: prDisabled, hidden: !hasCompletedPrompts },
-      { id: 'compound', label: 'Compound', key: '7', type: 'action', hidden: !hasCompletedPrompts },
-      // Mark completed - only visible if compound has been run
-      { id: 'mark-completed', label: 'Mark Completed', key: '8', type: 'action', hidden: !this.state.compoundRun },
-      // Switch/Choose spec - always visible, label changes
-      { id: 'switch-spec', label: specLabel, key: '9', type: 'action' },
+      // Review PR - only visible after first PR review detected
+      { id: 'review-pr', label: 'Review PR', key: '7', type: 'action', hidden: !this.state.prReviewUnlocked },
+      // Compound (shifted from 7 to 8)
+      { id: 'compound', label: 'Compound', key: '8', type: 'action', hidden: !hasCompletedPrompts },
+      // Mark completed - only visible if compound has been run (shifted from 8 to 9)
+      { id: 'mark-completed', label: 'Mark Completed', key: '9', type: 'action', hidden: !this.state.compoundRun },
+      // Switch/Choose spec - always visible, label changes (shifted from 9 to 0)
+      { id: 'switch-spec', label: specLabel, key: '0', type: 'action' },
       // Custom Flow - always visible, allows running any flow with custom message
-      { id: 'custom-flow', label: 'Custom Flow', key: '0', type: 'action' },
+      { id: 'custom-flow', label: 'Custom Flow', key: '-', type: 'action' },
       { id: 'separator-toggles', label: '─ Toggles ─', type: 'separator' },
       { id: 'toggle-loop', label: 'Loop', key: 'O', type: 'toggle', checked: this.state.loopEnabled },
       { id: 'toggle-emergent', label: 'Emergent', key: 'E', type: 'toggle', checked: this.state.emergentEnabled },
@@ -568,8 +586,8 @@ export class TUI {
   private getPRActionLabel(): string {
     switch (this.state.prActionState) {
       case 'create-pr': return 'Create PR';
-      case 'greptile-reviewing': return 'Greptile Reviewing';
-      case 'address-pr': return 'Address PR Review';
+      case 'awaiting-review': return 'Awaiting Review...';
+      case 'rerun-pr-review': return 'Rerun PR Review';
     }
   }
 
@@ -638,15 +656,18 @@ export class TUI {
       }
     });
 
-    // Number hotkeys for actions (work globally, not just in actions pane)
-    const hotkeys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'];
-    hotkeys.forEach((key, index) => {
+    // Hotkeys for actions (work globally, not just in actions pane)
+    // Uses the key property from action items for consistent mapping
+    const hotkeys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-'];
+    hotkeys.forEach((key) => {
       this.screen.key([key], () => {
         if (!this.activeModal && !this.activeFileViewer) {
-          const selectableItems = this.getSelectableActionItems();
-          const actionItems = selectableItems.filter(i => i.type === 'action');
-          if (index < actionItems.length) {
-            this.handleAction(actionItems[index].id);
+          // Find the action item with this key that is visible and enabled
+          const matchingItem = this.actionItems.find(
+            (item) => item.key === key && !item.hidden && !item.disabled && item.type === 'action'
+          );
+          if (matchingItem) {
+            this.handleAction(matchingItem.id);
           }
         }
       });
@@ -691,6 +712,13 @@ export class TUI {
       }
     });
 
+    // Delete agent when 'x' is pressed and status pane is focused with agent selected
+    this.screen.key(['x'], () => {
+      if (!this.activeModal && this.focusedPane === 'status') {
+        this.deleteSelectedAgent();
+      }
+    });
+
   }
 
   private cyclePane(direction: number): void {
@@ -721,7 +749,14 @@ export class TUI {
       case 'prompts':
         return Math.max(0, this.state.prompts.length - 1);
       case 'status':
-        return Math.max(0, this.state.activeAgents.length - 1);
+        // Status pane has docs + agents as selectable items
+        const fileStates = this.getFileStates();
+        const selectableItems = getSelectableItems(
+          this.state.spec,
+          fileStates,
+          this.state.activeAgents
+        );
+        return Math.max(0, selectableItems.length - 1);
     }
   }
 
@@ -740,8 +775,88 @@ export class TUI {
         const title = `Prompt ${String(prompt.number).padStart(2, '0')}: ${prompt.title}`;
         this.openFileViewer(title, prompt.path);
       }
+    } else if (this.focusedPane === 'status') {
+      // Status pane: select docs or agents
+      const fileStates = this.getFileStates();
+      const selectableItems = getSelectableItems(
+        this.state.spec,
+        fileStates,
+        this.state.activeAgents
+      );
+      const item = selectableItems[this.selectedIndex.status];
+      if (item) {
+        switch (item.type) {
+          case 'spec':
+            if (this.state.spec && this.options.cwd) {
+              // Try branch first (status.yaml is in branch-based folder), then spec name
+              const specPath = getSpecFilePath(this.options.cwd, this.state.branch || this.state.spec);
+              if (specPath) {
+                this.openFileViewer(`Spec: ${this.state.spec}`, specPath);
+              }
+            }
+            break;
+          case 'alignment':
+            if (this.state.branch && this.options.cwd) {
+              const alignPath = getPlanningFilePath(this.options.cwd, this.state.branch, 'alignment');
+              if (alignPath) {
+                this.openFileViewer('Alignment Document', alignPath);
+              }
+            }
+            break;
+          case 'e2e':
+            if (this.state.branch && this.options.cwd) {
+              const e2ePath = getPlanningFilePath(this.options.cwd, this.state.branch, 'e2e_test_plan');
+              if (e2ePath) {
+                this.openFileViewer('E2E Test Plan', e2ePath);
+              }
+            }
+            break;
+          case 'agent':
+            // For agents, Enter could show details - for now just log
+            this.log(`Selected agent: ${item.agentName}`);
+            break;
+        }
+      }
     }
-    // Status pane selection - could show agent details
+  }
+
+  /**
+   * Delete the currently selected agent (when status pane is focused)
+   */
+  private deleteSelectedAgent(): void {
+    if (this.focusedPane !== 'status') return;
+
+    const fileStates = this.getFileStates();
+    const selectableItems = getSelectableItems(
+      this.state.spec,
+      fileStates,
+      this.state.activeAgents
+    );
+    const item = selectableItems[this.selectedIndex.status];
+
+    if (item?.type === 'agent' && item.agentName) {
+      const agentName = item.agentName;
+      // Find and kill the agent window
+      const currentSession = getCurrentSession();
+      if (currentSession) {
+        try {
+          killWindow(currentSession, agentName);
+          // Remove from active agents
+          this.state.activeAgents = this.state.activeAgents.filter(
+            (a) => a.name !== agentName
+          );
+          this.log(`Deleted agent: ${agentName}`);
+          // Adjust selection if needed
+          const newMax = this.getMaxIndexForPane('status');
+          if (this.selectedIndex.status > newMax) {
+            this.selectedIndex.status = Math.max(0, newMax);
+          }
+          this.render();
+        } catch (e) {
+          this.log(`Failed to delete agent: ${agentName}`);
+        }
+      }
+    }
   }
 
   /**
@@ -819,9 +934,12 @@ export class TUI {
       case 'pr-action':
         if (this.state.prActionState === 'create-pr') {
           this.options.onAction('create-pr');
-        } else if (this.state.prActionState === 'address-pr') {
-          this.options.onAction('address-pr');
+        } else if (this.state.prActionState === 'rerun-pr-review') {
+          this.options.onAction('rerun-pr-review');
         }
+        break;
+      case 'review-pr':
+        this.options.onAction('review-pr');
         break;
       default:
         this.options.onAction(actionId);
@@ -852,9 +970,11 @@ export class TUI {
   }
 
   private openLogModal(): void {
+    // Reverse logs so newest entries appear at the top
+    const reversedLogs = [...this.logEntries].reverse();
     this.activeModal = createModal(this.screen, {
       title: 'Activity Log',
-      items: this.logEntries.map((entry, i) => ({
+      items: reversedLogs.map((entry, i) => ({
         id: `log-${i}`,
         label: entry,
         type: 'item' as const,
@@ -1221,14 +1341,14 @@ export class TUI {
   }
 
   /**
-   * Set PR URL for Greptile feedback monitoring
+   * Set PR URL for PR review feedback monitoring
    */
   public setPRUrl(url: string | null): void {
     if (this.eventLoop) {
       this.eventLoop.setPRUrl(url);
     }
     if (url) {
-      this.state.prActionState = 'greptile-reviewing';
+      this.state.prActionState = 'awaiting-review';
       this.buildActionItems();
       this.render();
     }
@@ -1282,7 +1402,8 @@ export class TUI {
       {
         onViewSpec: () => {
           if (this.state.spec && this.options.cwd) {
-            const specPath = getSpecFilePath(this.options.cwd, this.state.spec);
+            // Try branch first (status.yaml is in branch-based folder), then spec name
+            const specPath = getSpecFilePath(this.options.cwd, this.state.branch || this.state.spec);
             if (specPath) {
               this.openFileViewer(`Spec: ${this.state.spec}`, specPath);
             }
