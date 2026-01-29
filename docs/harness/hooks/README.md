@@ -10,6 +10,6 @@ Hooks intercept tool calls (PreToolUse, PostToolUse) and session events (Stop, C
 
 | Category | Doc |
 |---|---|
-| Context injection (tldr, edit, search routing, transcript safeguard) | [ref:docs/harness/hooks/context-hooks.md] |
-| Validation (diagnostics, schema, formatting) | [ref:docs/harness/hooks/validation-hooks.md] |
-| Lifecycle, observability, enforcement, notifications | [ref:docs/harness/hooks/lifecycle-and-observability-hooks.md] |
+| Context injection (tldr, edit, search routing, transcript safeguard) | [ref:docs/harness/hooks/context-hooks.md::bc59166] |
+| Validation (diagnostics, schema, formatting) | [ref:docs/harness/hooks/validation-hooks.md::bc59166] |
+| Lifecycle, observability, enforcement, notifications | [ref:docs/harness/hooks/lifecycle-and-observability-hooks.md::bc59166] |

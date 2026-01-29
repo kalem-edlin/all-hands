@@ -6,6 +6,6 @@ description: "Index of sync CLI command documentation covering sync (framework i
 
 | Command | Purpose | Doc |
 |---|---|---|
-| sync | Initialize or update the allhands framework with conflict resolution | [ref:docs/sync-cli/commands/sync-command.md] |
-| push | Contribute local changes back upstream via GitHub fork and PR | [ref:docs/sync-cli/commands/push-command.md] |
-| pull-manifest | Scaffold the sync config file for push customization | [ref:docs/sync-cli/commands/pull-manifest-command.md] |
+| sync | Initialize or update the allhands framework with conflict resolution | [ref:docs/sync-cli/commands/sync-command.md::bc59166] |
+| push | Contribute local changes back upstream via GitHub fork and PR | [ref:docs/sync-cli/commands/push-command.md::bc59166] |
+| pull-manifest | Scaffold the sync config file for push customization | [ref:docs/sync-cli/commands/pull-manifest-command.md::bc59166] |
