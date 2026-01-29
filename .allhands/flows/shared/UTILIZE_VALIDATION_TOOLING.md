@@ -22,7 +22,7 @@ Find and apply existing validation tooling to build strong acceptance criteria. 
 ## Step 1: Discover Available Suites
 
 - Run `ah validation-tools list`
-- Returns JSON with: `name`, `description`, `globs`, `file` path
+- Returns JSON with: `name`, `description`, `globs`, `file` path, `tools`
 
 ## Step 2: Identify Relevant Suites
 
@@ -45,16 +45,19 @@ For each relevant suite:
 
 Understand:
 - **Purpose**: What quality aspects it validates
-- **When to Use**: Confirm it matches your task
-- **Validation Commands**: Exact commands to run
-- **Interpreting Results**: How to know if validation passed
+- **Tooling**: What tools are needed and how to install/configure them
+- **Stochastic Validation**: How to use the suite for exploratory agent-driven validation during implementation
+- **Deterministic Integration**: What CI-gated commands to run for acceptance criteria
 
 ## Step 4: Integrate into Acceptance Criteria
 
-When writing acceptance criteria:
-- Reference specific commands from "Validation Commands" section
-- Define success conditions based on "Interpreting Results"
-- Order validation progressively
+Per **Agentic Validation Tooling**, use each dimension at the right phase:
+
+- **During implementation**: Follow the **Stochastic Validation** section — use model intuition to probe edge cases, test user flows, and verify quality beyond deterministic checks
+- **For acceptance criteria**: Reference the **Deterministic Integration** section — these are binary pass/fail commands that gate completion
+- Stochastic exploration informs quality during the work but is not an acceptance criterion — acceptance criteria must be deterministic
+
+Order validation progressively when writing acceptance criteria:
 
 Example:
 ```markdown
