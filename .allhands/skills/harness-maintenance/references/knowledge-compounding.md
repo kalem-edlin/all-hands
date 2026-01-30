@@ -71,3 +71,8 @@ This manifests in:
 - **Memories**: Persistent learnings across agent sessions
 - **Validation suites**: Crystallized quality checks that compound
 - **Skills**: Domain expertise packages that deepen over time
+
+## Related References
+
+- [`validation-tooling.md`](validation-tooling.md) — When knowledge artifacts involve validation suites or crystallization
+- [`harness_skills.md`](harness_skills.md) — When knowledge compounds through skill improvement or reference docs

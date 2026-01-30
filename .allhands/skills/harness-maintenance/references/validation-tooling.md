@@ -70,3 +70,8 @@ Prompt files reference validation suites in their `validation_suites` frontmatte
 1. Agent reads suite's **Stochastic Validation** section during implementation for exploratory quality
 2. Agent runs suite's **Deterministic Integration** section for acceptance criteria gating
 3. Validation review (`PROMPT_VALIDATION_REVIEW.md`) confirms pass/fail
+
+## Related References
+
+- [`tools-commands-mcp-hooks.md`](tools-commands-mcp-hooks.md) — When validation uses hooks, CLI commands, or MCP research tools
+- [`knowledge-compounding.md`](knowledge-compounding.md) — When crystallized patterns need to compound into persistent knowledge

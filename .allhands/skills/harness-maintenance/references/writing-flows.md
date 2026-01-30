@@ -68,3 +68,8 @@ Sub-flows use `<inputs>` and `<outputs>` tags for execution-agnostic subtasks. T
 ## Northstar Example
 
 See `.allhands/flows/PROMPT_TASK_EXECUTION.md` — this flow demonstrates all conventions: `<goal>`, `<constraints>`, phase sections, action-verb bullets, progressive disclosure via sub-flow references, and explicit completion steps.
+
+## Related References
+
+- [`core-architecture.md`](core-architecture.md) — When your flow change touches directory structure, TUI lifecycle, or schema system
+- [`harness_skills.md`](harness_skills.md) — When creating a flow that should be discoverable as a skill entry point

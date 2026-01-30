@@ -79,3 +79,9 @@ Per **Context is Precious**, each reference doc should:
 |-------|---------|---------|
 | `harness-maintenance` | Harness architecture and extension | Hub + `references/` |
 | `claude-code-patterns` | Claude Code native features | Hub + `docs/` |
+
+## Related References
+
+- [`writing-flows.md`](writing-flows.md) — When authoring reference docs or skill entry-point flows
+- [`knowledge-compounding.md`](knowledge-compounding.md) — When skills need to compound knowledge via schemas or indexes
+- [`core-architecture.md`](core-architecture.md) — When skill globs or discovery interact with directory structure
