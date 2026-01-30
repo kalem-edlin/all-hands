@@ -555,7 +555,7 @@ export interface EventLoopSettings {
 
 /** PR review detection and triggering settings */
 export interface PRReviewSettings {
-  reviewDetectionString?: string;
+  reviewMatchPattern?: string;
   rerunComment?: string;
   checkFrequency?: number;
 }
@@ -563,6 +563,11 @@ export interface PRReviewSettings {
 /** Project settings structure (.allhands/settings.json) */
 export interface DaemonSettings {
   enabled?: boolean;
+}
+
+/** Emergent work settings (hypothesis domains for emergent planner) */
+export interface EmergentSettings {
+  hypothesisDomains?: string[];
 }
 
 export interface ProjectSettings {
@@ -576,6 +581,7 @@ export interface ProjectSettings {
   spawn?: SpawnSettings;
   eventLoop?: EventLoopSettings;
   prReview?: PRReviewSettings;
+  emergent?: EmergentSettings;
   disabledHooks?: string[];
 }
 

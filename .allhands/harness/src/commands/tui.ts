@@ -33,7 +33,7 @@ import {
 import { triggerPRReview } from '../lib/pr-review.js';
 import { loadProjectSettings } from '../hooks/shared.js';
 import { findSpecForPath, extractSpecNameFromFile } from '../lib/planning-utils.js';
-import { getBaseBranch, getLocalBaseBranch } from '../lib/git.js';
+import { getBaseBranch, getLocalBaseBranch, hasUncommittedChanges } from '../lib/git.js';
 import { loadAllPrompts, getNextPromptNumber } from '../lib/prompts.js';
 import {
   isTmuxInstalled,
@@ -47,9 +47,24 @@ import { setHubWindowId, clearTuiSession } from '../lib/session.js';
 import { getProfilesByTuiAction } from '../lib/opencode/index.js';
 import { buildPR } from '../lib/oracle.js';
 import type { PromptFile } from '../lib/prompts.js';
-import { findSpecById, getSpecForBranch, type SpecFile } from '../lib/specs.js';
+import { findSpecById, getSpecForBranch, type SpecFile, type SpecType } from '../lib/specs.js';
 import { updateSpecStatus, reindexAfterMove } from './specs.js';
 import { logTuiError, logTuiAction, logTuiLifecycle } from '../lib/trace-store.js';
+import { getFlowsDirectory } from '../lib/flows.js';
+
+/**
+ * Map spec types to scoping flow filenames.
+ * Milestone uses the ideation agent's default flow (IDEATION_SESSION.md).
+ * All other types map to their respective scoping flow file.
+ */
+export const SCOPING_FLOW_MAP: Record<SpecType, string | null> = {
+  milestone: null,
+  investigation: 'INVESTIGATION_SCOPING.md',
+  optimization: 'OPTIMIZATION_SCOPING.md',
+  refactor: 'REFACTOR_SCOPING.md',
+  documentation: 'DOCUMENTATION_SCOPING.md',
+  triage: 'TRIAGE_SCOPING.md',
+};
 
 /**
  * Launch the TUI - can be called directly or via command
@@ -110,7 +125,6 @@ export async function launchTUI(options: { spec?: string } = {}): Promise<void> 
 
   const initialState: Partial<TUIState> = {
     loopEnabled: false, // Always start disabled, regardless of saved status
-    emergentEnabled: status?.loop.emergent ?? false,
     parallelEnabled: status?.loop?.parallel ?? false,
     prompts: promptItems,
     activeAgents,
@@ -118,7 +132,6 @@ export async function launchTUI(options: { spec?: string } = {}): Promise<void> 
     branch,
     baseBranch,
     prActionState: initialPRActionState,
-    compoundRun: status?.compound_run ?? false,
     customFlowCounter: 0,
   };
 
@@ -140,8 +153,8 @@ export async function launchTUI(options: { spec?: string } = {}): Promise<void> 
     onSpawnExecutor: (prompt, executorBranch, specId) => {
       spawnExecutorForPrompt(tui, prompt, executorBranch, specId);
     },
-    onSpawnEmergent: (prompt, emergentBranch, specId) => {
-      spawnEmergentForPrompt(tui, prompt, emergentBranch, specId);
+    onSpawnEmergentPlanning: (emergentBranch, specId) => {
+      spawnEmergentPlanningAgent(tui, emergentBranch, specId);
     },
     cwd: process.cwd(),
   });
@@ -173,7 +186,7 @@ export async function launchTUI(options: { spec?: string } = {}): Promise<void> 
  * Spawn agents for a TUI action using profile definitions
  *
  * Looks up all agent profiles with matching tui_action and spawns them.
- * Multiple profiles can share the same tui_action (e.g., compound spawns both documentor and compounder).
+ * Multiple profiles can share the same tui_action (e.g., compound can spawn multiple agents).
  */
 async function spawnAgentsForAction(
   tui: TUI,
@@ -245,10 +258,25 @@ async function spawnAgentsForAction(
   // Track compound_run in status when compound action is triggered
   if (action === 'compound' && planningKey && status) {
     updateStatus({ compound_run: true }, planningKey, cwd);
-    tui.updateState({ compoundRun: true });
   }
 
   updateRunningAgents(tui, branch);
+  return true;
+}
+
+/**
+ * Check for uncommitted changes and prompt the user for confirmation.
+ * Returns true if no uncommitted changes or user confirms proceeding.
+ */
+async function confirmProceedWithUncommittedChanges(
+  tui: TUI,
+  cwd: string,
+  message: string
+): Promise<boolean> {
+  if (hasUncommittedChanges(cwd)) {
+    const proceed = await tui.showConfirmation('Uncommitted Changes', message);
+    return proceed;
+  }
   return true;
 }
 
@@ -286,6 +314,12 @@ async function handleAction(
         tui.log('Error: No spec for this branch. Checkout a spec branch first.');
         return;
       }
+
+      // Warn about uncommitted changes — gives user a chance to cancel and commit first
+      const proceedWithPR = await confirmProceedWithUncommittedChanges(
+        tui, cwd, 'You have uncommitted changes that will not be included in the PR. Proceed anyway?'
+      );
+      if (!proceedWithPR) break;
 
       // Check if we're creating or updating
       const existingStatus = status?.pr?.url ? 'Updating' : 'Creating';
@@ -337,6 +371,12 @@ async function handleAction(
         tui.log('Error: No PR found. Create a PR first.');
         return;
       }
+
+      // Warn about uncommitted changes — gives user a chance to cancel and commit first
+      const proceedWithReview = await confirmProceedWithUncommittedChanges(
+        tui, cwd, 'You have uncommitted changes that will not be included in the PR. Proceed anyway?'
+      );
+      if (!proceedWithReview) break;
 
       tui.log('Triggering PR re-review...');
 
@@ -418,19 +458,10 @@ async function handleAction(
       }
 
       // Warn about uncommitted changes — gives user a chance to cancel and commit first
-      try {
-        const statusOut = execSync('git status --porcelain', { encoding: 'utf-8', cwd }).trim();
-        if (statusOut.length > 0) {
-          const proceed = await tui.showConfirmation(
-            'Uncommitted Changes',
-            'You have uncommitted changes that will not be included in the final push. Proceed anyway?'
-          );
-          if (!proceed) break;
-        }
-      } catch {
-        tui.log('Error: Could not check git status.');
-        break;
-      }
+      const proceedWithComplete = await confirmProceedWithUncommittedChanges(
+        tui, cwd, 'You have uncommitted changes that will not be included in the final push. Proceed anyway?'
+      );
+      if (!proceedWithComplete) break;
 
       tui.log(`Marking spec as completed: ${currentSpec.id}`);
 
@@ -676,15 +707,6 @@ async function handleAction(
       break;
     }
 
-    case 'toggle-emergent': {
-      const enabled = data?.enabled as boolean;
-      if (planningKey && status) {
-        updateStatus({ loop: { ...status.loop, emergent: enabled } }, planningKey, cwd);
-      }
-      tui.log(`Emergent: ${enabled ? 'Enabled' : 'Disabled'}`);
-      break;
-    }
-
     case 'toggle-parallel': {
       const enabled = data?.enabled as boolean;
       if (planningKey && status) {
@@ -765,6 +787,54 @@ async function handleAction(
       break;
     }
 
+    case 'new-initiative': {
+      const specType = data?.specType as string | undefined;
+      if (!specType) {
+        tui.log('Error: No spec type selected.');
+        break;
+      }
+
+      const flowFile = SCOPING_FLOW_MAP[specType as SpecType];
+      const flowOverride = flowFile
+        ? join(getFlowsDirectory(), flowFile)
+        : undefined;
+
+      tui.log(`New Initiative: ${specType}${flowOverride ? ` (${flowFile})` : ''}`);
+
+      // Spawn ideation agent with optional flow override
+      try {
+        const context = buildTemplateContext(
+          planningKey || 'default',
+          status?.name,
+          undefined,
+          undefined,
+          cwd
+        );
+
+        const result = spawnAgentFromProfile(
+          {
+            agentName: 'ideation',
+            context,
+            focusWindow: true,
+            flowOverride,
+          },
+          branch,
+          cwd
+        );
+
+        tui.log(`Spawned ideation in ${result.sessionName}:${result.windowName}`);
+        updateRunningAgents(tui, branch);
+      } catch (e) {
+        const message = e instanceof Error ? e.message : String(e);
+        tui.log(`Error spawning ideation: ${message}`);
+        logTuiError('new-initiative', e instanceof Error ? e : message, {
+          specType,
+          branch,
+        }, cwd);
+      }
+      break;
+    }
+
     default:
       tui.log(`Action: ${action}`);
   }
@@ -821,22 +891,21 @@ function spawnExecutorForPrompt(tui: TUI, prompt: PromptFile, branch: string, sp
   }
 }
 
-function spawnEmergentForPrompt(tui: TUI, prompt: PromptFile, branch: string, specId: string): void {
+function spawnEmergentPlanningAgent(tui: TUI, branch: string, specId: string): void {
   const cwd = process.cwd();
   const planningKey = sanitizeBranchForDir(branch);
 
-  // Get next available prompt number for the emergent agent to create
+  // Get next available prompt number for emergent planner window name
   const nextPromptNumber = getNextPromptNumber(planningKey, cwd);
 
-  tui.log(`Spawning emergent (will create prompt ${nextPromptNumber}) after: ${prompt.frontmatter.title}`);
+  tui.log(`Spawning emergent planner (will create prompts from ${nextPromptNumber})`);
 
   try {
-    // Build context with the NEXT prompt number (emergent will create this prompt)
     const context = buildTemplateContext(
       planningKey,
       specId,
       nextPromptNumber,
-      undefined,  // No prompt path yet - emergent will create it
+      undefined,
       cwd
     );
 
@@ -851,14 +920,13 @@ function spawnEmergentForPrompt(tui: TUI, prompt: PromptFile, branch: string, sp
       cwd
     );
 
-    tui.log(`Spawned emergent in ${result.sessionName}:${result.windowName}`);
+    tui.log(`Spawned emergent planner in ${result.sessionName}:${result.windowName}`);
     updateRunningAgents(tui, branch);
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
-    tui.log(`Error spawning emergent: ${message}`);
+    tui.log(`Error spawning emergent planner: ${message}`);
     logTuiError('spawn-emergent', e instanceof Error ? e : message, {
       promptNumber: nextPromptNumber,
-      promptTitle: `emergent-${nextPromptNumber}`,
       branch,
     }, cwd);
   }

@@ -1,25 +1,17 @@
 /**
  * Actions Pane - Left sidebar with agent spawners, toggles, and controls
  *
+ * All actions are always visible — agents exit early if nothing to do.
+ *
  * Layout (vertical):
- * [1] Coordinator
- * [2] Ideation
- * [3] Planner
- * [4] Build E2E Test
- * [5] Review Jury
- * [6] Create PR / Awaiting Review... / Rerun PR Review
- * [7] Review PR (appears after first review detected)
- * [8] Compound
- * [9] Mark Completed
- * [0] Switch Spec
- * [-] Custom Flow
- * ─ Toggles ─
- * [ ] Loop
- * [ ] Emergent
- * ─ Controls ─
- * [V] View Logs
- * [C] Clear Logs
- * [R] Refresh
+ * [1] Coordinator     [2] New Initiative  [3] Planner
+ * [4] Review Jury     [5] E2E Test Plan   [6] PR Action
+ * [7] Address PR Review  [8] Compound     [9] Complete
+ * [0] Switch Workspace  [-] Custom Flow
+ * ━━ Toggles ━━
+ * [O] Loop            [P] Parallel
+ * ━━ Controls ━━
+ * [V] View Logs       [C] Clear Logs      [R] Refresh
  * [Q] Quit
  */
 
@@ -32,20 +24,13 @@ export interface ActionItem {
   key?: string;
   type: 'action' | 'toggle' | 'separator';
   highlight?: boolean;
-  disabled?: boolean;
-  hidden?: boolean;
   checked?: boolean;
 }
 
 export interface ToggleState {
   loopEnabled: boolean;
-  emergentEnabled: boolean;
   parallelEnabled: boolean;
   prActionState: PRActionState;
-  prReviewUnlocked: boolean;  // true after first PR review detected
-  hasSpec: boolean;
-  hasCompletedPrompts: boolean;
-  compoundRun: boolean;
 }
 
 const PANE_WIDTH = 24;
@@ -147,17 +132,10 @@ function formatActionsContent(items: ActionItem[], selectedIndex?: number): Acti
   let selectedLineNumber: number | undefined;
 
   for (const item of items) {
-    // Skip hidden items entirely
-    if (item.hidden) {
-      continue;
-    }
-
     if (item.type === 'separator') {
       lines.push(`{#6366f1-fg}${item.label}{/#6366f1-fg}`);
     } else {
-      // Selectable item - only count non-disabled items for selection index
-      const isSelectable = !item.disabled;
-      const isSelected = isSelectable && selectedIndex === selectableIndex;
+      const isSelected = selectedIndex === selectableIndex;
 
       if (isSelected) {
         selectedLineNumber = lines.length;
@@ -165,52 +143,33 @@ function formatActionsContent(items: ActionItem[], selectedIndex?: number): Acti
 
       const content = formatItemContent(item, isSelected);
       lines.push(content);
-
-      // Only increment selectableIndex for non-disabled items
-      if (isSelectable) {
-        selectableIndex++;
-      }
+      selectableIndex++;
     }
   }
 
   return { content: lines.join('\n'), selectedLineNumber };
 }
 
-function buildActionItems(toggleState: ToggleState): ActionItem[] {
+export function buildActionItems(toggleState: ToggleState): ActionItem[] {
   const prLabel = getPRActionLabel(toggleState.prActionState);
-  const prDisabled = toggleState.prActionState === 'awaiting-review';
-
-  const { hasSpec, hasCompletedPrompts, compoundRun, prReviewUnlocked } = toggleState;
-
-  // Dynamic label for switch/choose spec
-  const specLabel = hasSpec ? 'Switch Spec' : 'Choose Spec';
 
   return [
-    // Agent spawners - coordinator and ideation always available
+    // Agent spawners — all always visible
     { id: 'coordinator', label: 'Coordinator', key: '1', type: 'action' },
-    { id: 'ideation', label: 'Ideation', key: '2', type: 'action' },
-    // Planner requires spec
-    { id: 'planner', label: 'Planner', key: '3', type: 'action', disabled: !hasSpec },
-    // These require at least 1 completed prompt
-    { id: 'e2e-test-planner', label: 'Build E2E Test', key: '4', type: 'action', hidden: !hasCompletedPrompts },
-    { id: 'review-jury', label: 'Review Jury', key: '5', type: 'action', hidden: !hasCompletedPrompts },
-    // PR action row (Create PR / Awaiting Review... / Rerun PR Review)
-    { id: 'pr-action', label: prLabel, key: '6', type: 'action', disabled: prDisabled, hidden: !hasCompletedPrompts },
-    // Review PR - only visible after first PR review detected
-    { id: 'review-pr', label: 'Review PR', key: '7', type: 'action', hidden: !prReviewUnlocked },
-    // Compound (shifted from 7 to 8)
-    { id: 'compound', label: 'Compound', key: '8', type: 'action', hidden: !hasCompletedPrompts },
-    // Mark completed - only visible if compound has been run (shifted from 8 to 9)
-    { id: 'mark-completed', label: 'Mark Completed', key: '9', type: 'action', hidden: !compoundRun },
-    // Switch/Choose spec - always visible, label changes (shifted from 9 to 0)
-    { id: 'switch-spec', label: specLabel, key: '0', type: 'action' },
-    // Custom Flow - always visible, allows running any flow with custom message
+    { id: 'new-initiative', label: 'New Initiative', key: '2', type: 'action' },
+    { id: 'planner', label: 'Planner', key: '3', type: 'action' },
+    { id: 'review-jury', label: 'Review Jury', key: '4', type: 'action' },
+    { id: 'e2e-test-planner', label: 'E2E Test Plan', key: '5', type: 'action' },
+    { id: 'pr-action', label: prLabel, key: '6', type: 'action' },
+    { id: 'review-pr', label: 'Address PR Review', key: '7', type: 'action' },
+    { id: 'compound', label: 'Compound', key: '8', type: 'action' },
+    { id: 'mark-completed', label: 'Complete', key: '9', type: 'action' },
+    { id: 'switch-spec', label: 'Switch Workspace', key: '0', type: 'action' },
     { id: 'custom-flow', label: 'Custom Flow', key: '-', type: 'action' },
     // Spacing before toggles
     { id: 'spacer-1', label: '', type: 'separator' },
     { id: 'separator-toggles', label: '━━ Toggles ━━', type: 'separator' },
     { id: 'toggle-loop', label: 'Loop', key: 'O', type: 'toggle', checked: toggleState.loopEnabled },
-    { id: 'toggle-emergent', label: 'Emergent', key: 'E', type: 'toggle', checked: toggleState.emergentEnabled },
     { id: 'toggle-parallel', label: 'Parallel', key: 'P', type: 'toggle', checked: toggleState.parallelEnabled },
     // Spacing before controls
     { id: 'spacer-2', label: '', type: 'separator' },
@@ -247,10 +206,7 @@ function formatItemContent(item: ActionItem, isSelected: boolean): string {
   let style = '';
   let endStyle = '';
 
-  if (item.disabled) {
-    style = '{#3a3f5c-fg}';
-    endStyle = '{/#3a3f5c-fg}';
-  } else if (isSelected) {
+  if (isSelected) {
     style = '{#a78bfa-fg}{bold}▸ ';
     endStyle = '{/bold}{/#a78bfa-fg}';
     // For selected items, use plain prefix without colors
@@ -265,6 +221,6 @@ function formatItemContent(item: ActionItem, isSelected: boolean): string {
 
 export function getSelectableItems(toggleState: ToggleState): ActionItem[] {
   return buildActionItems(toggleState).filter(
-    (item) => item.type !== 'separator' && !item.disabled && !item.hidden
+    (item) => item.type !== 'separator'
   );
 }

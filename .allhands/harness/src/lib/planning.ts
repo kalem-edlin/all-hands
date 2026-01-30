@@ -72,7 +72,6 @@ export function isLockedBranch(branch: string): boolean {
 
 export interface LoopConfig {
   enabled?: boolean;  // Deprecated: loop always starts disabled, not persisted
-  emergent: boolean;
   parallel?: boolean;  // Parallel execution enabled (persisted per spec)
   iteration: number;
 }
@@ -291,7 +290,6 @@ export function initializeStatus(
     spec: specPath,
     stage: 'planning',
     loop: {
-      emergent: false,
       iteration: 0,
     },
     compound_run: false,

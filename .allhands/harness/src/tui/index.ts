@@ -15,26 +15,26 @@
  */
 
 import blessed from 'blessed';
-import { createActionsPane, ActionItem, ToggleState } from './actions.js';
-import { createPromptsPane, PromptItem } from './prompts-pane.js';
-import { createStatusPane, AgentInfo, getSelectableItems } from './status-pane.js';
-import { createModal, Modal } from './modal.js';
-import { createFileViewer, FileViewer, getPlanningFilePath, getSpecFilePath } from './file-viewer-modal.js';
-import { EventLoop } from '../lib/event-loop.js';
-import { killWindow, listWindows, getCurrentSession, spawnCustomFlow } from '../lib/tmux.js';
-import { getHubWindowId, clearTuiSession, getSpawnedWindows } from '../lib/session.js';
-import { KnowledgeService } from '../lib/knowledge.js';
-import { validateDocs } from '../lib/docs-validation.js';
-import { loadAllProfiles } from '../lib/opencode/index.js';
-import { logTuiError, logTuiLifecycle, clearLogs } from '../lib/trace-store.js';
-import { loadAllPrompts, type PromptFile } from '../lib/prompts.js';
-import { readStatus, sanitizeBranchForDir, planningDirExists } from '../lib/planning.js';
-import { loadAllSpecs, specsToModalItems, type SpecFile } from '../lib/specs.js';
-import { loadAllFlows, flowsToModalItems } from '../lib/flows.js';
-import { isTldrInstalled, hasSemanticIndex, needsSemanticRebuild, buildSemanticIndexAsync, warmCallGraph, ensureTldrDaemon } from '../lib/tldr.js';
+import { join } from 'path';
 import { loadProjectSettings } from '../hooks/shared.js';
 import { CLIDaemon } from '../lib/cli-daemon.js';
-import { join } from 'path';
+import { validateDocs } from '../lib/docs-validation.js';
+import { EventLoop } from '../lib/event-loop.js';
+import { flowsToModalItems, loadAllFlows } from '../lib/flows.js';
+import { KnowledgeService } from '../lib/knowledge.js';
+import { loadAllProfiles } from '../lib/opencode/index.js';
+import { planningDirExists, readStatus, sanitizeBranchForDir } from '../lib/planning.js';
+import { loadAllPrompts, type PromptFile } from '../lib/prompts.js';
+import { clearTuiSession, getHubWindowId, getSpawnedWindows } from '../lib/session.js';
+import { loadAllSpecs, specsToModalItems, type SpecFile } from '../lib/specs.js';
+import { buildSemanticIndexAsync, ensureTldrDaemon, hasSemanticIndex, isTldrInstalled, needsSemanticRebuild, warmCallGraph } from '../lib/tldr.js';
+import { getCurrentSession, killWindow, listWindows, spawnCustomFlow } from '../lib/tmux.js';
+import { clearLogs, logTuiError, logTuiLifecycle } from '../lib/trace-store.js';
+import { ActionItem, createActionsPane, ToggleState } from './actions.js';
+import { createFileViewer, FileViewer, getPlanningFilePath, getSpecFilePath } from './file-viewer-modal.js';
+import { createModal, Modal } from './modal.js';
+import { createPromptsPane, PromptItem } from './prompts-pane.js';
+import { AgentInfo, createStatusPane, getSelectableItems } from './status-pane.js';
 
 export type PaneId = 'actions' | 'prompts' | 'status';
 
@@ -44,13 +44,12 @@ export interface TUIOptions {
   onAction: (action: string, data?: Record<string, unknown>) => void;
   onExit: () => void;
   onSpawnExecutor?: (prompt: PromptFile, branch: string, specId: string) => void;
-  onSpawnEmergent?: (prompt: PromptFile, branch: string, specId: string) => void;
+  onSpawnEmergentPlanning?: (branch: string, specId: string) => void;
   cwd?: string;
 }
 
 export interface TUIState {
   loopEnabled: boolean;
-  emergentEnabled: boolean;
   parallelEnabled: boolean;
   prompts: PromptItem[];
   activeAgents: AgentInfo[];
@@ -58,8 +57,6 @@ export interface TUIState {
   branch?: string;
   baseBranch?: string;
   prActionState: PRActionState;
-  prReviewUnlocked: boolean;  // true after first PR review detected
-  compoundRun: boolean;
   customFlowCounter: number;
 }
 
@@ -105,13 +102,10 @@ export class TUI {
     this.options = options;
     this.state = {
       loopEnabled: false,
-      emergentEnabled: false,
       parallelEnabled: false,
       prompts: [],
       activeAgents: [],
       prActionState: 'create-pr',
-      prReviewUnlocked: false,
-      compoundRun: false,
       customFlowCounter: 0,
     };
 
@@ -209,7 +203,6 @@ export class TUI {
         onPRReviewFeedback: (available: boolean) => {
           if (available && this.state.prActionState === 'awaiting-review') {
             this.state.prActionState = 'rerun-pr-review';
-            this.state.prReviewUnlocked = true;  // Unlock Review PR action
             this.buildActionItems();
             this.log('PR review feedback available - ready to review or rerun');
             this.render();
@@ -237,16 +230,15 @@ export class TUI {
                   path: p.path,
                 }));
                 // Don't restore loopEnabled from status - always requires manual enable
-                updates.emergentEnabled = status?.loop?.emergent ?? false;
-                updates.parallelEnabled = status?.loop?.parallel ?? false;
-                updates.compoundRun = status?.compound_run ?? false;
+                this.state.parallelEnabled = status?.loop?.parallel ?? false;
               } else {
-                updates.prompts = [];
-                updates.loopEnabled = false;
-                updates.emergentEnabled = false;
-                updates.parallelEnabled = false;
-                updates.compoundRun = false;
+                this.state.prompts = [];
+                this.state.loopEnabled = false;
+                this.state.parallelEnabled = false;
               }
+
+              // Sync toggle states to event loop
+              this.eventLoop?.setParallelEnabled(this.state.parallelEnabled);
             }
 
             if (newSpec) {
@@ -274,12 +266,11 @@ export class TUI {
             this.options.onSpawnExecutor(prompt, this.state.branch, specId);
           }
         },
-        onSpawnEmergent: (prompt) => {
-          this.log(`Loop: Spawning emergent for prompt ${prompt.frontmatter.number}`);
-          if (this.state.branch && this.options.onSpawnEmergent) {
-            // Use spec if available, otherwise fall back to planning key
+        onSpawnEmergentPlanning: () => {
+          this.log('Loop: Spawning emergent planner');
+          if (this.state.branch && this.options.onSpawnEmergentPlanning) {
             const specId = this.state.spec || sanitizeBranchForDir(this.state.branch);
-            this.options.onSpawnEmergent(prompt, this.state.branch, specId);
+            this.options.onSpawnEmergentPlanning(this.state.branch, specId);
           }
         },
         onLoopStatus: (message) => {
@@ -526,53 +517,29 @@ export class TUI {
   }
 
   private getToggleState(): ToggleState {
-    // Check if any prompts are completed
-    const hasCompletedPrompts = this.state.prompts.some(p => p.status === 'done');
-
     return {
       loopEnabled: this.state.loopEnabled,
-      emergentEnabled: this.state.emergentEnabled,
       parallelEnabled: this.state.parallelEnabled,
       prActionState: this.state.prActionState,
-      prReviewUnlocked: this.state.prReviewUnlocked,
-      hasSpec: !!this.state.spec,
-      hasCompletedPrompts,
-      compoundRun: this.state.compoundRun,
     };
   }
 
   private buildActionItems(): void {
-    const hasSpec = !!this.state.spec;
-    const hasCompletedPrompts = this.state.prompts.some(p => p.status === 'done');
-    const prDisabled = this.state.prActionState === 'awaiting-review';
-
-    // Dynamic label for switch/choose spec
-    const specLabel = hasSpec ? 'Switch Spec' : 'Choose Spec';
-
     this.actionItems = [
-      // Agent spawners - coordinator and ideation always available
+      // Agent spawners — all always visible
       { id: 'coordinator', label: 'Coordinator', key: '1', type: 'action' },
-      { id: 'ideation', label: 'Ideation', key: '2', type: 'action' },
-      // Planner requires spec
-      { id: 'planner', label: 'Planner', key: '3', type: 'action', disabled: !hasSpec },
-      // These require at least 1 completed prompt
-      { id: 'e2e-test-planner', label: 'Build E2E Test', key: '4', type: 'action', hidden: !hasCompletedPrompts },
-      { id: 'review-jury', label: 'Review Jury', key: '5', type: 'action', hidden: !hasCompletedPrompts },
-      // PR action row (Create PR / Awaiting Review... / Rerun PR Review)
-      { id: 'pr-action', label: this.getPRActionLabel(), key: '6', type: 'action', disabled: prDisabled, hidden: !hasCompletedPrompts },
-      // Review PR - only visible after first PR review detected
-      { id: 'review-pr', label: 'Review PR', key: '7', type: 'action', hidden: !this.state.prReviewUnlocked },
-      // Compound (shifted from 7 to 8)
-      { id: 'compound', label: 'Compound', key: '8', type: 'action', hidden: !hasCompletedPrompts },
-      // Mark completed - only visible if compound has been run (shifted from 8 to 9)
-      { id: 'mark-completed', label: 'Mark Completed', key: '9', type: 'action', hidden: !this.state.compoundRun },
-      // Switch/Choose spec - always visible, label changes (shifted from 9 to 0)
-      { id: 'switch-spec', label: specLabel, key: '0', type: 'action' },
-      // Custom Flow - always visible, allows running any flow with custom message
+      { id: 'new-initiative', label: 'New Initiative', key: '2', type: 'action' },
+      { id: 'planner', label: 'Planner', key: '3', type: 'action' },
+      { id: 'review-jury', label: 'Review Jury', key: '4', type: 'action' },
+      { id: 'e2e-test-planner', label: 'E2E Test Plan', key: '5', type: 'action' },
+      { id: 'pr-action', label: this.getPRActionLabel(), key: '6', type: 'action' },
+      { id: 'review-pr', label: 'Address PR Review', key: '7', type: 'action' },
+      { id: 'compound', label: 'Compound', key: '8', type: 'action' },
+      { id: 'mark-completed', label: 'Complete', key: '9', type: 'action' },
+      { id: 'switch-spec', label: 'Switch Workspace', key: '0', type: 'action' },
       { id: 'custom-flow', label: 'Custom Flow', key: '-', type: 'action' },
       { id: 'separator-toggles', label: '─ Toggles ─', type: 'separator' },
       { id: 'toggle-loop', label: 'Loop', key: 'O', type: 'toggle', checked: this.state.loopEnabled },
-      { id: 'toggle-emergent', label: 'Emergent', key: 'E', type: 'toggle', checked: this.state.emergentEnabled },
       { id: 'toggle-parallel', label: 'Parallel', key: 'P', type: 'toggle', checked: this.state.parallelEnabled },
       { id: 'separator-controls', label: '─ Controls ─', type: 'separator' },
       { id: 'view-logs', label: 'View Logs', key: 'V', type: 'action' },
@@ -591,9 +558,7 @@ export class TUI {
   }
 
   private getSelectableActionItems(): ActionItem[] {
-    return this.actionItems.filter(item =>
-      item.type !== 'separator' && !item.disabled && !item.hidden
-    );
+    return this.actionItems.filter(item => item.type !== 'separator');
   }
 
   private setupKeyBindings(): void {
@@ -661,9 +626,9 @@ export class TUI {
     hotkeys.forEach((key) => {
       this.screen.key([key], () => {
         if (!this.activeModal && !this.activeFileViewer) {
-          // Find the action item with this key that is visible and enabled
+          // Find the action item with this key
           const matchingItem = this.actionItems.find(
-            (item) => item.key === key && !item.hidden && !item.disabled && item.type === 'action'
+            (item) => item.key === key && item.type === 'action'
           );
           if (matchingItem) {
             this.handleAction(matchingItem.id);
@@ -672,15 +637,10 @@ export class TUI {
       });
     });
 
-    // Toggle hotkeys (O for lOop, E for Emergent, P for Parallel)
+    // Toggle hotkeys (O for lOop, P for Parallel)
     this.screen.key(['o'], () => {
       if (!this.activeModal) {
         this.handleAction('toggle-loop');
-      }
-    });
-    this.screen.key(['e'], () => {
-      if (!this.activeModal) {
-        this.handleAction('toggle-emergent');
       }
     });
     this.screen.key(['p'], () => {
@@ -896,15 +856,6 @@ export class TUI {
         this.options.onAction('toggle-loop', { enabled: this.state.loopEnabled });
         this.render();
         break;
-      case 'toggle-emergent':
-        this.state.emergentEnabled = !this.state.emergentEnabled;
-        this.buildActionItems();
-        if (this.eventLoop) {
-          this.eventLoop.setEmergentEnabled(this.state.emergentEnabled);
-        }
-        this.options.onAction('toggle-emergent', { enabled: this.state.emergentEnabled });
-        this.render();
-        break;
       case 'toggle-parallel':
         this.state.parallelEnabled = !this.state.parallelEnabled;
         this.buildActionItems();
@@ -940,9 +891,44 @@ export class TUI {
       case 'review-pr':
         this.options.onAction('review-pr');
         break;
+      case 'new-initiative':
+        this.openNewInitiativeModal();
+        break;
       default:
         this.options.onAction(actionId);
     }
+  }
+
+  /**
+   * Open a modal for selecting the spec type for a new initiative.
+   * Routes to the appropriate scoping flow based on selection.
+   */
+  private openNewInitiativeModal(): void {
+    const specTypes: Array<{ id: string; label: string }> = [
+      { id: 'milestone', label: 'Milestone — Feature development with deep ideation' },
+      { id: 'investigation', label: 'Investigation — Debug / diagnose issues' },
+      { id: 'optimization', label: 'Optimization — Performance / efficiency work' },
+      { id: 'refactor', label: 'Refactor — Cleanup / tech debt' },
+      { id: 'documentation', label: 'Documentation — Coverage gaps' },
+      { id: 'triage', label: 'Triage — External signal analysis (coming soon)' },
+    ];
+
+    this.activeModal = createModal(this.screen, {
+      title: 'New Initiative — Select Type',
+      items: specTypes.map((t) => ({
+        id: t.id,
+        label: t.label,
+        type: 'item' as const,
+      })),
+      onSelect: (specType: string) => {
+        this.closeModal();
+        this.options.onAction('new-initiative', { specType });
+      },
+      onCancel: () => {
+        this.closeModal();
+      },
+    });
+    this.screen.render();
   }
 
   private openSpecModal(): void {
@@ -1301,9 +1287,6 @@ export class TUI {
     this.state = { ...this.state, ...updates };
 
     // Sync toggle states to event loop if they were updated
-    if ('emergentEnabled' in updates && this.eventLoop) {
-      this.eventLoop.setEmergentEnabled(this.state.emergentEnabled);
-    }
     if ('parallelEnabled' in updates && this.eventLoop) {
       this.eventLoop.setParallelEnabled(this.state.parallelEnabled);
     }
@@ -1517,3 +1500,4 @@ export class TUI {
 export type { ActionItem } from './actions.js';
 export type { PromptItem } from './prompts-pane.js';
 export type { AgentInfo } from './status-pane.js';
+

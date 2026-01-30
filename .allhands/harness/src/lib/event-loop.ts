@@ -26,6 +26,9 @@ import {
   type PRReviewState,
 } from './pr-review.js';
 
+/** Cooldown between spawns to prevent race conditions with tmux registry */
+const SPAWN_COOLDOWN_MS = 10000;
+
 export interface PromptSnapshot {
   count: number;
   pending: number;
@@ -45,7 +48,6 @@ export interface EventLoopState {
   activeAgents: string[];
   lastCheckTime: number;
   loopEnabled: boolean;
-  emergentEnabled: boolean;
   parallelEnabled: boolean;  // Parallel execution mode
   /** Active executor prompt numbers (supports parallel execution) */
   activeExecutorPrompts: number[];
@@ -55,6 +57,10 @@ export interface EventLoopState {
   promptSnapshot: PromptSnapshot | null;
   /** Tick counter for modulus-based polling */
   tickCount: number;
+  /** Consecutive emergent planner spawns without new prompt creation (resets when new pending prompts appear) */
+  emergentSpawnCount: number;
+  /** Total prompt count at last emergent planner spawn, used to detect whether it produced new prompts */
+  emergentLastPromptCount: number;
 }
 
 export interface EventLoopCallbacks {
@@ -62,8 +68,8 @@ export interface EventLoopCallbacks {
   onBranchChange?: (newBranch: string, spec: SpecFile | null) => void;
   onAgentsChange?: (agents: string[]) => void;
   onSpawnExecutor?: (prompt: PromptFile) => void;
-  /** Called when emergent agent should be spawned (prompts done + emergent enabled) */
-  onSpawnEmergent?: (donePrompt: PromptFile) => void;
+  /** Called when emergent planner should be spawned (no pending + no in_progress) */
+  onSpawnEmergentPlanning?: () => void;
   onLoopStatus?: (message: string) => void;
   /** Called when prompts are added, removed, or their status changes */
   onPromptsChange?: (prompts: PromptFile[], snapshot: PromptSnapshot) => void;
@@ -80,7 +86,7 @@ export class EventLoop {
 
   // PR review settings from .allhands/settings.json
   private prReviewCheckFrequency: number;
-  private reviewDetectionString: string;
+  private reviewMatchPattern: string;
   private rerunComment: string;
 
   constructor(
@@ -95,7 +101,7 @@ export class EventLoop {
     const settings = loadProjectSettings();
     this.pollIntervalMs = pollIntervalMs ?? settings?.eventLoop?.tickIntervalMs ?? 5000;
     this.prReviewCheckFrequency = settings?.prReview?.checkFrequency ?? 3;
-    this.reviewDetectionString = settings?.prReview?.reviewDetectionString ?? 'greptile';
+    this.reviewMatchPattern = settings?.prReview?.reviewMatchPattern ?? 'greptile';
     this.rerunComment = settings?.prReview?.rerunComment ?? '@greptile';
 
     // Initialize state based on current branch
@@ -118,12 +124,13 @@ export class EventLoop {
       activeAgents: [],
       lastCheckTime: Date.now(),
       loopEnabled: false,
-      emergentEnabled: false,
       parallelEnabled: false,
       activeExecutorPrompts: [],
       lastExecutorSpawnTime: null,
       promptSnapshot: null,
       tickCount: 0,
+      emergentSpawnCount: 0,
+      emergentLastPromptCount: 0,
     };
   }
 
@@ -170,6 +177,7 @@ export class EventLoop {
    */
   setLoopEnabled(enabled: boolean): void {
     this.state.loopEnabled = enabled;
+    this.state.emergentSpawnCount = 0;
     if (!enabled) {
       this.state.activeExecutorPrompts = [];
       this.state.lastExecutorSpawnTime = null;
@@ -189,13 +197,6 @@ export class EventLoop {
    */
   async forceTick(): Promise<void> {
     await this.tick();
-  }
-
-  /**
-   * Enable or disable emergent refinement
-   */
-  setEmergentEnabled(enabled: boolean): void {
-    this.state.emergentEnabled = enabled;
   }
 
   /**
@@ -279,7 +280,7 @@ export class EventLoop {
       // Get current PR review state
       const currentState = await checkPRReviewStatus(
         this.state.prUrl,
-        this.reviewDetectionString,
+        this.reviewMatchPattern,
         afterTime,
         this.cwd
       );
@@ -369,6 +370,10 @@ export class EventLoop {
         snapshot.hash !== this.state.promptSnapshot.hash;
 
       if (hasChanged) {
+        // Reset emergent planner backoff when new pending prompts appear (external prompt creation)
+        if (this.state.promptSnapshot && snapshot.pending > this.state.promptSnapshot.pending) {
+          this.state.emergentSpawnCount = 0;
+        }
         this.state.promptSnapshot = snapshot;
         this.callbacks.onPromptsChange?.(prompts, snapshot);
       }
@@ -463,7 +468,7 @@ export class EventLoop {
           // If an executor exited, remove it from activeExecutorPrompts
           // Extract prompt number from window name (e.g., "executor-03" -> 3)
           for (const name of disappeared) {
-            if (name.startsWith('executor') || name.startsWith('emergent')) {
+            if (name.startsWith('executor')) {
               const match = name.match(/-(\d+)$/);
               if (match) {
                 const promptNum = parseInt(match[1], 10);
@@ -489,7 +494,7 @@ export class EventLoop {
       if (this.state.activeExecutorPrompts.length > 0) {
         const runningPromptNums = new Set<number>();
         for (const name of agentWindows) {
-          if (name.startsWith('executor') || name.startsWith('emergent')) {
+          if (name.startsWith('executor')) {
             const match = name.match(/-(\d+)$/);
             if (match) {
               runningPromptNums.add(parseInt(match[1], 10));
@@ -527,13 +532,14 @@ export class EventLoop {
   }
 
   /**
-   * Check if we should spawn an executor for the next prompt.
+   * Unified prompt loop — single decision path:
    *
-   * Parallel execution rules:
-   * 1. Emergent: Only ONE at a time; only starts when ALL prompts are done
-   * 2. Executors: Respect dependencies; spawn up to maxParallel when parallel enabled
-   * 3. One per tick: Only spawn ONE agent per event loop tick
-   * 4. Lowest first: Always choose the lowest prompt number among candidates
+   * 1. loop enabled + pending prompts → pick next, spawn executor
+   * 2. loop enabled + no pending + no in_progress → spawn emergent planner
+   * 3. loop enabled + no pending + in_progress exist → wait (executors still working)
+   * 4. loop disabled → nothing
+   *
+   * Parallel rules: spawn up to maxParallel executors; only ONE emergent planner at a time.
    */
   private async checkPromptLoop(): Promise<void> {
     if (!this.state.loopEnabled) {
@@ -547,85 +553,95 @@ export class EventLoop {
     }
 
     try {
-      // 1. Block if emergent is running (only ONE emergent ever)
+      // Block if emergent planner is running (only ONE at a time)
       const hasEmergent = this.state.activeAgents.some((name) => name.startsWith('emergent'));
       if (hasEmergent) {
         return;
       }
 
-      // 2. Count active executors
+      // Count active executors
       const activeExecutors = this.state.activeAgents.filter((name) => name.startsWith('executor'));
 
-      // 3. Determine max parallel based on toggle
+      // Determine max parallel based on toggle
       const settings = loadProjectSettings();
       const maxParallel = this.state.parallelEnabled
         ? (settings?.spawn?.maxParallelPrompts ?? 3)
         : 1;
 
-      // 4. Check capacity - if at max, don't spawn
+      // Check capacity - if at max, don't spawn
       if (activeExecutors.length >= maxParallel) {
         return;
       }
 
-      // Time-based guard: don't spawn if we spawned recently (within 10 seconds)
-      // This protects against race conditions where the tmux registry hasn't caught up
-      const SPAWN_COOLDOWN_MS = 10000;
+      // Time-based guard: don't spawn if we spawned recently (within cooldown)
       if (
         this.state.lastExecutorSpawnTime &&
         Date.now() - this.state.lastExecutorSpawnTime < SPAWN_COOLDOWN_MS
       ) {
-        // Recently spawned, wait for it to appear in activeAgents or exit
         return;
       }
 
-      // 5. Pick next prompt from planning directory
-      // Pass activeExecutorPrompts to exclude prompts already being worked on
+      // Pick next prompt from planning directory
       const result = pickNextPrompt(
         this.state.planningKey,
         this.cwd,
         this.state.activeExecutorPrompts
       );
 
-      if (!result.prompt) {
-        // 6. Emergent condition: NO pending/in_progress, at least 1 done
-        // This ensures emergent only runs when ALL prompts are completed
-        if (
-          this.state.emergentEnabled &&
-          result.stats &&
-          result.stats.pending === 0 &&
-          result.stats.inProgress === 0 &&
-          result.stats.done > 0
-        ) {
-          // Get all prompts and find a done one to refine
-          const allPrompts = loadAllPrompts(this.state.planningKey, this.cwd);
-          const donePrompt = allPrompts.find((p) => p.frontmatter.status === 'done');
+      if (result.prompt) {
+        // Pending prompt available → spawn executor
+        markPromptInProgress(result.prompt.path);
+        this.state.activeExecutorPrompts.push(result.prompt.frontmatter.number);
+        this.state.lastExecutorSpawnTime = Date.now();
 
-          if (donePrompt) {
-            this.state.activeExecutorPrompts.push(donePrompt.frontmatter.number);
-            this.state.lastExecutorSpawnTime = Date.now();
-
-            this.callbacks.onLoopStatus?.(
-              `Spawning emergent for prompt ${donePrompt.frontmatter.number}: ${donePrompt.frontmatter.title}`
-            );
-            this.callbacks.onSpawnEmergent?.(donePrompt);
-            return;
-          }
-        }
-
-        // No actionable prompts and no emergent to spawn
-        this.callbacks.onLoopStatus?.(result.reason);
+        this.callbacks.onLoopStatus?.(
+          `Spawning executor for prompt ${result.prompt.frontmatter.number}: ${result.prompt.frontmatter.title}`
+        );
+        this.callbacks.onSpawnExecutor?.(result.prompt);
         return;
       }
 
-      // 7. Mark prompt as in_progress and spawn executor (only ONE per tick)
-      markPromptInProgress(result.prompt.path);
-      this.state.activeExecutorPrompts.push(result.prompt.frontmatter.number);
-      this.state.lastExecutorSpawnTime = Date.now();
+      // No pending prompts — check if we should spawn emergent planner
+      if (
+        result.stats &&
+        result.stats.pending === 0 &&
+        result.stats.inProgress === 0
+      ) {
+        // Track whether prior emergent planner spawn was productive (created new prompts)
+        const currentPromptCount = this.state.promptSnapshot?.count ?? 0;
+        if (currentPromptCount <= this.state.emergentLastPromptCount) {
+          // Emergent planner spawned but didn't produce new prompts — unproductive
+          this.state.emergentSpawnCount++;
+        } else {
+          // Emergent planner produced work — reset backoff
+          this.state.emergentSpawnCount = 0;
+        }
 
-      this.callbacks.onLoopStatus?.(
-        `Spawning executor for prompt ${result.prompt.frontmatter.number}: ${result.prompt.frontmatter.title}`
-      );
-      this.callbacks.onSpawnExecutor?.(result.prompt);
+        // Apply exponential backoff for unproductive spawns
+        const cooldownMs = SPAWN_COOLDOWN_MS * Math.pow(2, Math.min(this.state.emergentSpawnCount, 4));
+        if (
+          this.state.lastExecutorSpawnTime &&
+          Date.now() - this.state.lastExecutorSpawnTime < cooldownMs
+        ) {
+          this.callbacks.onLoopStatus?.(
+            `Emergent planner backoff: waiting ${cooldownMs / 1000}s (${this.state.emergentSpawnCount} unproductive spawns)`
+          );
+          return;
+        }
+
+        // Spawn emergent planner
+        this.state.lastExecutorSpawnTime = Date.now();
+        this.state.emergentLastPromptCount = currentPromptCount;
+
+        this.callbacks.onLoopStatus?.(
+          `Spawning emergent planner (attempt ${this.state.emergentSpawnCount + 1})`
+        );
+        this.callbacks.onSpawnEmergentPlanning?.();
+        return;
+      }
+
+      // In-progress prompts still running — wait
+      this.callbacks.onLoopStatus?.(result.reason);
     } catch (err) {
       console.error('[EventLoop] checkPromptLoop failed:', err);
     }

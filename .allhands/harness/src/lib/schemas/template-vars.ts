@@ -30,11 +30,15 @@ export const TemplateVars = {
   // Branch/context variables
   BRANCH: z.string().describe('Current git branch name'),
 
-  // Workflow configuration variables
+  // Spec metadata variables
+  SPEC_TYPE: z
+    .string()
+    .describe('Spec type from frontmatter (milestone, investigation, optimization, refactor, documentation, triage)'),
+
+  // Emergent planner variables
   HYPOTHESIS_DOMAINS: z
     .string()
-    .describe('Comma-separated list of hypothesis domains available to emergent agents'),
-  WORKFLOW_TYPE: z.string().describe('Workflow type for the current spec (milestone, debugging, etc.)'),
+    .describe('Comma-separated list of hypothesis domains from settings.json'),
 } as const;
 
 /**

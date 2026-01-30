@@ -144,12 +144,12 @@
     },
     "emergent": {
       "type": "object",
-      "description": "Emergent refinement agent settings",
+      "description": "Emergent work settings (default domain pool for emergent planner)",
       "properties": {
         "hypothesisDomains": {
           "type": "array",
           "items": { "type": "string" },
-          "description": "Work domains available to emergent refinement agents. Agents diversify across these to discover valuable improvements.",
+          "description": "Default pool of hypothesis domains available to the emergent planner. Agents diversify across these to discover valuable improvements.",
           "examples": [
             ["testing", "stability", "performance", "feature", "ux", "integration"],
             ["reproduction", "diagnosis", "stability", "testing"]
@@ -184,10 +184,10 @@
       "type": "object",
       "description": "PR review detection and triggering settings",
       "properties": {
-        "reviewDetectionString": {
+        "reviewMatchPattern": {
           "type": "string",
           "default": "greptile",
-          "description": "String to match in PR comments to detect a review (case-insensitive)"
+          "description": "Pattern to match against PR comment author name and body to detect a review (case-insensitive)"
         },
         "rerunComment": {
           "type": "string",

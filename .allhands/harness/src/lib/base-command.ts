@@ -11,7 +11,7 @@
 import { logCommandStart, logCommandSuccess, logCommandError } from './trace-store.js';
 
 export interface CommandContext {
-  /** Agent type (executor, coordinator, planner, judge, ideation, documentor, pr-reviewer) */
+  /** Agent type (executor, coordinator, planner, judge, ideation, pr-reviewer) */
   agentType?: string;
   /** Current prompt number (e.g., "01") */
   promptNumber?: string;

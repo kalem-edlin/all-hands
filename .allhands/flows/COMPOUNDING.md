@@ -21,6 +21,13 @@ Read these spec artifacts to understand what happened:
 - Read all prompt files in `.planning/<spec>/prompts/`
 - Run `git log --oneline` to review commit history for this branch
 
+## Completion Assessment by Spec Type
+
+Per **Frontier Models are Capable**, assess completion differently based on spec `type`:
+
+- **Milestone** (or missing): Spec acceptance criteria met, all prompts complete, knowledge extraction thorough
+- **Exploratory** (investigation, optimization, refactor, documentation, triage): Problem resolution assessed against original hypothesis, learnings extracted from experiment outcomes, unresolved questions documented for future work
+
 ## Signal Analysis
 
 Identify patterns that indicate harness improvement opportunities:
