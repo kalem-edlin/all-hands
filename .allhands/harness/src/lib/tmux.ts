@@ -36,6 +36,7 @@ import { getCurrentBranch, getPlanningPaths } from './planning.js';
 import { getBaseBranch } from './git.js';
 import { addSpawnedWindow, removeSpawnedWindow, getSpawnedWindows } from './session.js';
 import { loadProjectSettings } from '../hooks/shared.js';
+import { getSpecForBranch } from './specs.js';
 
 /**
  * Agent type = agent profile name.
@@ -890,12 +891,16 @@ export function buildTemplateContext(
   const paths = getPlanningPaths(spec, cwd);
   const branch = getCurrentBranch(cwd);
 
+  // Resolve spec type for SPEC_TYPE template variable
+  const branchSpec = getSpecForBranch(branch, cwd);
+
   const context: TemplateContext = {
     BRANCH: branch,
     PLANNING_FOLDER: paths.root,
     PROMPTS_FOLDER: paths.prompts,
     ALIGNMENT_PATH: paths.alignment,
     OUTPUT_PATH: join(paths.root, 'e2e-test-plan.md'),
+    SPEC_TYPE: branchSpec?.type ?? 'milestone',
   };
 
   // Set spec name (use the display name if provided, else the directory name)

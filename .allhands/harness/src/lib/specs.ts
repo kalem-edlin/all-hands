@@ -49,7 +49,7 @@ export interface DomainGroup {
 /**
  * Parse frontmatter from spec file content
  */
-function parseFrontmatter(content: string): SpecFrontmatter | null {
+export function parseFrontmatter(content: string): SpecFrontmatter | null {
   const match = content.match(/^---\n([\s\S]*?)\n---/);
   if (!match) return null;
 
@@ -76,7 +76,7 @@ function extractTitle(content: string, filename: string): string {
 /**
  * Scan a directory for spec files
  */
-function scanSpecDir(
+export function scanSpecDir(
   dir: string,
   category: 'roadmap' | 'active' | 'completed'
 ): SpecFile[] {
