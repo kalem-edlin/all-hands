@@ -26,6 +26,9 @@ import {
   type PRReviewState,
 } from './pr-review.js';
 
+/** Cooldown between spawns to prevent race conditions with tmux registry */
+const SPAWN_COOLDOWN_MS = 10000;
+
 export interface PromptSnapshot {
   count: number;
   pending: number;
@@ -54,10 +57,10 @@ export interface EventLoopState {
   promptSnapshot: PromptSnapshot | null;
   /** Tick counter for modulus-based polling */
   tickCount: number;
-  /** Consecutive HP spawns without new prompt creation (resets when new pending prompts appear) */
-  hpSpawnCount: number;
-  /** Total prompt count at last HP spawn, used to detect whether HP produced new prompts */
-  hpLastPromptCount: number | null;
+  /** Consecutive emergent planner spawns without new prompt creation (resets when new pending prompts appear) */
+  emergentSpawnCount: number;
+  /** Total prompt count at last emergent planner spawn, used to detect whether it produced new prompts */
+  emergentLastPromptCount: number;
 }
 
 export interface EventLoopCallbacks {
@@ -126,8 +129,8 @@ export class EventLoop {
       lastExecutorSpawnTime: null,
       promptSnapshot: null,
       tickCount: 0,
-      hpSpawnCount: 0,
-      hpLastPromptCount: null,
+      emergentSpawnCount: 0,
+      emergentLastPromptCount: 0,
     };
   }
 
@@ -174,7 +177,7 @@ export class EventLoop {
    */
   setLoopEnabled(enabled: boolean): void {
     this.state.loopEnabled = enabled;
-    this.state.hpSpawnCount = 0;
+    this.state.emergentSpawnCount = 0;
     if (!enabled) {
       this.state.activeExecutorPrompts = [];
       this.state.lastExecutorSpawnTime = null;
@@ -367,9 +370,9 @@ export class EventLoop {
         snapshot.hash !== this.state.promptSnapshot.hash;
 
       if (hasChanged) {
-        // Reset HP backoff when new pending prompts appear (external prompt creation)
+        // Reset emergent planner backoff when new pending prompts appear (external prompt creation)
         if (this.state.promptSnapshot && snapshot.pending > this.state.promptSnapshot.pending) {
-          this.state.hpSpawnCount = 0;
+          this.state.emergentSpawnCount = 0;
         }
         this.state.promptSnapshot = snapshot;
         this.callbacks.onPromptsChange?.(prompts, snapshot);
@@ -570,9 +573,7 @@ export class EventLoop {
         return;
       }
 
-      // Time-based guard: don't spawn if we spawned recently (within 10 seconds)
-      // This protects against race conditions where the tmux registry hasn't caught up
-      const SPAWN_COOLDOWN_MS = 10000;
+      // Time-based guard: don't spawn if we spawned recently (within cooldown)
       if (
         this.state.lastExecutorSpawnTime &&
         Date.now() - this.state.lastExecutorSpawnTime < SPAWN_COOLDOWN_MS
@@ -608,34 +609,32 @@ export class EventLoop {
       ) {
         // Track whether prior emergent planner spawn was productive (created new prompts)
         const currentPromptCount = this.state.promptSnapshot?.count ?? 0;
-        if (this.state.hpLastPromptCount !== null) {
-          if (currentPromptCount <= this.state.hpLastPromptCount) {
-            // Emergent planner spawned but didn't produce new prompts — unproductive
-            this.state.hpSpawnCount++;
-          } else {
-            // Emergent planner produced work — reset backoff
-            this.state.hpSpawnCount = 0;
-          }
+        if (currentPromptCount <= this.state.emergentLastPromptCount) {
+          // Emergent planner spawned but didn't produce new prompts — unproductive
+          this.state.emergentSpawnCount++;
+        } else {
+          // Emergent planner produced work — reset backoff
+          this.state.emergentSpawnCount = 0;
         }
 
         // Apply exponential backoff for unproductive spawns
-        const cooldownMs = SPAWN_COOLDOWN_MS * Math.pow(2, Math.min(this.state.hpSpawnCount, 4));
+        const cooldownMs = SPAWN_COOLDOWN_MS * Math.pow(2, Math.min(this.state.emergentSpawnCount, 4));
         if (
           this.state.lastExecutorSpawnTime &&
           Date.now() - this.state.lastExecutorSpawnTime < cooldownMs
         ) {
           this.callbacks.onLoopStatus?.(
-            `Emergent planner backoff: waiting ${cooldownMs / 1000}s (${this.state.hpSpawnCount} unproductive spawns)`
+            `Emergent planner backoff: waiting ${cooldownMs / 1000}s (${this.state.emergentSpawnCount} unproductive spawns)`
           );
           return;
         }
 
         // Spawn emergent planner
         this.state.lastExecutorSpawnTime = Date.now();
-        this.state.hpLastPromptCount = currentPromptCount;
+        this.state.emergentLastPromptCount = currentPromptCount;
 
         this.callbacks.onLoopStatus?.(
-          `Spawning emergent planner (attempt ${this.state.hpSpawnCount + 1})`
+          `Spawning emergent planner (attempt ${this.state.emergentSpawnCount + 1})`
         );
         this.callbacks.onSpawnEmergentPlanning?.();
         return;
