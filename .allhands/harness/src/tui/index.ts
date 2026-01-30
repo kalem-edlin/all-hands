@@ -44,7 +44,7 @@ export interface TUIOptions {
   onAction: (action: string, data?: Record<string, unknown>) => void;
   onExit: () => void;
   onSpawnExecutor?: (prompt: PromptFile, branch: string, specId: string) => void;
-  onSpawnHypothesisPlanner?: (branch: string, specId: string) => void;
+  onSpawnEmergentPlanning?: (branch: string, specId: string) => void;
   cwd?: string;
 }
 
@@ -264,11 +264,11 @@ export class TUI {
             this.options.onSpawnExecutor(prompt, this.state.branch, specId);
           }
         },
-        onSpawnHypothesisPlanner: () => {
-          this.log('Loop: Spawning hypothesis planner');
-          if (this.state.branch && this.options.onSpawnHypothesisPlanner) {
+        onSpawnEmergentPlanning: () => {
+          this.log('Loop: Spawning emergent planner');
+          if (this.state.branch && this.options.onSpawnEmergentPlanning) {
             const specId = this.state.spec || sanitizeBranchForDir(this.state.branch);
-            this.options.onSpawnHypothesisPlanner(this.state.branch, specId);
+            this.options.onSpawnEmergentPlanning(this.state.branch, specId);
           }
         },
         onLoopStatus: (message) => {

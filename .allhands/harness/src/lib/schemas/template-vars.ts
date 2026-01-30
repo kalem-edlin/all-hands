@@ -35,7 +35,7 @@ export const TemplateVars = {
     .string()
     .describe('Spec type from frontmatter (milestone, investigation, optimization, refactor, documentation, triage)'),
 
-  // Hypothesis planner variables
+  // Emergent planner variables
   HYPOTHESIS_DOMAINS: z
     .string()
     .describe('Comma-separated list of hypothesis domains from settings.json'),

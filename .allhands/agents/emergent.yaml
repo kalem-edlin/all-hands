@@ -1,8 +1,8 @@
-name: hypothesis-planner
-flow: HYPOTHESIS_PLANNER.md
-prompt_scoped: false
-tui_action: hypothesis-planner
-tui_label: Hypothesis Planner
+name: emergent
+flow: EMERGENT_PLANNING.md
+prompt_scoped: true
+tui_action: emergent
+tui_label: Emergent
 tui_requires_spec: true
 non_coding: true
 message_template: |

@@ -564,7 +564,7 @@ export interface DaemonSettings {
   enabled?: boolean;
 }
 
-/** Emergent work settings (hypothesis domains for planner agents) */
+/** Emergent work settings (hypothesis domains for emergent planner) */
 export interface EmergentSettings {
   hypothesisDomains?: string[];
 }

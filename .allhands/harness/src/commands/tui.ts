@@ -139,8 +139,8 @@ export async function launchTUI(options: { spec?: string } = {}): Promise<void> 
     onSpawnExecutor: (prompt, executorBranch, specId) => {
       spawnExecutorForPrompt(tui, prompt, executorBranch, specId);
     },
-    onSpawnHypothesisPlanner: (hpBranch, specId) => {
-      spawnHypothesisPlannerAgent(tui, hpBranch, specId);
+    onSpawnEmergentPlanning: (emergentBranch, specId) => {
+      spawnEmergentPlanningAgent(tui, emergentBranch, specId);
     },
     cwd: process.cwd(),
   });
@@ -902,37 +902,42 @@ function spawnExecutorForPrompt(tui: TUI, prompt: PromptFile, branch: string, sp
   }
 }
 
-function spawnHypothesisPlannerAgent(tui: TUI, branch: string, specId: string): void {
+function spawnEmergentPlanningAgent(tui: TUI, branch: string, specId: string): void {
   const cwd = process.cwd();
   const planningKey = sanitizeBranchForDir(branch);
 
-  tui.log('Spawning hypothesis planner');
+  // Get next available prompt number for emergent planner window name
+  const nextPromptNumber = getNextPromptNumber(planningKey, cwd);
+
+  tui.log(`Spawning emergent planner (will create prompts from ${nextPromptNumber})`);
 
   try {
     const context = buildTemplateContext(
       planningKey,
       specId,
-      undefined,  // Not prompt-scoped
+      nextPromptNumber,
       undefined,
       cwd
     );
 
     const result = spawnAgentFromProfile(
       {
-        agentName: 'hypothesis-planner',
+        agentName: 'emergent',
         context,
+        promptNumber: nextPromptNumber,
         focusWindow: false, // Don't steal focus from TUI
       },
       branch,
       cwd
     );
 
-    tui.log(`Spawned hypothesis planner in ${result.sessionName}:${result.windowName}`);
+    tui.log(`Spawned emergent planner in ${result.sessionName}:${result.windowName}`);
     updateRunningAgents(tui, branch);
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
-    tui.log(`Error spawning hypothesis planner: ${message}`);
-    logTuiError('spawn-hypothesis-planner', e instanceof Error ? e : message, {
+    tui.log(`Error spawning emergent planner: ${message}`);
+    logTuiError('spawn-emergent', e instanceof Error ? e : message, {
+      promptNumber: nextPromptNumber,
       branch,
     }, cwd);
   }

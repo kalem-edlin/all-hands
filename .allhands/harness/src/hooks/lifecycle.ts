@@ -55,11 +55,12 @@ export function handleAgentStop(_input: HookInput): void {
     type: 'banner',
   });
 
-  // Only kill the tmux window for prompt-scoped agents.
-  // Non-prompt-scoped agents should remain running (their window stays open).
+  // Kill the tmux window for prompt-scoped agents AND the emergent planner.
+  // Non-prompt-scoped agents (except emergent) should remain running (their window stays open).
   // Prompt-scoped agents may not close naturally even with exec, so we
-  // explicitly kill them here.
-  if (isPromptScoped) {
+  // explicitly kill them here. The emergent planner is prompt_scoped, but
+  // this condition also covers it by agent type for clarity.
+  if (isPromptScoped || agentType === 'emergent') {
     const sessionName = getCurrentSession() || SESSION_NAME;
     if (agentId && windowExists(sessionName, agentId)) {
       killWindow(sessionName, agentId);
@@ -100,13 +101,15 @@ export async function handleAgentCompact(input: HookInput): Promise<void> {
   const isPromptScoped = process.env.PROMPT_SCOPED === 'true';
   const transcriptPath = input.transcript_path;
 
-  // Only process compaction for prompt-scoped agents with PROMPT_NUMBER.
-  // Non-prompt-scoped agents (like the main session) should just pass through
-  // without killing windows or attempting to write summaries.
-  if (!isPromptScoped || !promptNumber) {
+  const agentType = process.env.AGENT_TYPE;
+
+  // Only process compaction for prompt executor agents (prompt-scoped with PROMPT_NUMBER).
+  // The emergent planner is prompt_scoped (for window naming) but must NOT run compaction —
+  // it plans hypotheses, not implementation. Non-prompt-scoped agents pass through too.
+  if (!isPromptScoped || !promptNumber || agentType === 'emergent') {
     logHookSuccess(HOOK_AGENT_COMPACT, {
       action: 'skip',
-      reason: !isPromptScoped ? 'not_prompt_scoped' : 'no_prompt_number',
+      reason: !isPromptScoped ? 'not_prompt_scoped' : agentType === 'emergent' ? 'emergent_planner' : 'no_prompt_number',
     });
     return outputPreCompact(undefined);
   }

@@ -36,7 +36,7 @@ Guide maintainers in preserving and improving the harness architecture. This doc
 | **Frontier Models are Capable** | Flows provide "why", agents deduce "how"; control flows not micromanagement |
 | **Agentic Validation Tooling** | Schema validation on edit; diagnostics hooks; validation suites as acceptance criteria |
 | **Knowledge Compounding** | Compaction summaries preserve learnings; skills/validation improve with use |
-| **Quality Engineering** | Settings define hypothesis domains; hypothesis planner diversifies work to discover valuable variants |
+| **Quality Engineering** | Settings define hypothesis domains; emergent planner diversifies work to discover valuable variants |
 
 ---
 
@@ -202,7 +202,7 @@ template_vars:              # Required context variables
 
 ## Hypothesis Domains
 
-Per **Quality Engineering**, hypothesis domains define the available work areas for the hypothesis planner.
+Per **Quality Engineering**, hypothesis domains define the available work areas for the emergent planner.
 
 ### Configuration
 
@@ -220,11 +220,11 @@ Per **Frontier Models are Capable**, agents understand domain meanings from name
 ### Integration with Agent Spawning
 1. `buildTemplateContext()` loads domains from `settings.json`
 2. Domains formatted as `HYPOTHESIS_DOMAINS` template variable
-3. Hypothesis planner receives available domains in spawn message
+3. Emergent planner receives available domains in spawn message
 4. Planner selects domain and creates `type: emergent` prompts for executors
 
 ### Diversification Rule
-Per **Knowledge Compounding**, the hypothesis planner tracks work types in alignment doc summaries. If prior prompts cluster on one domain, subsequent prompts should diversify by selecting an underrepresented domain.
+Per **Knowledge Compounding**, the emergent planner tracks work types in alignment doc summaries. If prior prompts cluster on one domain, subsequent prompts should diversify by selecting an underrepresented domain.
 
 ---
 
@@ -318,7 +318,7 @@ Sub-flows use `<inputs>` and `<outputs>` tags for execution-agnostic subtasks.
 
 ### Updating Hypothesis Domains
 1. Edit available domains in `settings.json` under `emergent.hypothesisDomains`
-2. Domains are passed to hypothesis planner via `HYPOTHESIS_DOMAINS` template variable
+2. Domains are passed to emergent planner via `HYPOTHESIS_DOMAINS` template variable
 
 ### Adding New Template Variables
 1. Add to `TemplateVars` registry in `src/lib/schemas/template-vars.ts`

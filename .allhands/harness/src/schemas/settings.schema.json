@@ -144,12 +144,12 @@
     },
     "emergent": {
       "type": "object",
-      "description": "Emergent work settings (default domain pool for hypothesis planner)",
+      "description": "Emergent work settings (default domain pool for emergent planner)",
       "properties": {
         "hypothesisDomains": {
           "type": "array",
           "items": { "type": "string" },
-          "description": "Default pool of hypothesis domains available to the hypothesis planner. Agents diversify across these to discover valuable improvements.",
+          "description": "Default pool of hypothesis domains available to the emergent planner. Agents diversify across these to discover valuable improvements.",
           "examples": [
             ["testing", "stability", "performance", "feature", "ux", "integration"],
             ["reproduction", "diagnosis", "stability", "testing"]

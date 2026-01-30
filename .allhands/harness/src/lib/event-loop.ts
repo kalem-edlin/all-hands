@@ -65,8 +65,8 @@ export interface EventLoopCallbacks {
   onBranchChange?: (newBranch: string, spec: SpecFile | null) => void;
   onAgentsChange?: (agents: string[]) => void;
   onSpawnExecutor?: (prompt: PromptFile) => void;
-  /** Called when hypothesis planner should be spawned (no pending + no in_progress) */
-  onSpawnHypothesisPlanner?: () => void;
+  /** Called when emergent planner should be spawned (no pending + no in_progress) */
+  onSpawnEmergentPlanning?: () => void;
   onLoopStatus?: (message: string) => void;
   /** Called when prompts are added, removed, or their status changes */
   onPromptsChange?: (prompts: PromptFile[], snapshot: PromptSnapshot) => void;
@@ -476,7 +476,7 @@ export class EventLoop {
             }
           }
           // Clear spawn timestamp to allow new spawns
-          if (disappeared.some((name) => name.startsWith('executor') || name.startsWith('hypothesis-planner'))) {
+          if (disappeared.some((name) => name.startsWith('executor') || name.startsWith('emergent'))) {
             this.state.lastExecutorSpawnTime = null;
           }
         }
@@ -532,11 +532,11 @@ export class EventLoop {
    * Unified prompt loop — single decision path:
    *
    * 1. loop enabled + pending prompts → pick next, spawn executor
-   * 2. loop enabled + no pending + no in_progress → spawn hypothesis planner
+   * 2. loop enabled + no pending + no in_progress → spawn emergent planner
    * 3. loop enabled + no pending + in_progress exist → wait (executors still working)
    * 4. loop disabled → nothing
    *
-   * Parallel rules: spawn up to maxParallel executors; only ONE hypothesis planner at a time.
+   * Parallel rules: spawn up to maxParallel executors; only ONE emergent planner at a time.
    */
   private async checkPromptLoop(): Promise<void> {
     if (!this.state.loopEnabled) {
@@ -550,9 +550,9 @@ export class EventLoop {
     }
 
     try {
-      // Block if hypothesis planner is running (only ONE at a time)
-      const hasHypothesisPlanner = this.state.activeAgents.some((name) => name.startsWith('hypothesis-planner'));
-      if (hasHypothesisPlanner) {
+      // Block if emergent planner is running (only ONE at a time)
+      const hasEmergent = this.state.activeAgents.some((name) => name.startsWith('emergent'));
+      if (hasEmergent) {
         return;
       }
 
@@ -600,20 +600,20 @@ export class EventLoop {
         return;
       }
 
-      // No pending prompts — check if we should spawn hypothesis planner
+      // No pending prompts — check if we should spawn emergent planner
       if (
         result.stats &&
         result.stats.pending === 0 &&
         result.stats.inProgress === 0
       ) {
-        // Track whether prior HP spawn was productive (created new prompts)
+        // Track whether prior emergent planner spawn was productive (created new prompts)
         const currentPromptCount = this.state.promptSnapshot?.count ?? 0;
         if (this.state.hpLastPromptCount !== null) {
           if (currentPromptCount <= this.state.hpLastPromptCount) {
-            // HP spawned but didn't produce new prompts — unproductive
+            // Emergent planner spawned but didn't produce new prompts — unproductive
             this.state.hpSpawnCount++;
           } else {
-            // HP produced work — reset backoff
+            // Emergent planner produced work — reset backoff
             this.state.hpSpawnCount = 0;
           }
         }
@@ -625,19 +625,19 @@ export class EventLoop {
           Date.now() - this.state.lastExecutorSpawnTime < cooldownMs
         ) {
           this.callbacks.onLoopStatus?.(
-            `Hypothesis planner backoff: waiting ${cooldownMs / 1000}s (${this.state.hpSpawnCount} unproductive spawns)`
+            `Emergent planner backoff: waiting ${cooldownMs / 1000}s (${this.state.hpSpawnCount} unproductive spawns)`
           );
           return;
         }
 
-        // Spawn hypothesis planner
+        // Spawn emergent planner
         this.state.lastExecutorSpawnTime = Date.now();
         this.state.hpLastPromptCount = currentPromptCount;
 
         this.callbacks.onLoopStatus?.(
-          `Spawning hypothesis planner (attempt ${this.state.hpSpawnCount + 1})`
+          `Spawning emergent planner (attempt ${this.state.hpSpawnCount + 1})`
         );
-        this.callbacks.onSpawnHypothesisPlanner?.();
+        this.callbacks.onSpawnEmergentPlanning?.();
         return;
       }
 

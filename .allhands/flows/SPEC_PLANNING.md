@@ -12,7 +12,7 @@ Transform the spec into executable prompts with type-appropriate planning depth.
 - MUST read spec `type` field before planning — it determines planning depth
 - MUST present recommended approach for each decision point
 - Milestone specs MUST include jury review before finalizing
-- Exploratory specs MUST document unresolved questions in alignment doc for hypothesis planner consumption
+- Exploratory specs MUST document unresolved questions in alignment doc for emergent planner consumption
 - Prompts MUST be fully autonomous - no human intervention during execution
 - Testing is NOT a prompt - validation happens via validation_suites attached to prompts
 </constraints>
@@ -167,15 +167,15 @@ Present spec open questions and concerns to the engineer using `AskUserQuestion`
 - Create 0-3 seed prompts as testable hypotheses grounded in research findings
 - Read `.allhands/flows/shared/UTILIZE_VALIDATION_TOOLING.md` to discover and assign validation suites
 - Seed prompts target the most concrete, immediately actionable aspects of the spec
-- Remaining open questions are left for the hypothesis planner to design experiments around
+- Remaining open questions are left for the emergent planner to design experiments around
 
 ### Exploratory Alignment Doc
 
 - Run `ah schema alignment` for format — use the same schema sections with type-appropriate content:
-  - **Overview**: Problem statement, evidence, context, and unresolved questions — the hypothesis planner reads these to design experiments
+  - **Overview**: Problem statement, evidence, context, and unresolved questions — the emergent planner reads these to design experiments
   - **Hard User Requirements**: Success criteria and constraints
   - **Engineer Decisions**: Only deviations from recommendations (same as milestone)
-- Document unresolved questions (skipped interview questions, open spec questions) prominently in Overview — per **Knowledge Compounding**, this enables hypothesis planner to discover and test answers
+- Document unresolved questions (skipped interview questions, open spec questions) prominently in Overview — per **Knowledge Compounding**, this enables emergent planner to discover and test answers
 - Document concerns and limitations as context for hypothesis formation
 - Do NOT write prompt summaries - those are appended by executor after prompt completion
 
