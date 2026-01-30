@@ -37,11 +37,12 @@ Per **Agentic Validation Tooling**, this suite meets the existence threshold: th
 - Rust CLI + Node.js daemon built on Playwright. Discrete CLI commands, not a persistent API.
 - **Snapshot+Refs model**: Accessibility tree with compact element refs (`@e1`). Refs invalidate on state change — always re-snapshot after navigation or DOM mutation.
 - **Session isolation**: Named sessions for parallel exploration. Auth state persists across sessions.
-- **Command reference**: `agent-browser --help` and `agent-browser <command> --help`
+- **Command reference first**: Run `agent-browser --help` and `agent-browser <command> --help` before any exploration — command vocabulary shapes what you attempt. Prerequisite, not afterthought.
 
 ### Playwright (deterministic dimension)
 
 - **Installation**: `npm install -D @playwright/test @axe-core/playwright && npx playwright install chromium --with-deps`
+- **Command reference first**: `npx playwright --help` and Playwright docs for the full API surface.
 - Scripted CI tests — visual regression (`toHaveScreenshot()`), accessibility (`@axe-core/playwright`, WCAG 2.1 AA), e2e flows. Not via MCP; no LLM reasoning needed.
 
 ## Stochastic Validation
@@ -49,6 +50,8 @@ Per **Agentic Validation Tooling**, this suite meets the existence threshold: th
 Agent-driven exploratory browser validation. This section teaches WHAT to validate and WHY — the CLI teaches HOW.
 
 ### Core Loop
+
+**Prerequisite**: `agent-browser --help` — internalize the full command vocabulary before exploring. Every subcommand has its own `--help`. Command awareness shapes exploration quality.
 
 Navigate → snapshot → identify targets → interact → wait for result → verify outcome → check errors.
 
@@ -63,20 +66,20 @@ This is the thinking pattern to internalize, not a command sequence:
 
 These seed categories guide exploration. Per **Frontier Models are Capable**, the agent extrapolates deeper investigation from these starting points.
 
-- **Flow verification**: Walk critical user paths end-to-end (registration, checkout, settings). Verify each step completed — form submitted, URL changed, success state appeared. Exercise redirects and back/forward navigation.
-- **Responsive testing**: Resize viewport across breakpoints, verify layout at mobile widths. Test media preferences (dark mode, reduced motion). Layout bugs at specific widths are among the most common front-end regressions.
-- **Edge case probing**: Submit empty forms, overlong strings, special characters. Verify error handling surfaces appropriate messages. Test keyboard-only navigation — can a user complete flows without a mouse?
-- **Accessibility exploration**: Use snapshot to inspect semantic structure (the accessibility tree IS an assistive technology view). Verify Tab order, Enter/Space activation, Escape dismissal, focus management on modals.
-- **Evidence capture**: Screenshot before/after interactions for visual comparison. Capture console errors tied to specific flows as bug evidence. Screenshots are opportunistic — capture what's interesting, not on a schedule.
-- **Video recording**: Explore first (discover flows, find issues), then record clean replay for engineer review. Recording creates a fresh context but preserves session state — focused evidence, not noisy exploration footage.
+- **Flow verification**: `navigate` to entry point, `snapshot` to orient, interact via refs — `click @e3`, `type @e5 "user@test.com"` — then re-snapshot to verify: URL changed, success state appeared, no console errors. Walk full critical paths (registration, checkout, settings). Exercise redirects and back/forward navigation.
+- **Responsive testing**: `resize` viewport across breakpoints (e.g., 375px mobile, 768px tablet, 1280px desktop), `snapshot` at each to inspect layout changes. Test media preferences with `emulate-media` (dark mode, reduced motion). Layout bugs at specific widths are among the most common front-end regressions.
+- **Edge case probing**: `click` submit without filling fields, `type` overlong strings and special characters into inputs. Verify error handling surfaces appropriate messages in the next `snapshot`. Test keyboard-only navigation — `press Tab`, `press Enter`, `press Escape` — can a user complete flows without a mouse?
+- **Accessibility exploration**: `snapshot` IS the assistive technology view — the accessibility tree reveals semantic structure directly. Verify Tab order (`press Tab` sequences), Enter/Space activation (`press Enter` on focused element), Escape dismissal (`press Escape`), focus management on modals.
+- **Evidence capture**: `screenshot` before/after interactions for visual comparison. Capture console output tied to specific flows as bug evidence. Screenshots are opportunistic — capture what's interesting, not on a schedule.
+- **Video recording**: Explore first (discover flows, find issues), then `record` a clean replay for engineer review. Recording creates a fresh context but preserves session state — focused evidence, not noisy exploration footage.
 
 ### Resilience
 
 Stochastic exploration is inherently unpredictable. These patterns prevent death spirals:
 
 - Max 3 retries on any interaction, then report failure and move on
-- Screenshot on failure — capture full-page state before recovery attempts
-- Session restart if page becomes unresponsive — fresh session + alternative path
+- `screenshot` on failure — capture full-page state before recovery attempts
+- Session restart if page becomes unresponsive — fresh named session + alternative path
 - Auth bail-out — OAuth, MFA, or CAPTCHA blockers: save state, report, move on
 - Dialog/frame handling — accept or dismiss dialogs to unblock; switch into iframes for embedded content
 - Self-healing pattern — when an element disappears, re-snapshot the entire page rather than retrying the same selector (Stagehand reference)
@@ -85,12 +88,12 @@ Use `agent-browser --help` and `agent-browser <command> --help` for all availabl
 
 ## Deterministic Integration
 
-CI-gated browser regression testing using Playwright directly. Scripted assertions — no LLM reasoning needed. Playwright docs and `npx playwright --help` teach specific APIs.
+CI-gated browser regression testing using Playwright directly. Scripted assertions — no LLM reasoning needed.
 
-- **Visual regression**: Baseline screenshots committed to repo, fail CI on drift. Mask dynamic content (timestamps, avatars) to avoid false positives. Single OS + browser in CI for font rendering consistency.
-- **Accessibility**: `@axe-core/playwright` for WCAG 2.1 AA scanning. Reusable fixture for consistent config. Scope to components for feature tests, full-page for integration.
-- **Multi-device**: Chromium-only, desktop/mobile/tablet viewport projects. Responsive regression is a viewport concern, not a browser concern.
-- **CI artifacts**: Traces + screenshots on failure for remote debugging. Upload artifacts to survive ephemeral runners.
+- **Visual regression**: `await expect(page).toHaveScreenshot('dashboard.png')` — baseline screenshots committed to repo, fail CI on drift. Mask dynamic content (`{ mask: [page.locator('.timestamp')] }`) to avoid false positives. Single OS + browser in CI for font rendering consistency.
+- **Accessibility**: `const results = await new AxeBuilder({ page }).analyze()` — WCAG 2.1 AA scanning via `@axe-core/playwright`. Reusable fixture for consistent config. Scope to components (`.include('.component')`) for feature tests, full-page for integration.
+- **Multi-device**: `projects: [{ use: devices['iPhone 14'] }]` — Chromium-only, desktop/mobile/tablet viewport projects. Responsive regression is a viewport concern, not a browser concern.
+- **CI artifacts**: `use: { trace: 'on-first-retry', screenshot: 'only-on-failure' }` — traces + screenshots on failure for remote debugging. Upload artifacts to survive ephemeral runners.
 
 ## ENV Configuration
 

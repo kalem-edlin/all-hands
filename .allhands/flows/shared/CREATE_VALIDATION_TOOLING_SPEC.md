@@ -33,9 +33,10 @@ If valuable MCP not integrated, note as acceptance criterion.
 
 Per **Agentic Validation Tooling**, research produces assumptions; running the tool produces ground truth. Per **Ideation First**, prevents encoding untested assumptions.
 
-- Install and verify the tool responds to `--help`
+- Install and verify the tool responds to `--help` — internalize the full command vocabulary before anything else
 - Create a minimal test target (temp directory, not committed)
 - Execute representative stochastic workflows — discover commands, chaining, and the observe-act-verify loop
+- Systematically try commands from `--help` against codebase-relevant scenarios — this exploration directly produces the command/use-case pairs that belong in the suite documentation
 - Document divergences from researched documentation — informs spec and engineer interview
 
 ## Engineer Interview
@@ -47,13 +48,13 @@ Confirm engineer agrees and understands this creates a blocking dependency.
 ## Suite Writing Philosophy
 
 <constraints>
-- MUST reference `<tool> --help` as authoritative command reference — suites MUST NOT replicate tool command docs. Per **Knowledge Compounding**, single source prevents drift.
-- MUST provide brief command/use-case pairs as calibration anchors, not exhaustive catalogs. Per **Frontier Models are Capable**, illustrative examples enable agent extrapolation.
-- MUST frame motivations around harness value: reducing human-in-loop supervision, verifying code quality, confirming implementation matches expectations.
-- MUST describe exploration categories, not prescriptive command sequences. Per **Frontier Models are Capable**, agents deduce the "how" from motivations and `--help`.
+- MUST instruct agents to pull `<tool> --help` as prerequisite before any exploration — command vocabulary shapes exploration quality. This is a directive in the suite, not just a reference. Per **Knowledge Compounding**, `--help` is the authoritative source; the suite MUST NOT replicate full command docs.
+- MUST weave brief inline command examples into use-case motivations as calibration anchors — not exhaustive catalogs, not separated command reference sections. Per **Frontier Models are Capable**, inline examples seed the right approach while `--help` reveals the full picture.
+- MUST frame motivations around harness value: reducing human-in-loop supervision, verifying code quality, confirming implementation matches expectations. Inline commands back up motivations with concrete tool direction.
+- MUST describe exploration categories with enough command specificity to orient, not prescriptive sequences that constrain. Per **Frontier Models are Capable**, agents extrapolate deeper investigation from seeded examples + `--help`.
 </constraints>
 
-Per **Context is Precious**, target the density of `WRITING_HARNESS_FLOWS.md`. The formula: **motivations + brief command/use-case pairs + `--help` progressive disclosure**.
+Per **Context is Precious**, target the density of `WRITING_HARNESS_FLOWS.md`. The formula: **motivations backed by inline command examples + `--help` as prerequisite and progressive disclosure**. Commands woven into use cases give direction; `--help` reveals depth. Leave `--help` with things to reveal — don't overfit tool specifics to use cases.
 
 ## Evidence Capture
 
