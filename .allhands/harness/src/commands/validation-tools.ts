@@ -12,7 +12,7 @@ import { existsSync, readdirSync, readFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 import { tracedAction } from '../lib/base-command.js';
-import { extractFrontmatter } from '../lib/schema.js';
+import { extractFrontmatter, loadSchema, validateFrontmatter } from '../lib/schema.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -50,6 +50,11 @@ function listValidationSuites(): ValidationSuiteEntry[] {
     return [];
   }
 
+  const schema = loadSchema('validation-suite');
+  if (!schema) {
+    return [];
+  }
+
   const files = readdirSync(dir).filter(f => f.endsWith('.md'));
   const suites: ValidationSuiteEntry[] = [];
 
@@ -57,9 +62,9 @@ function listValidationSuites(): ValidationSuiteEntry[] {
     const filePath = join(dir, file);
     const content = readFileSync(filePath, 'utf-8');
     const { frontmatter: rawFm } = extractFrontmatter(content);
-    const fm = rawFm as ValidationSuiteFrontmatter | null;
 
-    if (fm && fm.name && fm.description && Array.isArray(fm.globs) && Array.isArray(fm.tools)) {
+    if (rawFm && validateFrontmatter(rawFm, schema).valid) {
+      const fm = rawFm as unknown as ValidationSuiteFrontmatter;
       suites.push({
         name: fm.name,
         description: fm.description,
