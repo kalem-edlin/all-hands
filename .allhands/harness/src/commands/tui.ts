@@ -250,6 +250,22 @@ async function spawnAgentsForAction(
   return true;
 }
 
+/**
+ * Check for uncommitted changes and prompt the user for confirmation.
+ * Returns true if no uncommitted changes or user confirms proceeding.
+ */
+async function confirmProceedWithUncommittedChanges(
+  tui: TUI,
+  cwd: string,
+  message: string
+): Promise<boolean> {
+  if (hasUncommittedChanges(cwd)) {
+    const proceed = await tui.showConfirmation('Uncommitted Changes', message);
+    return proceed;
+  }
+  return true;
+}
+
 async function handleAction(
   tui: TUI,
   action: string,
@@ -286,13 +302,10 @@ async function handleAction(
       }
 
       // Warn about uncommitted changes — gives user a chance to cancel and commit first
-      if (hasUncommittedChanges(cwd)) {
-        const proceed = await tui.showConfirmation(
-          'Uncommitted Changes',
-          'You have uncommitted changes that will not be included in the PR. Proceed anyway?'
-        );
-        if (!proceed) break;
-      }
+      const proceedWithPR = await confirmProceedWithUncommittedChanges(
+        tui, cwd, 'You have uncommitted changes that will not be included in the PR. Proceed anyway?'
+      );
+      if (!proceedWithPR) break;
 
       // Check if we're creating or updating
       const existingStatus = status?.pr?.url ? 'Updating' : 'Creating';
@@ -346,13 +359,10 @@ async function handleAction(
       }
 
       // Warn about uncommitted changes — gives user a chance to cancel and commit first
-      if (hasUncommittedChanges(cwd)) {
-        const proceed = await tui.showConfirmation(
-          'Uncommitted Changes',
-          'You have uncommitted changes that will not be included in the PR. Proceed anyway?'
-        );
-        if (!proceed) break;
-      }
+      const proceedWithReview = await confirmProceedWithUncommittedChanges(
+        tui, cwd, 'You have uncommitted changes that will not be included in the PR. Proceed anyway?'
+      );
+      if (!proceedWithReview) break;
 
       tui.log('Triggering PR re-review...');
 
@@ -434,13 +444,10 @@ async function handleAction(
       }
 
       // Warn about uncommitted changes — gives user a chance to cancel and commit first
-      if (hasUncommittedChanges(cwd)) {
-        const proceed = await tui.showConfirmation(
-          'Uncommitted Changes',
-          'You have uncommitted changes that will not be included in the final push. Proceed anyway?'
-        );
-        if (!proceed) break;
-      }
+      const proceedWithComplete = await confirmProceedWithUncommittedChanges(
+        tui, cwd, 'You have uncommitted changes that will not be included in the final push. Proceed anyway?'
+      );
+      if (!proceedWithComplete) break;
 
       tui.log(`Marking spec as completed: ${currentSpec.id}`);
 
