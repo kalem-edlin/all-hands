@@ -47,10 +47,24 @@ import { setHubWindowId, clearTuiSession } from '../lib/session.js';
 import { getProfilesByTuiAction } from '../lib/opencode/index.js';
 import { buildPR } from '../lib/oracle.js';
 import type { PromptFile } from '../lib/prompts.js';
-import { findSpecById, getSpecForBranch, type SpecFile } from '../lib/specs.js';
+import { findSpecById, getSpecForBranch, type SpecFile, type SpecType } from '../lib/specs.js';
 import { updateSpecStatus, reindexAfterMove } from './specs.js';
 import { logTuiError, logTuiAction, logTuiLifecycle } from '../lib/trace-store.js';
 import { getFlowsDirectory } from '../lib/flows.js';
+
+/**
+ * Map spec types to scoping flow filenames.
+ * Milestone uses the ideation agent's default flow (IDEATION_SESSION.md).
+ * All other types map to their respective scoping flow file.
+ */
+export const SCOPING_FLOW_MAP: Record<SpecType, string | null> = {
+  milestone: null,
+  investigation: 'INVESTIGATION_SCOPING.md',
+  optimization: 'OPTIMIZATION_SCOPING.md',
+  refactor: 'REFACTOR_SCOPING.md',
+  documentation: 'DOCUMENTATION_SCOPING.md',
+  triage: 'TRIAGE_SCOPING.md',
+};
 
 /**
  * Launch the TUI - can be called directly or via command
@@ -813,18 +827,7 @@ async function handleAction(
         break;
       }
 
-      // Map spec types to scoping flow filenames
-      // Milestone uses the ideation agent's default flow (IDEATION_SESSION.md)
-      const scopingFlowMap: Record<string, string | null> = {
-        milestone: null,
-        investigation: 'INVESTIGATION_SCOPING.md',
-        optimization: 'OPTIMIZATION_SCOPING.md',
-        refactor: 'REFACTOR_SCOPING.md',
-        documentation: 'DOCUMENTATION_SCOPING.md',
-        triage: 'TRIAGE_SCOPING.md',
-      };
-
-      const flowFile = scopingFlowMap[specType];
+      const flowFile = SCOPING_FLOW_MAP[specType as SpecType];
       const flowOverride = flowFile
         ? join(getFlowsDirectory(), flowFile)
         : undefined;

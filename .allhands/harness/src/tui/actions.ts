@@ -150,7 +150,7 @@ function formatActionsContent(items: ActionItem[], selectedIndex?: number): Acti
   return { content: lines.join('\n'), selectedLineNumber };
 }
 
-function buildActionItems(toggleState: ToggleState): ActionItem[] {
+export function buildActionItems(toggleState: ToggleState): ActionItem[] {
   const prLabel = getPRActionLabel(toggleState.prActionState);
 
   return [
