@@ -33,7 +33,7 @@ import {
 import { triggerPRReview } from '../lib/pr-review.js';
 import { loadProjectSettings } from '../hooks/shared.js';
 import { findSpecForPath, extractSpecNameFromFile } from '../lib/planning-utils.js';
-import { getBaseBranch, getLocalBaseBranch } from '../lib/git.js';
+import { getBaseBranch, getLocalBaseBranch, hasUncommittedChanges } from '../lib/git.js';
 import { loadAllPrompts, getNextPromptNumber } from '../lib/prompts.js';
 import {
   isTmuxInstalled,
@@ -285,6 +285,15 @@ async function handleAction(
         return;
       }
 
+      // Warn about uncommitted changes — gives user a chance to cancel and commit first
+      if (hasUncommittedChanges(cwd)) {
+        const proceed = await tui.showConfirmation(
+          'Uncommitted Changes',
+          'You have uncommitted changes that will not be included in the PR. Proceed anyway?'
+        );
+        if (!proceed) break;
+      }
+
       // Check if we're creating or updating
       const existingStatus = status?.pr?.url ? 'Updating' : 'Creating';
       tui.log(`${existingStatus} PR via oracle...`);
@@ -334,6 +343,15 @@ async function handleAction(
       if (!prStatus?.url) {
         tui.log('Error: No PR found. Create a PR first.');
         return;
+      }
+
+      // Warn about uncommitted changes — gives user a chance to cancel and commit first
+      if (hasUncommittedChanges(cwd)) {
+        const proceed = await tui.showConfirmation(
+          'Uncommitted Changes',
+          'You have uncommitted changes that will not be included in the PR. Proceed anyway?'
+        );
+        if (!proceed) break;
       }
 
       tui.log('Triggering PR re-review...');
@@ -416,18 +434,12 @@ async function handleAction(
       }
 
       // Warn about uncommitted changes — gives user a chance to cancel and commit first
-      try {
-        const statusOut = execSync('git status --porcelain', { encoding: 'utf-8', cwd }).trim();
-        if (statusOut.length > 0) {
-          const proceed = await tui.showConfirmation(
-            'Uncommitted Changes',
-            'You have uncommitted changes that will not be included in the final push. Proceed anyway?'
-          );
-          if (!proceed) break;
-        }
-      } catch {
-        tui.log('Error: Could not check git status.');
-        break;
+      if (hasUncommittedChanges(cwd)) {
+        const proceed = await tui.showConfirmation(
+          'Uncommitted Changes',
+          'You have uncommitted changes that will not be included in the final push. Proceed anyway?'
+        );
+        if (!proceed) break;
       }
 
       tui.log(`Marking spec as completed: ${currentSpec.id}`);
