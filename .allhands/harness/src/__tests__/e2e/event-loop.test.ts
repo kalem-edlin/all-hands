@@ -68,7 +68,7 @@ vi.mock('../../lib/pr-review.js', () => ({
 
 // Imports after mocks (vi.mock calls are hoisted)
 import { EventLoop } from '../../lib/event-loop.js';
-import { pickNextPrompt, markPromptInProgress } from '../../lib/prompts.js';
+import { pickNextPrompt, markPromptInProgress, loadAllPrompts } from '../../lib/prompts.js';
 import { listWindows, getSpawnedAgentRegistry } from '../../lib/tmux.js';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -395,6 +395,145 @@ describe('EventLoop Decision Logic', () => {
 
       expect(loop.getState().activeExecutorPrompts).toEqual([]);
       expect(loop.getState().lastExecutorSpawnTime).toBeNull();
+    });
+  });
+
+  // ─── Emergent Planner Exponential Backoff ────────────────────────────
+
+  describe('emergent planner exponential backoff', () => {
+    /** Configure mocks for the emergent planner path (no pending, no in_progress) */
+    function setupEmergentPath(doneCount: number) {
+      const donePrompts = Array.from({ length: doneCount }, (_, i) => makePrompt(i + 1, 'done'));
+      vi.mocked(loadAllPrompts).mockReturnValue(donePrompts);
+      vi.mocked(pickNextPrompt).mockReturnValue(
+        pickerResult(null, { total: doneCount, pending: 0, inProgress: 0, done: doneCount, blocked: 0 }),
+      );
+    }
+
+    it('increments emergentSpawnCount on unproductive spawn and applies 20s cooldown', async () => {
+      setupEmergentPath(5);
+
+      // Tick 1: first spawn — productive (snapshot count 5 > initial emergentLastPromptCount 0)
+      await loop.forceTick();
+      expect(callbacks.onSpawnEmergentPlanning).toHaveBeenCalledTimes(1);
+      expect(loop.getState().emergentSpawnCount).toBe(0);
+
+      // Fix time at 15s after spawn — past base 10s but under 20s backoff
+      const spawnTime = loop.getState().lastExecutorSpawnTime!;
+      const dateNowSpy = vi.spyOn(Date, 'now').mockReturnValue(spawnTime + 15000);
+
+      // Tick 2: unproductive (count still 5) → emergentSpawnCount = 1, cooldown = 20s
+      await loop.forceTick();
+      expect(callbacks.onSpawnEmergentPlanning).toHaveBeenCalledTimes(1); // blocked by backoff
+      expect(loop.getState().emergentSpawnCount).toBe(1);
+      expect(callbacks.onLoopStatus).toHaveBeenCalledWith(
+        'Emergent planner backoff: waiting 20s (1 unproductive spawns)',
+      );
+
+      dateNowSpy.mockRestore();
+    });
+
+    it('doubles cooldown with each unproductive attempt: 20s, 40s, 80s, 160s, capped at 160s', async () => {
+      setupEmergentPath(5);
+
+      // Tick 1: first spawn (productive, emergentSpawnCount = 0)
+      await loop.forceTick();
+      expect(callbacks.onSpawnEmergentPlanning).toHaveBeenCalledTimes(1);
+
+      // Advance time past base 10s cooldown but within each escalating backoff window
+      const spawnTime = loop.getState().lastExecutorSpawnTime!;
+      const dateNowSpy = vi.spyOn(Date, 'now');
+
+      dateNowSpy.mockReturnValue(spawnTime + 11000); // 11s: past base 10s, within 20s
+      await loop.forceTick(); // count → 1
+      expect(callbacks.onLoopStatus).toHaveBeenCalledWith(
+        'Emergent planner backoff: waiting 20s (1 unproductive spawns)',
+      );
+
+      dateNowSpy.mockReturnValue(spawnTime + 21000); // 21s: past base, within 40s
+      await loop.forceTick(); // count → 2
+      expect(callbacks.onLoopStatus).toHaveBeenCalledWith(
+        'Emergent planner backoff: waiting 40s (2 unproductive spawns)',
+      );
+
+      dateNowSpy.mockReturnValue(spawnTime + 41000); // 41s: past base, within 80s
+      await loop.forceTick(); // count → 3
+      expect(callbacks.onLoopStatus).toHaveBeenCalledWith(
+        'Emergent planner backoff: waiting 80s (3 unproductive spawns)',
+      );
+
+      dateNowSpy.mockReturnValue(spawnTime + 81000); // 81s: past base, within 160s
+      await loop.forceTick(); // count → 4
+      expect(callbacks.onLoopStatus).toHaveBeenCalledWith(
+        'Emergent planner backoff: waiting 160s (4 unproductive spawns)',
+      );
+
+      // count → 5, Math.min(5, 4) = 4, cooldown still 160s (capped at same time offset)
+      await loop.forceTick();
+      expect(callbacks.onLoopStatus).toHaveBeenCalledWith(
+        'Emergent planner backoff: waiting 160s (5 unproductive spawns)',
+      );
+
+      // Only the initial spawn succeeded — all subsequent ticks blocked
+      expect(callbacks.onSpawnEmergentPlanning).toHaveBeenCalledTimes(1);
+
+      dateNowSpy.mockRestore();
+    });
+
+    it('resets backoff when new pending prompts appear externally', async () => {
+      setupEmergentPath(5);
+
+      // Tick 1: spawn emergent (productive, count = 0)
+      await loop.forceTick();
+      expect(callbacks.onSpawnEmergentPlanning).toHaveBeenCalledTimes(1);
+
+      // Tick 2 at +11s: unproductive → count = 1, backoff (cooldown 20s, 11s elapsed)
+      const spawnTime = loop.getState().lastExecutorSpawnTime!;
+      const dateNowSpy = vi.spyOn(Date, 'now').mockReturnValue(spawnTime + 11000);
+      await loop.forceTick();
+      expect(loop.getState().emergentSpawnCount).toBe(1);
+
+      // External prompt appears: pending count increases from 0 to 1
+      const donePrompts = Array.from({ length: 5 }, (_, i) => makePrompt(i + 1, 'done'));
+      const pendingPrompt = makePrompt(6, 'pending');
+      vi.mocked(loadAllPrompts).mockReturnValue([...donePrompts, pendingPrompt]);
+      vi.mocked(pickNextPrompt).mockReturnValue(
+        pickerResult(pendingPrompt, { total: 6, pending: 1, inProgress: 0, done: 5, blocked: 0 }),
+      );
+
+      // Tick 3: checkPromptFiles detects pending increase → resets emergentSpawnCount
+      // Then checkPromptLoop picks pending prompt → spawns executor
+      await loop.forceTick();
+      expect(loop.getState().emergentSpawnCount).toBe(0);
+      expect(callbacks.onSpawnExecutor).toHaveBeenCalledWith(pendingPrompt);
+
+      dateNowSpy.mockRestore();
+    });
+
+    it('resets backoff when emergent planner produces new prompts', async () => {
+      setupEmergentPath(5);
+
+      // Tick 1: spawn emergent (productive, count = 0)
+      await loop.forceTick();
+      expect(callbacks.onSpawnEmergentPlanning).toHaveBeenCalledTimes(1);
+
+      // Tick 2 at +11s: past base cooldown, enters emergent path — unproductive → count = 1
+      const spawnTime = loop.getState().lastExecutorSpawnTime!;
+      const dateNowSpy = vi.spyOn(Date, 'now').mockReturnValue(spawnTime + 11000);
+      await loop.forceTick();
+      expect(loop.getState().emergentSpawnCount).toBe(1);
+
+      // Emergent planner produced a new prompt (total count increases 5 → 6)
+      setupEmergentPath(6);
+
+      // Tick 3 at +21s: past base cooldown, productive (count 6 > emergentLastPromptCount 5)
+      // → count = 0, cooldown = 10s base, 21s elapsed → spawns
+      dateNowSpy.mockReturnValue(spawnTime + 21000);
+      await loop.forceTick();
+      expect(loop.getState().emergentSpawnCount).toBe(0);
+      expect(callbacks.onSpawnEmergentPlanning).toHaveBeenCalledTimes(2);
+
+      dateNowSpy.mockRestore();
     });
   });
 });
