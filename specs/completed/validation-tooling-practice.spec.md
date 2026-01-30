@@ -1,7 +1,7 @@
 ---
 name: validation-tooling-practice
 domain_name: validation
-status: roadmap
+status: completed
 dependencies: []
 branch: feature/validation-tooling-practice
 ---
