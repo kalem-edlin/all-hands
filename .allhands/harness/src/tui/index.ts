@@ -15,26 +15,26 @@
  */
 
 import blessed from 'blessed';
-import { createActionsPane, ActionItem, ToggleState } from './actions.js';
-import { createPromptsPane, PromptItem } from './prompts-pane.js';
-import { createStatusPane, AgentInfo, getSelectableItems } from './status-pane.js';
-import { createModal, Modal } from './modal.js';
-import { createFileViewer, FileViewer, getPlanningFilePath, getSpecFilePath } from './file-viewer-modal.js';
-import { EventLoop } from '../lib/event-loop.js';
-import { killWindow, listWindows, getCurrentSession, spawnCustomFlow } from '../lib/tmux.js';
-import { getHubWindowId, clearTuiSession, getSpawnedWindows } from '../lib/session.js';
-import { KnowledgeService } from '../lib/knowledge.js';
-import { validateDocs } from '../lib/docs-validation.js';
-import { loadAllProfiles } from '../lib/opencode/index.js';
-import { logTuiError, logTuiLifecycle, clearLogs } from '../lib/trace-store.js';
-import { loadAllPrompts, type PromptFile } from '../lib/prompts.js';
-import { readStatus, sanitizeBranchForDir, planningDirExists } from '../lib/planning.js';
-import { loadAllSpecs, specsToModalItems, type SpecFile } from '../lib/specs.js';
-import { loadAllFlows, flowsToModalItems } from '../lib/flows.js';
-import { isTldrInstalled, hasSemanticIndex, needsSemanticRebuild, buildSemanticIndexAsync, warmCallGraph, ensureTldrDaemon } from '../lib/tldr.js';
+import { join } from 'path';
 import { loadProjectSettings } from '../hooks/shared.js';
 import { CLIDaemon } from '../lib/cli-daemon.js';
-import { join } from 'path';
+import { validateDocs } from '../lib/docs-validation.js';
+import { EventLoop } from '../lib/event-loop.js';
+import { flowsToModalItems, loadAllFlows } from '../lib/flows.js';
+import { KnowledgeService } from '../lib/knowledge.js';
+import { loadAllProfiles } from '../lib/opencode/index.js';
+import { planningDirExists, readStatus, sanitizeBranchForDir } from '../lib/planning.js';
+import { loadAllPrompts, type PromptFile } from '../lib/prompts.js';
+import { clearTuiSession, getHubWindowId, getSpawnedWindows } from '../lib/session.js';
+import { loadAllSpecs, specsToModalItems, type SpecFile } from '../lib/specs.js';
+import { buildSemanticIndexAsync, ensureTldrDaemon, hasSemanticIndex, isTldrInstalled, needsSemanticRebuild, warmCallGraph } from '../lib/tldr.js';
+import { getCurrentSession, killWindow, listWindows, spawnCustomFlow } from '../lib/tmux.js';
+import { clearLogs, logTuiError, logTuiLifecycle } from '../lib/trace-store.js';
+import { ActionItem, createActionsPane, ToggleState } from './actions.js';
+import { createFileViewer, FileViewer, getPlanningFilePath, getSpecFilePath } from './file-viewer-modal.js';
+import { createModal, Modal } from './modal.js';
+import { createPromptsPane, PromptItem } from './prompts-pane.js';
+import { AgentInfo, createStatusPane, getSelectableItems } from './status-pane.js';
 
 export type PaneId = 'actions' | 'prompts' | 'status';
 
@@ -210,21 +210,20 @@ export class TUI {
         },
         onBranchChange: (newBranch, newSpec) => {
           this.log(`Branch changed to: ${newBranch}`);
-          this.state.branch = newBranch;
 
-          // Update spec context when branch changes (branch-keyed model)
+          const updates: Partial<TUIState> = { branch: newBranch };
           const newSpecId = newSpec?.id;
-          if (newSpecId !== this.state.spec) {
-            this.state.spec = newSpecId;
 
-            // Reload prompts for new branch's planning directory
+          if (newSpecId !== this.state.spec) {
+            updates.spec = newSpecId;
+
             if (this.options.cwd) {
               const planningKey = sanitizeBranchForDir(newBranch);
               if (planningDirExists(planningKey, this.options.cwd)) {
                 const prompts = loadAllPrompts(planningKey, this.options.cwd);
                 const status = readStatus(planningKey, this.options.cwd);
 
-                this.state.prompts = prompts.map((p: { path: string; frontmatter: { number: number; title: string; status: string } }) => ({
+                updates.prompts = prompts.map((p: { path: string; frontmatter: { number: number; title: string; status: string } }) => ({
                   number: p.frontmatter.number,
                   title: p.frontmatter.title,
                   status: p.frontmatter.status as 'pending' | 'in_progress' | 'done',
@@ -242,11 +241,14 @@ export class TUI {
               this.eventLoop?.setParallelEnabled(this.state.parallelEnabled);
             }
 
-            this.buildActionItems();
+            if (newSpec) {
+              this.log(`Spec: ${newSpec.id}`);
+            } else {
+              this.log('No spec for this branch');
+            }
           }
 
-          this.options.onAction('branch-changed', { branch: newBranch, spec: newSpec });
-          this.render();
+          this.updateState(updates);
         },
         onAgentsChange: (agents) => {
           this.state.activeAgents = agents.map((name) => ({
@@ -1498,3 +1500,4 @@ export class TUI {
 export type { ActionItem } from './actions.js';
 export type { PromptItem } from './prompts-pane.js';
 export type { AgentInfo } from './status-pane.js';
+
