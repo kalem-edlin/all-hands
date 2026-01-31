@@ -891,6 +891,32 @@ export async function validateDocsAsync(
   // Generate ctags index asynchronously
   const ctagsResult = await generateCtagsIndexAsync(projectRoot);
 
+  // If ctags is unavailable or failed, run validation with the empty map
+  // (to prevent a sync fallback that would also fail), then strip out the
+  // symbol-ref invalids that are false positives from the empty index.
+  if (!ctagsResult.success) {
+    const baseResult = validateDocs(docsPath, projectRoot, {
+      ...options,
+      ctagsIndex: ctagsResult.index, // empty map — avoids sync fallback
+    });
+    // Remove symbol-ref invalid entries (they're false positives from empty index)
+    const symbolInvalidCount = baseResult.invalid.filter((i) =>
+      i.reason.startsWith("Symbol '")
+    ).length;
+    baseResult.invalid = baseResult.invalid.filter(
+      (i) => !i.reason.startsWith("Symbol '")
+    );
+    // Also strip from per-doc entries
+    for (const entry of Object.values(baseResult.by_doc_file)) {
+      entry.invalid = entry.invalid.filter(
+        (i) => !i.reason.startsWith("Symbol '")
+      );
+    }
+    baseResult.invalid_count -= symbolInvalidCount;
+    baseResult.message = `ctags unavailable: ${ctagsResult.error ?? "unknown error"} — symbol ref validation skipped`;
+    return baseResult;
+  }
+
   // Delegate to sync validateDocs with the pre-built index
   return validateDocs(docsPath, projectRoot, {
     ...options,

@@ -62,6 +62,7 @@ async function main(): Promise<void> {
     const message = err instanceof Error ? err.message : String(err);
     process.stderr.write(`[knowledge-worker] Error: ${message}\n`);
     process.stdout.write(JSON.stringify({ success: false, error: message }) + "\n");
+    process.exit(1);
   }
 
   // Clean exit to release ONNX thread pools

@@ -406,8 +406,10 @@ export class TUI {
       this.render();
 
       // GC hint: reclaim memory from TLDR child process buffers before knowledge indexing
-      global.gc?.();
-      await new Promise((resolve) => setTimeout(resolve, 100));
+      if (global.gc) {
+        global.gc();
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
 
       const cwd = this.options.cwd;
       const service = new KnowledgeService(cwd, { quiet: true });

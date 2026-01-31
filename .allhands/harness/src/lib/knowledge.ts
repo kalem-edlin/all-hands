@@ -693,7 +693,14 @@ export async function reindexAllInWorker(
       stdoutBuffer += data.toString();
     });
 
+    // 5 minute timeout (matching TLDR pattern)
+    const timeout = setTimeout(() => {
+      child.kill();
+      resolve({ files_indexed: 0, total_tokens: 0 });
+    }, 300000);
+
     child.on("close", (code) => {
+      clearTimeout(timeout);
       // Flush remaining stderr
       if (stderrBuffer.trim() && onProgress) {
         onProgress(stderrBuffer.trim());
@@ -717,14 +724,9 @@ export async function reindexAllInWorker(
     });
 
     child.on("error", () => {
+      clearTimeout(timeout);
       resolve({ files_indexed: 0, total_tokens: 0 });
     });
-
-    // 5 minute timeout (matching TLDR pattern)
-    setTimeout(() => {
-      child.kill();
-      resolve({ files_indexed: 0, total_tokens: 0 });
-    }, 300000);
   });
 }
 
@@ -768,7 +770,14 @@ export async function reindexFromChangesInWorker(
     child.stdin?.write(JSON.stringify(changes));
     child.stdin?.end();
 
+    // 5 minute timeout
+    const timeout = setTimeout(() => {
+      child.kill();
+      resolve({ success: false, message: "Worker timed out", files: [] });
+    }, 300000);
+
     child.on("close", (code) => {
+      clearTimeout(timeout);
       // Flush remaining stderr
       if (stderrBuffer.trim() && onProgress) {
         onProgress(stderrBuffer.trim());
@@ -791,14 +800,9 @@ export async function reindexFromChangesInWorker(
     });
 
     child.on("error", () => {
+      clearTimeout(timeout);
       resolve({ success: false, message: "Worker spawn failed", files: [] });
     });
-
-    // 5 minute timeout
-    setTimeout(() => {
-      child.kill();
-      resolve({ success: false, message: "Worker timed out", files: [] });
-    }, 300000);
   });
 }
 
