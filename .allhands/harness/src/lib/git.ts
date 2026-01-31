@@ -12,6 +12,54 @@ import { getBaseBranch, getLocalBaseBranch } from '../hooks/shared.js';
 // Re-export getBaseBranch and getLocalBaseBranch for consumers
 export { getBaseBranch, getLocalBaseBranch };
 
+// ── Safe git execution wrapper ──────────────────────────────────────────────
+
+export interface GitExecResult {
+  success: boolean;
+  stdout: string;
+  stderr: string;
+  exitCode: number;
+}
+
+/**
+ * Safe git command execution using spawnSync with argument arrays.
+ * No shell involved — immune to command injection via branch names, paths, etc.
+ */
+export function gitExec(args: string[], cwd?: string): GitExecResult {
+  const workingDir = cwd || process.cwd();
+  const result = spawnSync('git', args, {
+    encoding: 'utf-8',
+    cwd: workingDir,
+    maxBuffer: 10 * 1024 * 1024,
+  });
+
+  return {
+    success: result.status === 0,
+    stdout: result.stdout?.trim() || '',
+    stderr: result.stderr?.trim() || '',
+    exitCode: result.status ?? 1,
+  };
+}
+
+// ── Input validation ────────────────────────────────────────────────────────
+
+const GIT_REF_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9/_.-]*$/;
+
+/**
+ * Validate a git ref (branch name, tag, etc.) against a safe allowlist pattern.
+ * Throws a descriptive error if the ref contains unsafe characters.
+ *
+ * Apply at the boundary where user-derived values (spec frontmatter `branch`,
+ * settings `baseBranch`) enter git operations — not deep inside helpers.
+ */
+export function validateGitRef(ref: string, label: string): void {
+  if (!ref || !GIT_REF_PATTERN.test(ref)) {
+    throw new Error(
+      `Invalid ${label}: "${ref}". Git refs must start with an alphanumeric character and contain only alphanumerics, slashes, underscores, dots, and hyphens.`
+    );
+  }
+}
+
 // Protected branches - no planning required
 const PROTECTED_BRANCHES = new Set([
   "main",
@@ -151,6 +199,10 @@ export function getShortCommit(commitHash: string): string {
 /**
  * Check if there are uncommitted changes in the working directory.
  * Returns true if there are staged or unstaged changes.
+ *
+ * Fail-safe: returns true when git itself fails (non-zero exit or exception).
+ * When we can't determine repo state, assume dirty to prevent destructive
+ * operations (checkout, clean, branch delete) from proceeding on false data.
  */
 export function hasUncommittedChanges(cwd?: string): boolean {
   const workingDir = cwd || process.cwd();
@@ -159,10 +211,14 @@ export function hasUncommittedChanges(cwd?: string): boolean {
       encoding: "utf-8",
       cwd: workingDir,
     });
-    // If output is non-empty, there are uncommitted changes
-    return result.status === 0 && result.stdout.trim().length > 0;
+    // Fail-safe: if git status itself fails, assume changes exist
+    if (result.status !== 0) {
+      return true;
+    }
+    return result.stdout.trim().length > 0;
   } catch {
-    return false;
+    // Fail-safe: exception means we can't determine state — assume dirty
+    return true;
   }
 }
 
@@ -404,4 +460,49 @@ export function createBranchWithoutCheckout(
     const errorMsg = e instanceof Error ? e.message : String(e);
     return { success: false, created: false, error: errorMsg };
   }
+}
+
+// ── Remote sync ─────────────────────────────────────────────────────────────
+
+export interface SyncResult {
+  success: boolean;
+  conflicts: string[];
+}
+
+/**
+ * Sync the current branch with origin/main.
+ * Used at three lifecycle points: activation, PR creation, completion.
+ *
+ * Flow: fetch origin main → merge origin/main --no-edit →
+ *   on conflict: parse conflicted files, abort merge, return conflicts list
+ *   on success: return { success: true, conflicts: [] }
+ */
+export function syncWithOriginMain(cwd?: string): SyncResult {
+  const workingDir = cwd || process.cwd();
+
+  // 1. Fetch latest main from origin
+  const fetch = gitExec(['fetch', 'origin', 'main'], workingDir);
+  if (!fetch.success) {
+    return { success: false, conflicts: [] };
+  }
+
+  // 2. Attempt merge
+  const merge = gitExec(['merge', 'origin/main', '--no-edit'], workingDir);
+  if (merge.success) {
+    return { success: true, conflicts: [] };
+  }
+
+  // 3. Merge failed — detect conflicts
+  const diffResult = gitExec(
+    ['diff', '--name-only', '--diff-filter=U'],
+    workingDir,
+  );
+  const conflicts = diffResult.stdout
+    ? diffResult.stdout.split('\n').filter(Boolean)
+    : [];
+
+  // 4. Abort the failed merge to restore clean state
+  gitExec(['merge', '--abort'], workingDir);
+
+  return { success: false, conflicts };
 }
