@@ -1,7 +1,7 @@
 ---
 name: harness-maintenance
 description: Domain expertise for maintaining and extending the All Hands harness. Use when working on flows, hooks, commands, agents, schemas, or MCP integrations.
-version: 1.0.0
+version: 2.0.0
 globs:
   - ".allhands/flows/**/*.md"
   - ".allhands/agents/*.yaml"
@@ -16,31 +16,24 @@ globs:
 # Harness Maintenance
 
 <goal>
-Guide maintainers in preserving and improving the harness architecture. This document is the single reference for understanding how components interact, why decisions were made, and how to extend the system while upholding first principles.
+Route maintainers to domain-specific harness knowledge. Per **Context is Precious**, agents load only the reference matching their scenario — not the full architecture.
 </goal>
 
 <constraints>
 - MUST read `.allhands/principles.md` before any harness modification
 - MUST cite First Principles by name when adding features or changing behavior
-- MUST update this document when making structural changes to the harness
+- MUST update the relevant reference doc when making structural changes to the harness
+- MUST validate changes with `ah validate agents` after profile modifications
 - NEVER add complexity without clear first principle justification
-- ALWAYS validate changes with `ah validate agents` after profile modifications
 </constraints>
 
-## First Principles Applied to Harness Design
+## Start Here
 
-| First Principle | Harness Implementation |
-|-----------------|------------------------|
-| **Context is Precious** | Hooks inject minimal context; read-enforcer returns TLDR for large files; prompts limited to 3-5 tasks |
-| **Prompt Files as Units of Work** | Prompts ARE tasks, not descriptions; completed prompts document decisions |
-| **Frontier Models are Capable** | Flows provide "why", agents deduce "how"; control flows not micromanagement |
-| **Agentic Validation Tooling** | Schema validation on edit; diagnostics hooks; validation suites as acceptance criteria |
-| **Knowledge Compounding** | Compaction summaries preserve learnings; skills/validation improve with use |
-| **Quality Engineering** | Settings define hypothesis domains; emergent planner diversifies work to discover valuable variants |
+Read `.allhands/principles.md` first — it is the single entry point covering all first principles and core philosophy pillars. Every harness change should be motivated by a named principle.
 
----
+## Reference Routing
 
-## Architecture Overview
+Use **Scenario** to find the right reference for your task. Use **Trigger** to find which reference to update after a change.
 
 ```
 .allhands/
@@ -60,17 +53,25 @@ Guide maintainers in preserving and improving the harness architecture. This doc
     └── src/platforms/   # Claude Code settings.json
 ```
 
----
+## Related Skills
 
-## Project Settings
+The `harness-maintenance` and `claude-code-patterns` skills have overlapping globs on `.allhands/` files. When both match:
 
-**Location:** `.allhands/settings.json` | **Schema:** `harness/src/schemas/settings.schema.json`
+- **harness-maintenance** provides architectural knowledge, maintenance guidance, and routing to domain-specific references — the "why" and "when" of harness changes
+- **claude-code-patterns** provides Claude Code native feature docs, implementation patterns, and API reference — the "how" of building with Claude Code primitives
+- For structural changes to `.allhands/` content files (flows, schemas, skills, validation), **harness-maintenance** is primary
+- For TypeScript implementation in `harness/src/` or Claude Code configs in `.claude/`, **claude-code-patterns** is primary
+- When in doubt, read harness-maintenance first for architectural context, then claude-code-patterns for implementation details
 
-Repository-specific, platform-agnostic configuration. Hooks read this to determine behavior.
+## Cross-Cutting Patterns
 
-| Setting | Hook | Purpose |
-|---------|------|---------|
-| `validation.format` | `ah hooks validation format` | Auto-format after Write/Edit |
+### Key Design Patterns
+- **Graceful Degradation**: Every optional dependency (TLDR, pyright, Greptile) has fallback behavior. Never fail the primary operation.
+- **Semantic Validation**: Zod schemas catch config mistakes at spawn time, not runtime. Fail fast with helpful messages.
+- **In-Memory State**: Registry patterns (spawned agents, search contexts) keep TUI in sync without polling.
+- **Motivation-Driven Documentation**: Per **Frontier Models are Capable**, teach agents HOW TO THINK about using a tool — not command catalogs. Commands are discoverable via `--help`; documentation value is in motivations and thinking models.
+- **Token Efficiency**: Read enforcer + context injection + TLDR layers save ~95% on large files.
+- **Iterative Refinement**: Compaction summaries make incomplete work resumable. Per **Prompt Files as Units of Work**, same prompt can be re-run with accumulated learnings.
 
 Format config: `enabled`, `command` (default), `patterns` (file-specific overrides).
 
@@ -439,6 +440,10 @@ When modifying the harness:
 - [ ] Identify which First Principle motivates the change
 - [ ] Check for graceful degradation on optional dependencies
 - [ ] Add validation for new configuration
-- [ ] Update this document if structural changes made
+- [ ] Update relevant reference doc if structural changes made
 - [ ] Run `ah validate agents` after profile changes
 - [ ] Test hook behavior with Claude Code runner
+- [ ] Verify routing table rows match reference files in `references/`
+- [ ] Verify each routing table entry has a corresponding thin flow in `flows/harness/`
+- [ ] Verify cross-domain navigation links in modified reference docs resolve
+- [ ] NEVER run `ah docs validate`/`finalize` on skill references — those commands are scoped to `docs/` only
