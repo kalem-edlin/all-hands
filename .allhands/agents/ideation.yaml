@@ -1,5 +1,5 @@
 name: ideation
-flow: IDEATION_SESSION.md
+flow: IDEATION_SCOPING.md
 prompt_scoped: false
 tui_action: ideation
 tui_label: Ideation

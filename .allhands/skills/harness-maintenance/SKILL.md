@@ -8,7 +8,7 @@ globs:
   - ".allhands/schemas/*.yaml"
   - ".allhands/skills/**/*.md"
   - ".allhands/validation/*.md"
-  - ".allhands/workflows/**/*.yaml"
+  - ".allhands/workflows/**/*.md"
   - ".allhands/harness/src/**/*.ts"
   - ".allhands/harness/src/**/*.json"
 ---
@@ -47,7 +47,7 @@ Guide maintainers in preserving and improving the harness architecture. This doc
 ├── settings.json    # Repository-specific settings (format, validation)
 ├── flows/           # Agent instructions (progressive disclosure)
 ├── agents/          # Agent profiles (YAML spawn configs)
-├── workflows/       # Workflow configs (hypothesis domains per workflow type)
+├── workflows/       # Workflow domain configs (per-domain knowledge for shared flows)
 ├── skills/          # Domain expertise (patterns, best practices)
 ├── validation/      # Acceptance criteria tooling
 ├── schemas/         # Agent-facing YAML frontmatter schemas
