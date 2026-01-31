@@ -340,7 +340,7 @@ export function formatErrors(result: ValidationResult): string {
 // Schema Type Detection
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type SchemaType = 'prompt' | 'alignment' | 'spec' | 'documentation' | 'solution' | 'validation-suite' | 'skill';
+export type SchemaType = 'prompt' | 'alignment' | 'spec' | 'documentation' | 'solution' | 'validation-suite' | 'skill' | 'workflow';
 
 interface SchemaPattern {
   pattern: string;
@@ -356,6 +356,7 @@ const SCHEMA_PATTERNS: SchemaPattern[] = [
   { pattern: 'docs/**/*.md', schemaType: 'documentation' },
   { pattern: '.allhands/validation/*.md', schemaType: 'validation-suite' },
   { pattern: '.allhands/skills/*/SKILL.md', schemaType: 'skill' },
+  { pattern: '.allhands/workflows/*.md', schemaType: 'workflow' },
 ];
 
 /**
@@ -409,6 +410,9 @@ export function inferSchemaType(file: string): SchemaType | null {
   }
   if (file.includes('/skills/') && file.endsWith('SKILL.md')) {
     return 'skill';
+  }
+  if (file.includes('/workflows/') && file.endsWith('.md')) {
+    return 'workflow';
   }
   return null;
 }
