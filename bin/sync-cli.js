@@ -6594,11 +6594,17 @@ var Manifest = class {
   internalPath;
   data;
   gitignoreFilter;
+  initOnlyMatchers;
   constructor(allhandsRoot) {
     this.allhandsRoot = allhandsRoot;
     this.internalPath = join3(allhandsRoot, INTERNAL_FILENAME);
     this.data = this.load();
     this.gitignoreFilter = new GitignoreFilter(allhandsRoot);
+    this.initOnlyMatchers = this.initOnlyPatterns.map((p) => {
+      const negated = p.startsWith("!");
+      const pattern = negated ? p.slice(1) : p;
+      return { matcher: new Minimatch(pattern, { dot: true }), negated };
+    });
   }
   load() {
     if (!existsSync3(this.internalPath)) {
@@ -6625,15 +6631,9 @@ var Manifest = class {
    */
   isInitOnly(path2) {
     let initOnly = false;
-    for (const pattern of this.initOnlyPatterns) {
-      if (pattern.startsWith("!")) {
-        if (minimatch(path2, pattern.slice(1), { dot: true })) {
-          initOnly = false;
-        }
-      } else {
-        if (minimatch(path2, pattern, { dot: true })) {
-          initOnly = true;
-        }
+    for (const { matcher, negated } of this.initOnlyMatchers) {
+      if (matcher.match(path2)) {
+        initOnly = !negated;
       }
     }
     return initOnly;

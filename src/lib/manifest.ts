@@ -1,6 +1,6 @@
 import { readFileSync, existsSync, statSync } from 'fs';
 import { join } from 'path';
-import { minimatch } from 'minimatch';
+import { minimatch, Minimatch } from 'minimatch';
 import { GitignoreFilter } from './gitignore.js';
 
 interface InternalData {
@@ -15,12 +15,18 @@ export class Manifest {
   private internalPath: string;
   private data: InternalData;
   private gitignoreFilter: GitignoreFilter;
+  private initOnlyMatchers: { matcher: Minimatch; negated: boolean }[];
 
   constructor(allhandsRoot: string) {
     this.allhandsRoot = allhandsRoot;
     this.internalPath = join(allhandsRoot, INTERNAL_FILENAME);
     this.data = this.load();
     this.gitignoreFilter = new GitignoreFilter(allhandsRoot);
+    this.initOnlyMatchers = this.initOnlyPatterns.map(p => {
+      const negated = p.startsWith('!');
+      const pattern = negated ? p.slice(1) : p;
+      return { matcher: new Minimatch(pattern, { dot: true }), negated };
+    });
   }
 
   private load(): InternalData {
@@ -52,15 +58,9 @@ export class Manifest {
    */
   isInitOnly(path: string): boolean {
     let initOnly = false;
-    for (const pattern of this.initOnlyPatterns) {
-      if (pattern.startsWith('!')) {
-        if (minimatch(path, pattern.slice(1), { dot: true })) {
-          initOnly = false;
-        }
-      } else {
-        if (minimatch(path, pattern, { dot: true })) {
-          initOnly = true;
-        }
+    for (const { matcher, negated } of this.initOnlyMatchers) {
+      if (matcher.match(path)) {
+        initOnly = !negated;
       }
     }
     return initOnly;
