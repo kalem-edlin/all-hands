@@ -75,4 +75,4 @@ This manifests in:
 ## Related References
 
 - [`validation-tooling.md`](validation-tooling.md) — When knowledge artifacts involve validation suites or crystallization
-- [`harness_skills.md`](harness_skills.md) — When knowledge compounds through skill improvement or reference docs
+- [`harness-skills.md`](harness-skills.md) — When knowledge compounds through skill improvement or reference docs

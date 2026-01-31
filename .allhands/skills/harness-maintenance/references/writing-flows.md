@@ -72,4 +72,4 @@ See `.allhands/flows/PROMPT_TASK_EXECUTION.md` — this flow demonstrates all co
 ## Related References
 
 - [`core-architecture.md`](core-architecture.md) — When your flow change touches directory structure, TUI lifecycle, or schema system
-- [`harness_skills.md`](harness_skills.md) — When creating a flow that should be discoverable as a skill entry point
+- [`harness-skills.md`](harness-skills.md) — When creating a flow that should be discoverable as a skill entry point

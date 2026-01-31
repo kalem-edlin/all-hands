@@ -184,4 +184,4 @@ Connection point between harness and Claude Code:
 
 - [`tools-commands-mcp-hooks.md`](tools-commands-mcp-hooks.md) — When modifying hooks, CLI commands, or MCP server integration
 - [`writing-flows.md`](writing-flows.md) — When changes affect flow directory structure or conventions
-- [`harness_skills.md`](harness_skills.md) — When changes affect skill discovery or the schema system
+- [`harness-skills.md`](harness-skills.md) — When changes affect skill discovery or the schema system

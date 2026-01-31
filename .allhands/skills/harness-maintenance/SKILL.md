@@ -40,7 +40,7 @@ Use **Scenario** to find the right reference for your task. Use **Trigger** to f
 | Writing or editing flows | [`writing-flows.md`](references/writing-flows.md) | Flow files, XML tags, progressive disclosure, structure conventions | Flow XML tags, structure conventions, or progressive disclosure patterns |
 | Hooks, commands, or MCP | [`tools-commands-mcp-hooks.md`](references/tools-commands-mcp-hooks.md) | Adding/modifying hooks, CLI commands, MCP servers, extension points | CLI commands, hooks, MCP servers, or auto-discovery registration |
 | Architecture & schemas | [`core-architecture.md`](references/core-architecture.md) | Directory structure, TUI lifecycle, schema system, agent profiles, settings | Directory structure, TUI lifecycle, schemas, agent profiles, or settings |
-| Skills system | [`harness_skills.md`](references/harness_skills.md) | Creating/extending skills, hub-and-spoke pattern, skill schema, discovery | Skill schema, discovery mechanism, or hub-and-spoke conventions |
+| Skills system | [`harness-skills.md`](references/harness-skills.md) | Creating/extending skills, hub-and-spoke pattern, skill schema, discovery | Skill schema, discovery mechanism, or hub-and-spoke conventions |
 | Validation tooling | [`validation-tooling.md`](references/validation-tooling.md) | Validation suites, crystallization lifecycle, suite writing philosophy | Validation suites, crystallization lifecycle, or stochastic/deterministic methodology |
 | Knowledge & docs | [`knowledge-compounding.md`](references/knowledge-compounding.md) | Documentation schemas, solutions, memories, knowledge indexes | Documentation schemas, knowledge indexes, or compounding flows |
 
@@ -89,7 +89,7 @@ Coverage by destination:
 - tools-commands-mcp-hooks.md: hooks system, commands architecture, hook events,
   3 extension points
 - writing-flows.md: progressive disclosure, flow organization, inputs/outputs
-- harness_skills.md: new content (hub-and-spoke pattern documentation)
+- harness-skills.md: new content (hub-and-spoke pattern documentation)
 - validation-tooling.md: new content (crystallization lifecycle, suite philosophy)
 - knowledge-compounding.md: new content (knowledge indexes, compounding patterns)
 
