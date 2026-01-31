@@ -2,7 +2,7 @@
 name: harness-maintenance-skill
 domain_name: infrastructure
 type: refactor
-status: roadmap
+status: completed
 dependencies: []
 branch: refactor/harness-maintenance-skill
 ---
@@ -109,3 +109,30 @@ Engineer expects each flow to be thin — its primary step is skill discovery vi
 - The `ah schema skill` command defines minimal frontmatter (`name`, `description`, `globs`, optional `version`). The `references/` subdirectory pattern is a convention, not schema-enforced — the spec should establish clear conventions for reference doc naming and structure.
 - `CREATE_VALIDATION_TOOLING_SPEC.md` is currently referenced by `ASSESS_VALIDATION_TOOLING.md` flow. This reference chain must be preserved or updated during migration.
 - The skill currently has `version: 1.0.0`. This restructure should bump to `2.0.0` to signal the architectural change in how maintenance knowledge is organized.
+
+## Implementation Reality
+
+### What Was Implemented
+
+All 5 spec goals were achieved across 14 prompts (3 planned, 5 emergent, 5 review-fix, 1 user-patch):
+
+- **Goal 1 (Skill directory restructure)**: SKILL.md decomposed from 375 lines to 61-line routing hub + 6 domain-specific reference docs in `references/`. Version bumped to 2.0.0. Knowledge audit confirmed 95.7% preservation (45/47 units), 2 intentionally omitted.
+- **Goal 2 (SKILL.md as routing hub)**: Single merged routing table with scenario and trigger columns. Principles reference, cross-cutting patterns, maintainer checklist, and cross-skill disambiguation all in hub.
+- **Goal 3 (Reference docs)**: All 6 created with domain-specific content, cross-domain navigation footers, and flexible per-domain structure.
+- **Goal 4 (Thin flows)**: All 6 flows created at 27 lines each in `flows/harness/`. Identical structural pattern with domain-specific `<goal>` principle citations.
+- **Goal 5 (Flow migration)**: CLAUDE.md updated to reference skill directly (not a flow). `flows/shared/WRITING_HARNESS_FLOWS.md` thinned to 11-line redirect. `CREATE_VALIDATION_TOOLING_SPEC.md` deep knowledge migrated to skill reference.
+
+### How Engineer Desires Evolved
+
+- **CLAUDE.md routing**: Engineer chose to reference the skill itself rather than a specific flow — a more fundamental routing change than the spec anticipated. CLAUDE.md scope also broadened from `flows/` to all `.allhands/` files.
+- **[ref:] anchors rejected**: Emergent prompt 04 added code reference anchors to ground docs in source. Engineer directed removal (prompt 12) because `ah docs validate`/`finalize` are scoped to `docs/` only — anchors in skill references silently go stale.
+- **Audit artifacts rejected**: Knowledge completeness audit (prompt 06) was valuable as a process but engineer directed removal of the embedded HTML comment artifact from SKILL.md — stale metadata violates Context is Precious.
+- **Consolidated routing**: Engineer preferred merging duplicate routing tables (Reference Routing + Maintenance Triggers) into a single table rather than maintaining parallel routing structures.
+- **Naming consistency**: `harness_skills.md` (snake_case) renamed to `harness-skills.md` (kebab-case) — flagged independently by 3 jury reviewers.
+
+### Key Technical Decisions
+
+- **Hub-and-spoke with single hub table**: One routing table serves both scenario-based routing ("I'm working on flows") and change-based routing ("I changed a hook") via dual columns.
+- **Cross-skill disambiguation**: Explicit Related Skills section resolves glob overlap between harness-maintenance and claude-code-patterns skills.
+- **Scope guard for docs tooling**: Maintainer checklist explicitly prohibits `ah docs validate`/`finalize` on skill references.
+- **Redirect flow preserved**: `flows/shared/WRITING_HARNESS_FLOWS.md` kept as 11-line redirect distinguishing knowledge source (skill reference) from execution source (harness flow).
