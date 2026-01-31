@@ -294,9 +294,9 @@ export async function executeRecommendation(
       // Clean untracked files (except .planning/)
       gitExec(['clean', '-fd', '--exclude=.planning'], workingDir);
 
-      // Restore preserved files
+      // Restore preserved files (reverse order — git stash is LIFO)
       if (recommendation.preserveFiles.length > 0) {
-        for (const file of recommendation.preserveFiles) {
+        for (let i = recommendation.preserveFiles.length - 1; i >= 0; i--) {
           try {
             gitExec(['stash', 'pop'], workingDir);
           } catch {
