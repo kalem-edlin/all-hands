@@ -304,9 +304,14 @@ async function handleAction(
   let contextOverrides: Record<string, string> | undefined;
   if (action === 'initiative-steering' && data?.domain) {
     const selectedDomain = data.domain as string;
-    contextOverrides = {
-      WORKFLOW_DOMAIN_PATH: join(cwd, '.allhands', 'workflows', `${selectedDomain}.md`),
-    };
+    const domainConfigPath = join(cwd, '.allhands', 'workflows', `${selectedDomain}.md`);
+    if (existsSync(domainConfigPath)) {
+      contextOverrides = {
+        WORKFLOW_DOMAIN_PATH: domainConfigPath,
+      };
+    } else {
+      console.warn(`Workflow domain config not found: ${domainConfigPath}`);
+    }
   }
 
   // Try to handle as a profile-based agent spawn

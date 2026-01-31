@@ -36,7 +36,7 @@ import { getCurrentBranch, getPlanningPaths } from './planning.js';
 import { getBaseBranch } from './git.js';
 import { addSpawnedWindow, removeSpawnedWindow, getSpawnedWindows } from './session.js';
 import { loadProjectSettings } from '../hooks/shared.js';
-import { getSpecForBranch } from './specs.js';
+import { getSpecForBranch, getWorkflowDomain } from './specs.js';
 
 /**
  * Agent type = agent profile name.
@@ -935,24 +935,9 @@ export function buildTemplateContext(
 
   // Resolve WORKFLOW_DOMAIN_PATH from spec's initial_workflow_domain frontmatter
   const basePath = cwd || process.cwd();
-  let workflowDomain = 'milestone';
-  if (context.SPEC_PATH) {
-    try {
-      const specFullPath = join(basePath, context.SPEC_PATH);
-      if (existsSync(specFullPath)) {
-        const specContent = readFileSync(specFullPath, 'utf-8');
-        const fmMatch = specContent.match(/^---\n([\s\S]*?)\n---/);
-        if (fmMatch) {
-          const domainMatch = fmMatch[1].match(/^initial_workflow_domain:\s*(.+)/m);
-          if (domainMatch) {
-            workflowDomain = domainMatch[1].trim();
-          }
-        }
-      }
-    } catch {
-      // Ignore parse errors, use default
-    }
-  }
+  const workflowDomain = context.SPEC_PATH
+    ? getWorkflowDomain(join(basePath, context.SPEC_PATH))
+    : 'milestone';
   const workflowDomainPath = join(basePath, '.allhands', 'workflows', `${workflowDomain}.md`);
   if (existsSync(workflowDomainPath)) {
     context.WORKFLOW_DOMAIN_PATH = workflowDomainPath;

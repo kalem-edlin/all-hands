@@ -15,7 +15,6 @@
  */
 
 import blessed from 'blessed';
-import { readFileSync } from 'fs';
 import { join } from 'path';
 import { loadProjectSettings } from '../hooks/shared.js';
 import { CLIDaemon } from '../lib/cli-daemon.js';
@@ -27,7 +26,7 @@ import { loadAllProfiles } from '../lib/opencode/index.js';
 import { planningDirExists, readStatus, sanitizeBranchForDir } from '../lib/planning.js';
 import { loadAllPrompts, type PromptFile } from '../lib/prompts.js';
 import { clearTuiSession, getHubWindowId, getSpawnedWindows } from '../lib/session.js';
-import { getSpecForBranch, loadAllSpecs, specsToModalItems, type SpecFile } from '../lib/specs.js';
+import { getSpecForBranch, getWorkflowDomain, loadAllSpecs, specsToModalItems, type SpecFile } from '../lib/specs.js';
 import { buildSemanticIndexAsync, ensureTldrDaemon, hasSemanticIndex, isTldrInstalled, needsSemanticRebuild, warmCallGraph } from '../lib/tldr.js';
 import { getCurrentSession, killWindow, listWindows, spawnCustomFlow } from '../lib/tmux.js';
 import { clearLogs, logTuiError, logTuiLifecycle } from '../lib/trace-store.js';
@@ -947,18 +946,7 @@ export class TUI {
     if (branch) {
       const spec = getSpecForBranch(branch, this.options.cwd);
       if (spec) {
-        try {
-          const specContent = readFileSync(spec.path, 'utf-8');
-          const fmMatch = specContent.match(/^---\n([\s\S]*?)\n---/);
-          if (fmMatch) {
-            const domainMatch = fmMatch[1].match(/^initial_workflow_domain:\s*(.+)/m);
-            if (domainMatch) {
-              defaultDomain = domainMatch[1].trim();
-            }
-          }
-        } catch {
-          // Fall back to default
-        }
+        defaultDomain = getWorkflowDomain(spec.path);
       }
     }
 
