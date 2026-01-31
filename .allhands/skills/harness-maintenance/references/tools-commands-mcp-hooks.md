@@ -10,9 +10,9 @@ Hooks, commands, and MCP servers share the same extension model:
 3. The harness auto-discovers and registers at startup
 
 This pattern applies to:
-- **Hooks**: `[ref:.allhands/harness/src/hooks]` — Claude Code lifecycle integration
-- **Commands**: `[ref:.allhands/harness/src/commands]` — CLI subcommands under `ah`
-- **MCP Servers**: `[ref:.allhands/harness/src/mcp]` — External tool integrations
+- **Hooks**: `.allhands/harness/src/hooks/` — Claude Code lifecycle integration
+- **Commands**: `.allhands/harness/src/commands/` — CLI subcommands under `ah`
+- **MCP Servers**: `.allhands/harness/src/mcp/` — External tool integrations
 
 ## Hooks System
 
@@ -29,7 +29,7 @@ Per **Context is Precious** and **Agentic Validation Tooling**, hooks bridge Cla
 | **Notification** | Desktop alerts | `elicitation`, `stop`, `compact` |
 | **Session** | Startup tasks | `tldr-warm` |
 
-### Hook Events (`[ref:.claude/settings.json::e246ecd]`)
+### Hook Events (`.claude/settings.json`)
 
 | Event | Purpose |
 |-------|---------|
@@ -54,7 +54,7 @@ Per **Knowledge Compounding**, `agent-compact` preserves work:
 
 ## Commands Architecture
 
-Entry point: `[ref:.allhands/harness/src/cli.ts::13330fb]` (default action launches TUI). Auto-discovers commands from `[ref:.allhands/harness/src/commands]`.
+Entry point: `.allhands/harness/src/cli.ts` (default action launches TUI). Auto-discovers commands from `.allhands/harness/src/commands/`.
 
 ### Core Commands
 
@@ -81,7 +81,7 @@ Per **Agentic Validation Tooling**, MCP servers extend the harness with external
 Follow `.allhands/flows/shared/WRITING_HARNESS_MCP_TOOLS.md` for the full process. Key phases:
 
 1. **Research**: Investigate package requirements (transport type, auth, env vars)
-2. **Build Config**: Copy `[ref:.allhands/harness/src/mcp/_template.ts::ce02241]`, fill in researched values
+2. **Build Config**: Copy `.allhands/harness/src/mcp/_template.ts`, fill in researched values
 3. **Environment**: Document required env vars (do NOT add values)
 4. **Validate**: Build harness, verify with `ah tools --list` and `ah tools <server-name>`
 
@@ -96,17 +96,17 @@ Follow `.allhands/flows/shared/WRITING_HARNESS_MCP_TOOLS.md` for the full proces
 ## Extension Points
 
 ### Adding New Hooks
-1. Create file in `[ref:.allhands/harness/src/hooks]`
+1. Create file in `.allhands/harness/src/hooks/`
 2. Export `register(parent: Command)` function
-3. Add matcher to `[ref:.claude/settings.json::e246ecd]`
+3. Add matcher to `.claude/settings.json`
 
 ### Adding New Commands
-1. Create file in `[ref:.allhands/harness/src/commands]`
+1. Create file in `.allhands/harness/src/commands/`
 2. Export `register(parent: Command)` function
 3. Document in `README.md`
 
 ### Adding New Template Variables
-1. Add to `TemplateVars` registry in `[ref:.allhands/harness/src/lib/schemas/template-vars.ts:TemplateVars:aa2cf15]`
+1. Add to `TemplateVars` registry in `.allhands/harness/src/lib/schemas/template-vars.ts`
 2. Include Zod schema and description
 
 ## Related References

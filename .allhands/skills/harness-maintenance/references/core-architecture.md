@@ -24,7 +24,7 @@ Per **Context is Precious**, this is the architectural map — how harness compo
 
 ## Project Settings
 
-**Location:** `.allhands/settings.json` | **Schema:** `[ref:.allhands/harness/src/schemas/settings.schema.json::edcd9d1]`
+**Location:** `.allhands/settings.json` | **Schema:** `.allhands/harness/src/schemas/settings.schema.json`
 
 Repository-specific, platform-agnostic configuration. Hooks read this to determine behavior.
 
@@ -71,15 +71,15 @@ Exposed via `ah schema <type>`. Define frontmatter for harness-managed files:
 - `solution.yaml` — Solution documentation (`docs/solutions/`)
 - `documentation.yaml` — General documentation (`docs/`)
 
-### Internal Schemas (`[ref:.allhands/harness/src/lib/schemas]`)
+### Internal Schemas (`.allhands/harness/src/lib/schemas/`)
 Zod schemas for harness configuration. NOT exposed to agents:
 
-**Template Variables Registry** (`[ref:.allhands/harness/src/lib/schemas/template-vars.ts:TemplateVars:aa2cf15]`)
+**Template Variables Registry** (`.allhands/harness/src/lib/schemas/template-vars.ts`)
 - Single source of truth for valid template variables
 - Each has Zod schema + description
 - Variables: `SPEC_PATH`, `ALIGNMENT_PATH`, `MILESTONE_NAME`, `PROMPT_NUMBER`, `BRANCH`, `HYPOTHESIS_DOMAINS`, `SPEC_TYPE`, etc.
 
-**Agent Profile Schema** (`[ref:.allhands/harness/src/lib/schemas/agent-profile.ts::aa2cf15]`)
+**Agent Profile Schema** (`.allhands/harness/src/lib/schemas/agent-profile.ts`)
 - Raw schema (snake_case from YAML) + normalized interface (camelCase)
 - Semantic validation: template vars in `message_template` must match `template_vars` list
 - Pattern validation: `PROMPT_NUMBER` must match `^\d{2}$`
@@ -145,7 +145,7 @@ Per **Knowledge Compounding**, the emergent planner tracks work types in alignme
 
 ## Platform Integration
 
-### Settings Configuration (`[ref:.claude/settings.json::e246ecd]`)
+### Settings Configuration (`.claude/settings.json`)
 Connection point between harness and Claude Code:
 ```json
 "PreToolUse": [
@@ -178,7 +178,7 @@ Connection point between harness and Claude Code:
 
 ### Adding New Schemas
 1. Create YAML in `schemas/` for agent-facing
-2. Create Zod schema in `[ref:.allhands/harness/src/lib/schemas]` for internal
+2. Create Zod schema in `.allhands/harness/src/lib/schemas/` for internal
 
 ## Related References
 
