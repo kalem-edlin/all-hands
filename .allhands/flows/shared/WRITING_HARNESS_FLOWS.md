@@ -8,4 +8,4 @@ Flow authoring conventions for the All Hands harness. Per **Knowledge Compoundin
 - Read the skill's routing table — select `references/writing-flows.md` for flow authoring patterns
 - For execution, follow `.allhands/flows/harness/WRITING_HARNESS_FLOWS.md`
 
-Per **Context is Precious**, this file redirects to the canonical source rather than duplicating content.
+Per **Context is Precious**, this file redirects to two canonical sources — the skill reference for domain knowledge, the harness flow for execution — rather than duplicating content.
