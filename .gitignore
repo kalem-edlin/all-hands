@@ -4,14 +4,11 @@ node_modules/
 .DS_Store
 .trees/**
 .swp
-
-# ALLHANDS_SYNC
 .planning/
 .env.ai
 .tldr/*
 !.tldr/config.json
 .reposearch/
-docs/
 
 # Orphaned planning artifacts at repo root
 supabase-validation-ideas.md

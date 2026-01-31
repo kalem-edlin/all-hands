@@ -9,6 +9,7 @@ message_template: |
   DO NOT ask for any user input for this task.
   Alignment doc: ${ALIGNMENT_PATH}
   Prompts folder: ${PROMPTS_FOLDER}
+  Workflow domain config: ${WORKFLOW_DOMAIN_PATH}
   Branch: ${BRANCH}
 
   Available hypothesis domains for this workflow:
@@ -16,5 +17,6 @@ message_template: |
 template_vars:
   - ALIGNMENT_PATH
   - PROMPTS_FOLDER
+  - WORKFLOW_DOMAIN_PATH
   - HYPOTHESIS_DOMAINS
   - BRANCH

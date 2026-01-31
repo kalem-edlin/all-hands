@@ -18,6 +18,13 @@ frontmatter:
     required: false
     description: "Validation gaps engineer accepted (e.g., 'No E2E - manual UI testing')"
 
+  core_consolidation:
+    type: enum
+    required: false
+    values: [pending, complete]
+    default: pending
+    description: "Emergence phase tracking — pending for core goal consolidation, complete enables tangential exploration"
+
 body:
   description: "Markdown document with header and append sections"
   sections:

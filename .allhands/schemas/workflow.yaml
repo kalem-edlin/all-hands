@@ -1,0 +1,51 @@
+# Workflow Domain Config Schema
+# Single source of truth for workflow domain configuration files in .allhands/workflows/
+
+frontmatter:
+  name:
+    type: string
+    required: true
+    description: "Domain identifier matching spec type values (milestone, investigation, etc.)"
+
+  type:
+    type: enum
+    required: true
+    values: [milestone, investigation, optimization, refactor, documentation, triage]
+    description: "Workflow domain type"
+
+  planning_depth:
+    type: enum
+    required: true
+    values: [deep, focused]
+    description: "Planning depth — milestone uses deep (full research + jury), all others use focused"
+
+  jury_required:
+    type: boolean
+    required: true
+    description: "Whether spec planning activates the 4-member jury review"
+
+  max_tangential_hypotheses:
+    type: integer
+    required: true
+    description: "Cap on tangential emergence hypotheses after core consolidation"
+
+  required_ideation_questions:
+    type: array
+    items: string
+    required: true
+    description: "Questions the ideation scoping flow MUST ask for this domain"
+
+body:
+  description: "Markdown document with domain-specific knowledge and guidance"
+  sections:
+    - name: "Domain Knowledge"
+      required: true
+      description: "Freetext domain-specific considerations, vocabulary, deep dives, gap detection patterns, completeness criteria"
+
+    - name: "Ideation Guidance"
+      required: true
+      description: "How the ideation flow should interpret this domain's knowledge (probe guidance, output sections, principle citations)"
+
+    - name: "Planning Considerations"
+      required: true
+      description: "Constraints, limitations, edge cases for spec planning to surface"
