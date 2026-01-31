@@ -6,38 +6,17 @@
  * Commands:
  * - ah specs list              - List all specs grouped by domain_name
  * - ah specs complete <name>   - Mark spec completed, move spec out of roadmap
- * - ah specs resurrect <name>  - Mark spec incomplete, move spec back to roadmap
  */
 
 import { Command } from 'commander';
-import { existsSync, readFileSync, writeFileSync, renameSync, readdirSync, mkdirSync } from 'fs';
+import { existsSync, readFileSync, writeFileSync, renameSync, mkdirSync } from 'fs';
 import { join, dirname, relative, basename } from 'path';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import { getGitRoot, getCurrentBranch } from '../lib/planning.js';
 import { getBaseBranch, commitFilesToBranch, createBranchWithoutCheckout } from '../lib/git.js';
 import { KnowledgeService } from '../lib/knowledge.js';
-import { findSpecByBranch, getSpecForBranch } from '../lib/specs.js';
+import { findSpecByBranch, getSpecForBranch, loadAllSpecs as loadAllSpecGroups, type SpecFile, type SpecFrontmatter } from '../lib/specs.js';
 import { logCommandStart, logCommandSuccess, logCommandError } from '../lib/trace-store.js';
-
-type SpecType = 'milestone' | 'investigation' | 'optimization' | 'refactor' | 'documentation' | 'triage';
-
-interface SpecFrontmatter {
-  name: string;
-  domain_name: string;
-  type?: SpecType;
-  status: 'roadmap' | 'in_progress' | 'completed';
-  dependencies: string[];
-  branch?: string;  // Source of truth for spec's working branch
-}
-
-interface SpecInfo {
-  name: string;
-  domain_name: string;
-  type: SpecType;
-  status: 'roadmap' | 'in_progress' | 'completed';
-  path: string;
-  dependencies: string[];
-}
 
 /**
  * Parse spec file frontmatter
@@ -79,52 +58,15 @@ export function updateSpecStatus(filePath: string, newStatus: 'roadmap' | 'in_pr
 }
 
 /**
- * Scan a directory for spec files and parse their frontmatter
+ * Find a spec by ID (filename without extension)
  */
-function scanSpecsDir(dir: string): SpecInfo[] {
-  if (!existsSync(dir)) return [];
-
-  const specs: SpecInfo[] = [];
-  const files = readdirSync(dir).filter((f) => f.endsWith('.spec.md'));
-
-  for (const file of files) {
-    const filePath = join(dir, file);
-    const frontmatter = parseSpecFrontmatter(filePath);
-    if (frontmatter) {
-      specs.push({
-        name: frontmatter.name || file.replace('.spec.md', ''),
-        domain_name: frontmatter.domain_name || 'uncategorized',
-        type: frontmatter.type || 'milestone',
-        status: frontmatter.status || 'roadmap',
-        path: filePath,
-        dependencies: frontmatter.dependencies || [],
-      });
-    }
+function findSpecByName(name: string): SpecFile | null {
+  const groups = loadAllSpecGroups();
+  for (const group of groups) {
+    const spec = group.specs.find((s) => s.id === name);
+    if (spec) return spec;
   }
-
-  return specs;
-}
-
-/**
- * Load all specs from both specs/ and specs/roadmap/
- */
-function loadAllSpecs(): SpecInfo[] {
-  const gitRoot = getGitRoot();
-  const specsDir = join(gitRoot, 'specs');
-  const roadmapDir = join(specsDir, 'roadmap');
-
-  const rootSpecs = scanSpecsDir(specsDir);
-  const roadmapSpecs = scanSpecsDir(roadmapDir);
-
-  return [...rootSpecs, ...roadmapSpecs];
-}
-
-/**
- * Find a spec by name
- */
-function findSpecByName(name: string): SpecInfo | null {
-  const specs = loadAllSpecs();
-  return specs.find((s) => s.name === name) || null;
+  return null;
 }
 
 /**
@@ -178,7 +120,8 @@ export function register(program: Command): void {
     .option('--completed', 'Only show completed specs')
     .option('--in-progress', 'Only show in-progress specs')
     .action(async (options: { json?: boolean; domainsOnly?: boolean; domain?: string; roadmap?: boolean; completed?: boolean; inProgress?: boolean }) => {
-      let allSpecs = loadAllSpecs();
+      const groups = loadAllSpecGroups();
+      let allSpecs = groups.flatMap((g) => g.specs);
 
       // Apply status filters
       if (options.roadmap) {
@@ -190,7 +133,7 @@ export function register(program: Command): void {
       }
 
       // Group by domain_name
-      const byDomain: Record<string, SpecInfo[]> = {};
+      const byDomain: Record<string, SpecFile[]> = {};
       for (const spec of allSpecs) {
         const domain = spec.domain_name || 'uncategorized';
         if (!byDomain[domain]) {
@@ -229,7 +172,7 @@ export function register(program: Command): void {
           process.exit(1);
         }
 
-        const sortedSpecs = domainSpecs.sort((a, b) => a.name.localeCompare(b.name));
+        const sortedSpecs = domainSpecs.sort((a, b) => a.id.localeCompare(b.id));
 
         if (options.json) {
           console.log(JSON.stringify({
@@ -243,7 +186,7 @@ export function register(program: Command): void {
           for (const spec of sortedSpecs) {
             const statusIcon = spec.status === 'completed' ? '[x]' : spec.status === 'in_progress' ? '[>]' : '[ ]';
             const deps = spec.dependencies.length > 0 ? ` (deps: ${spec.dependencies.join(', ')})` : '';
-            console.log(`  ${statusIcon} ${spec.name}${deps}`);
+            console.log(`  ${statusIcon} ${spec.id}${deps}`);
           }
         }
         return;
@@ -263,11 +206,11 @@ export function register(program: Command): void {
 
       for (const domain of domains) {
         console.log(`## ${domain}`);
-        const domainSpecs = byDomain[domain].sort((a, b) => a.name.localeCompare(b.name));
+        const domainSpecs = byDomain[domain].sort((a, b) => a.id.localeCompare(b.id));
         for (const spec of domainSpecs) {
           const statusIcon = spec.status === 'completed' ? '[x]' : spec.status === 'in_progress' ? '[>]' : '[ ]';
           const deps = spec.dependencies.length > 0 ? ` (deps: ${spec.dependencies.join(', ')})` : '';
-          console.log(`  ${statusIcon} ${spec.name}${deps}`);
+          console.log(`  ${statusIcon} ${spec.id}${deps}`);
         }
         console.log();
       }
@@ -407,95 +350,6 @@ export function register(program: Command): void {
 
       console.log(`Marked spec completed: ${name}`);
       if (wasInRoadmap) {
-        console.log(`  Moved to: ${targetPath}`);
-        console.log('  Knowledge indexes updated ✓');
-      }
-    });
-
-  // ah specs resurrect <name>
-  specs
-    .command('resurrect <name>')
-    .description('Mark spec incomplete and move back to roadmap')
-    .option('--json', 'Output as JSON')
-    .action(async (name: string, options: { json?: boolean }) => {
-      const commandName = 'specs resurrect';
-      const commandArgs = { name, options };
-      logCommandStart(commandName, commandArgs);
-
-      const spec = findSpecByName(name);
-
-      if (!spec) {
-        const error = `Spec not found: ${name}`;
-        logCommandError(commandName, error, commandArgs);
-        if (options.json) {
-          console.log(JSON.stringify({ success: false, error }));
-        } else {
-          console.error(error);
-        }
-        process.exit(1);
-      }
-
-      if (spec.status === 'roadmap') {
-        const error = `Spec already in roadmap: ${name}`;
-        logCommandError(commandName, error, commandArgs);
-        if (options.json) {
-          console.log(JSON.stringify({ success: false, error }));
-        } else {
-          console.error(error);
-        }
-        process.exit(1);
-      }
-
-      const gitRoot = getGitRoot();
-      const roadmapDir = join(gitRoot, 'specs', 'roadmap');
-      const targetPath = join(roadmapDir, `${name}.spec.md`);
-
-      // Update status in frontmatter
-      if (!updateSpecStatus(spec.path, 'roadmap')) {
-        const error = 'Failed to update spec status';
-        logCommandError(commandName, error, commandArgs);
-        if (options.json) {
-          console.log(JSON.stringify({ success: false, error }));
-        } else {
-          console.error(error);
-        }
-        process.exit(1);
-      }
-
-      // Move file if it's not already in roadmap
-      const wasNotInRoadmap = !spec.path.includes('/roadmap/');
-      if (wasNotInRoadmap) {
-        mkdirSync(roadmapDir, { recursive: true });
-        renameSync(spec.path, targetPath);
-
-        // Reindex knowledge bases to reflect the move
-        if (!options.json) {
-          console.log('  Reindexing knowledge bases...');
-        }
-        await reindexAfterMove(gitRoot, spec.path, targetPath, options.json);
-      }
-
-      // Log success
-      logCommandSuccess(commandName, {
-        name,
-        status: 'roadmap',
-        path: wasNotInRoadmap ? targetPath : spec.path,
-        reindexed: wasNotInRoadmap,
-      });
-
-      if (options.json) {
-        console.log(JSON.stringify({
-          success: true,
-          name,
-          status: 'roadmap',
-          path: wasNotInRoadmap ? targetPath : spec.path,
-          reindexed: wasNotInRoadmap,
-        }, null, 2));
-        return;
-      }
-
-      console.log(`Resurrected spec to roadmap: ${name}`);
-      if (wasNotInRoadmap) {
         console.log(`  Moved to: ${targetPath}`);
         console.log('  Knowledge indexes updated ✓');
       }

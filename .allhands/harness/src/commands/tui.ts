@@ -603,57 +603,10 @@ async function handleAction(
           break;
         }
 
-        // Check if spec is completed - if so, warn and offer to resurrect
+        // Completed specs cannot be switched to
         if (specFile.status === 'completed') {
-          const confirmed = await tui.showConfirmation(
-            'Resurrect Completed Spec?',
-            `Spec "${specFile.title}" is marked as completed.\n\n` +
-            'Selecting it will move the spec back to the roadmap\n' +
-            'and you will need to mark it completed again when done.\n\n' +
-            'Both docs and roadmap indexes will be updated.'
-          );
-
-          if (!confirmed) {
-            tui.log('Spec selection cancelled');
-            break;
-          }
-
-          // Resurrect the spec: update status, move to roadmap, reindex
-          tui.log('Resurrecting spec to roadmap...');
-          try {
-            if (!updateSpecStatus(specFile.path, 'roadmap')) {
-              tui.log('Error: Failed to update spec status');
-              break;
-            }
-
-            const roadmapDir = join(cwd, 'specs', 'roadmap');
-            const targetPath = join(roadmapDir, specFile.filename);
-            const wasNotInRoadmap = !specFile.path.includes('/roadmap/');
-
-            if (wasNotInRoadmap) {
-              mkdirSync(roadmapDir, { recursive: true });
-              renameSync(specFile.path, targetPath);
-              await reindexAfterMove(cwd, specFile.path, targetPath, true);
-            }
-
-            tui.log('Spec resurrected and indexes updated ✓');
-
-            // Re-find the spec since its path has changed
-            specFile = findSpecById(specId, cwd);
-            if (!specFile) {
-              tui.log(`Error: Spec file not found after resurrection: ${specId}`);
-              break;
-            }
-          } catch (resErr) {
-            const message = resErr instanceof Error ? resErr.message : String(resErr);
-            tui.log(`Error resurrecting spec: ${message}`);
-            logTuiError('resurrect-spec', resErr instanceof Error ? resErr : message, {
-              specId,
-              spec: currentSpec?.id,
-              branch,
-            }, cwd);
-            break;
-          }
+          tui.log(`Spec "${specFile.id}" is completed and cannot be selected.`);
+          break;
         }
 
         // Checkout the spec's branch (we already validated it exists above)
