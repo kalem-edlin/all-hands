@@ -6,6 +6,7 @@
  * Commands:
  * - ah specs list              - List all specs grouped by domain_name
  * - ah specs complete <name>   - Mark spec completed, move spec out of roadmap
+ * - ah specs create <path>     - Create spec: validate, assign branch, commit and push
  */
 
 import { Command } from 'commander';
@@ -13,7 +14,7 @@ import { existsSync, readFileSync, writeFileSync, renameSync, mkdirSync } from '
 import { join, dirname, relative, basename } from 'path';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import { getGitRoot, getCurrentBranch } from '../lib/planning.js';
-import { getBaseBranch, commitFilesToBranch, createBranchWithoutCheckout } from '../lib/git.js';
+import { getBaseBranch, gitExec } from '../lib/git.js';
 import { KnowledgeService } from '../lib/knowledge.js';
 import { findSpecByBranch, getSpecForBranch, loadAllSpecs as loadAllSpecGroups, type SpecFile, type SpecFrontmatter } from '../lib/specs.js';
 import { logCommandStart, logCommandSuccess, logCommandError } from '../lib/trace-store.js';
@@ -355,23 +356,35 @@ export function register(program: Command): void {
       }
     });
 
-  // ah specs persist <path>
+  // ah specs create <path>
   specs
-    .command('persist <path>')
-    .description('Create spec branch, update frontmatter, and commit to base branch')
+    .command('create <path>')
+    .description('Create spec: validate, assign branch, commit and push to base branch')
     .option('--json', 'Output as JSON')
-    .option('--no-branch', 'Skip branch creation (just commit to base)')
-    .action((specPath: string, options: { json?: boolean; branch?: boolean }) => {
-      const commandName = 'specs persist';
+    .action((specPath: string, options: { json?: boolean }) => {
+      const commandName = 'specs create';
       const commandArgs = { specPath, options };
       logCommandStart(commandName, commandArgs);
 
       const gitRoot = getGitRoot();
       const baseBranch = getBaseBranch();
+      const currentBranch = getCurrentBranch();
 
-      // Resolve spec path
+      // 1. Enforce being on base branch
+      if (currentBranch !== baseBranch) {
+        const error = `Spec creation requires being on the base branch (${baseBranch}). Currently on: ${currentBranch}`;
+        logCommandError(commandName, error, commandArgs);
+        if (options.json) {
+          console.log(JSON.stringify({ success: false, error }));
+        } else {
+          console.error(error);
+        }
+        process.exit(1);
+      }
+
+      // 2. Validate spec file
       const absolutePath = specPath.startsWith('/') ? specPath : join(process.cwd(), specPath);
-      const relativePath = relative(gitRoot, absolutePath);
+      const specRelativePath = relative(gitRoot, absolutePath);
 
       if (!existsSync(absolutePath)) {
         const error = `Spec file not found: ${specPath}`;
@@ -384,7 +397,6 @@ export function register(program: Command): void {
         process.exit(1);
       }
 
-      // Validate it's a spec file
       if (!absolutePath.endsWith('.spec.md')) {
         const error = 'File must be a .spec.md file';
         logCommandError(commandName, error, commandArgs);
@@ -396,81 +408,58 @@ export function register(program: Command): void {
         process.exit(1);
       }
 
-      const specName = basename(absolutePath, '.spec.md');
-      let specBranch: string = `feature/${specName}`;
-      let branchCreated = false;
-
-      // Read current frontmatter to check for existing branch
-      const frontmatter = parseSpecFrontmatter(absolutePath);
-
-      // Resolve branch name before committing (needed for frontmatter update)
-      if (options.branch !== false) {
-        // Use existing branch from frontmatter, or use the default
-        if (frontmatter?.branch) {
-          specBranch = frontmatter.branch;
-        }
-
-        // Resolve branch collisions by appending a number
-        const baseBranchName = specBranch;
-        let suffix = 1;
-        let existingSpec = findSpecByBranch(specBranch, gitRoot);
-        while (existingSpec && existingSpec.id !== specName) {
-          suffix++;
-          specBranch = `${baseBranchName}-${suffix}`;
-          existingSpec = findSpecByBranch(specBranch, gitRoot);
-        }
-
-        // Update spec frontmatter with branch if missing or changed due to collision
-        if (!frontmatter?.branch || frontmatter.branch !== specBranch) {
-          try {
-            const content = readFileSync(absolutePath, 'utf-8');
-            const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
-
-            if (frontmatterMatch) {
-              const fm = parseYaml(frontmatterMatch[1]) as Record<string, unknown>;
-              fm.branch = specBranch;
-              const newContent = `---\n${stringifyYaml(fm).trim()}\n---\n${frontmatterMatch[2]}`;
-              writeFileSync(absolutePath, newContent);
-            }
-          } catch (e) {
-            const error = `Failed to update frontmatter: ${e instanceof Error ? e.message : String(e)}`;
-            logCommandError(commandName, error, commandArgs);
-            if (options.json) {
-              console.log(JSON.stringify({ success: false, error }));
-            } else {
-              console.error(error);
-            }
-            process.exit(1);
-          }
-        }
-      }
-
-      // Commit spec to base branch BEFORE creating feature branch
-      // so the feature branch includes the spec file
-      const result = commitFilesToBranch({
-        files: [absolutePath],
-        branch: baseBranch,
-        message: `spec: ${specName}`,
-        cwd: gitRoot,
-      });
-
-      if (!result.success) {
-        const error = result.error || 'Unknown error';
+      if (!specRelativePath.startsWith('specs/roadmap/')) {
+        const error = `Spec file must be in specs/roadmap/. Got: ${specRelativePath}`;
         logCommandError(commandName, error, commandArgs);
         if (options.json) {
           console.log(JSON.stringify({ success: false, error }));
         } else {
-          console.error(`Failed to persist spec: ${error}`);
+          console.error(error);
         }
         process.exit(1);
       }
 
-      // Create feature branch from base AFTER commit, so it includes the spec file
-      if (options.branch !== false) {
-        const branchResult = createBranchWithoutCheckout(specBranch, baseBranch, gitRoot);
+      // 3. Derive branch name from spec type
+      const specName = basename(absolutePath, '.spec.md');
+      const frontmatter = parseSpecFrontmatter(absolutePath);
+      const specType = frontmatter?.type || 'milestone';
 
-        if (!branchResult.success) {
-          const error = `Failed to create branch: ${branchResult.error}`;
+      const SPEC_TYPE_BRANCH_PREFIX: Record<string, string> = {
+        milestone: 'feature/',
+        investigation: 'fix/',
+        optimization: 'optimize/',
+        refactor: 'refactor/',
+        documentation: 'docs/',
+        triage: 'triage/',
+      };
+
+      const prefix = SPEC_TYPE_BRANCH_PREFIX[specType] || 'feature/';
+      let specBranch = frontmatter?.branch || `${prefix}${specName}`;
+
+      // Handle branch name collisions
+      const baseBranchName = specBranch;
+      let suffix = 1;
+      let existingSpec = findSpecByBranch(specBranch, gitRoot);
+      while (existingSpec && existingSpec.id !== specName) {
+        suffix++;
+        specBranch = `${baseBranchName}-${suffix}`;
+        existingSpec = findSpecByBranch(specBranch, gitRoot);
+      }
+
+      // 4. Write branch to spec frontmatter if not present or changed
+      if (!frontmatter?.branch || frontmatter.branch !== specBranch) {
+        try {
+          const content = readFileSync(absolutePath, 'utf-8');
+          const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
+
+          if (frontmatterMatch) {
+            const fm = parseYaml(frontmatterMatch[1]) as Record<string, unknown>;
+            fm.branch = specBranch;
+            const newContent = `---\n${stringifyYaml(fm).trim()}\n---\n${frontmatterMatch[2]}`;
+            writeFileSync(absolutePath, newContent);
+          }
+        } catch (e) {
+          const error = `Failed to update frontmatter: ${e instanceof Error ? e.message : String(e)}`;
           logCommandError(commandName, error, commandArgs);
           if (options.json) {
             console.log(JSON.stringify({ success: false, error }));
@@ -479,41 +468,65 @@ export function register(program: Command): void {
           }
           process.exit(1);
         }
-
-        branchCreated = branchResult.created;
       }
 
-      // Log success
+      // 5. Stage only the spec file
+      const addResult = gitExec(['add', '--', specRelativePath], gitRoot);
+      if (!addResult.success) {
+        const error = `Failed to stage spec file: ${addResult.stderr}`;
+        logCommandError(commandName, error, commandArgs);
+        if (options.json) {
+          console.log(JSON.stringify({ success: false, error }));
+        } else {
+          console.error(error);
+        }
+        process.exit(1);
+      }
+
+      // 6. Commit
+      const commitResult = gitExec(['commit', '-m', `spec: ${specName}`], gitRoot);
+      if (!commitResult.success) {
+        const error = `Failed to commit: ${commitResult.stderr}`;
+        logCommandError(commandName, error, commandArgs);
+        if (options.json) {
+          console.log(JSON.stringify({ success: false, error }));
+        } else {
+          console.error(error);
+        }
+        process.exit(1);
+      }
+
+      // 7. Push to origin
+      const pushResult = gitExec(['push', 'origin', baseBranch], gitRoot);
+      if (!pushResult.success) {
+        const error = `Failed to push to origin ${baseBranch}: ${pushResult.stderr}`;
+        logCommandError(commandName, error, commandArgs);
+        if (options.json) {
+          console.log(JSON.stringify({ success: false, error }));
+        } else {
+          console.error(error);
+        }
+        process.exit(1);
+      }
+
+      // 8. Report results
       logCommandSuccess(commandName, {
-        path: relativePath,
-        baseBranch,
-        specBranch,
-        branchCreated,
-        method: result.method,
+        name: specName,
+        branch: specBranch,
+        path: specRelativePath,
       });
 
       if (options.json) {
         console.log(JSON.stringify({
           success: true,
-          path: relativePath,
-          baseBranch,
-          specBranch,
-          branchCreated,
-          currentBranch: result.currentBranch,
-          method: result.method,
+          name: specName,
+          branch: specBranch,
+          path: specRelativePath,
         }, null, 2));
       } else {
-        console.log(`Committed spec to ${baseBranch}: ${relativePath}`);
-        if (specBranch) {
-          if (branchCreated) {
-            console.log(`  Created branch: ${specBranch}`);
-          } else {
-            console.log(`  Branch exists: ${specBranch}`);
-          }
-        }
-        if (result.currentBranch) {
-          console.log(`  (You remain on ${result.currentBranch})`);
-        }
+        console.log(`Created spec: ${specName}`);
+        console.log(`  Branch: ${specBranch}`);
+        console.log(`  Path: ${specRelativePath}`);
       }
     });
 }
