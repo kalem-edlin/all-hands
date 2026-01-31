@@ -36,6 +36,13 @@ frontmatter:
     default: "feature/{name}"
     description: "Working branch for this spec"
 
+  initial_workflow_domain:
+    type: enum
+    required: false
+    values: [milestone, investigation, optimization, refactor, documentation, triage]
+    default: milestone
+    description: "Records which workflow domain was used during ideation, enables downstream flows to load correct config"
+
 body:
   description: "Markdown document capturing the spec vision"
   sections:

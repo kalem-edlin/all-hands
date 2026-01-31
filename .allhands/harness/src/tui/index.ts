@@ -26,7 +26,7 @@ import { loadAllProfiles } from '../lib/opencode/index.js';
 import { planningDirExists, readStatus, sanitizeBranchForDir } from '../lib/planning.js';
 import { loadAllPrompts, type PromptFile } from '../lib/prompts.js';
 import { clearTuiSession, getHubWindowId, getSpawnedWindows } from '../lib/session.js';
-import { loadAllSpecs, specsToModalItems, type SpecFile } from '../lib/specs.js';
+import { getSpecForBranch, getWorkflowDomain, loadAllSpecs, specsToModalItems, type SpecFile } from '../lib/specs.js';
 import { buildSemanticIndexAsync, ensureTldrDaemon, hasSemanticIndex, isTldrInstalled, needsSemanticRebuild, warmCallGraph } from '../lib/tldr.js';
 import { getCurrentSession, killWindow, listWindows, spawnCustomFlow } from '../lib/tmux.js';
 import { clearLogs, logTuiError, logTuiLifecycle } from '../lib/trace-store.js';
@@ -35,6 +35,19 @@ import { createFileViewer, FileViewer, getPlanningFilePath, getSpecFilePath } fr
 import { createModal, Modal } from './modal.js';
 import { createPromptsPane, PromptItem } from './prompts-pane.js';
 import { AgentInfo, createStatusPane, getSelectableItems } from './status-pane.js';
+
+/**
+ * Shared workflow domain items for initiative and steering modals.
+ * Single source of truth for the 6 domain {id, label} pairs.
+ */
+export const WORKFLOW_DOMAIN_ITEMS: ReadonlyArray<{ id: string; label: string }> = [
+  { id: 'milestone', label: 'Milestone — Feature development with deep ideation' },
+  { id: 'investigation', label: 'Investigation — Debug / diagnose issues' },
+  { id: 'optimization', label: 'Optimization — Performance / efficiency work' },
+  { id: 'refactor', label: 'Refactor — Cleanup / tech debt' },
+  { id: 'documentation', label: 'Documentation — Coverage gaps' },
+  { id: 'triage', label: 'Triage — External signal analysis' },
+];
 
 export type PaneId = 'actions' | 'prompts' | 'status';
 
@@ -538,6 +551,7 @@ export class TUI {
       { id: 'mark-completed', label: 'Complete', key: '9', type: 'action' },
       { id: 'switch-spec', label: 'Switch Workspace', key: '0', type: 'action' },
       { id: 'custom-flow', label: 'Custom Flow', key: '-', type: 'action' },
+      { id: 'initiative-steering', label: 'Steer Initiative', key: '=', type: 'action' },
       { id: 'separator-toggles', label: '─ Toggles ─', type: 'separator' },
       { id: 'toggle-loop', label: 'Loop', key: 'O', type: 'toggle', checked: this.state.loopEnabled },
       { id: 'toggle-parallel', label: 'Parallel', key: 'P', type: 'toggle', checked: this.state.parallelEnabled },
@@ -622,7 +636,7 @@ export class TUI {
 
     // Hotkeys for actions (work globally, not just in actions pane)
     // Uses the key property from action items for consistent mapping
-    const hotkeys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-'];
+    const hotkeys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '='];
     hotkeys.forEach((key) => {
       this.screen.key([key], () => {
         if (!this.activeModal && !this.activeFileViewer) {
@@ -894,6 +908,9 @@ export class TUI {
       case 'new-initiative':
         this.openNewInitiativeModal();
         break;
+      case 'initiative-steering':
+        this.openSteeringDomainModal();
+        break;
       default:
         this.options.onAction(actionId);
     }
@@ -904,18 +921,9 @@ export class TUI {
    * Routes to the appropriate scoping flow based on selection.
    */
   private openNewInitiativeModal(): void {
-    const specTypes: Array<{ id: string; label: string }> = [
-      { id: 'milestone', label: 'Milestone — Feature development with deep ideation' },
-      { id: 'investigation', label: 'Investigation — Debug / diagnose issues' },
-      { id: 'optimization', label: 'Optimization — Performance / efficiency work' },
-      { id: 'refactor', label: 'Refactor — Cleanup / tech debt' },
-      { id: 'documentation', label: 'Documentation — Coverage gaps' },
-      { id: 'triage', label: 'Triage — External signal analysis (coming soon)' },
-    ];
-
     this.activeModal = createModal(this.screen, {
       title: 'New Initiative — Select Type',
-      items: specTypes.map((t) => ({
+      items: WORKFLOW_DOMAIN_ITEMS.map((t) => ({
         id: t.id,
         label: t.label,
         type: 'item' as const,
@@ -923,6 +931,45 @@ export class TUI {
       onSelect: (specType: string) => {
         this.closeModal();
         this.options.onAction('new-initiative', { specType });
+      },
+      onCancel: () => {
+        this.closeModal();
+      },
+    });
+    this.screen.render();
+  }
+
+  /**
+   * Open a modal for selecting the workflow domain when steering an initiative.
+   * Pre-selects the spec's initial_workflow_domain as the default.
+   */
+  private openSteeringDomainModal(): void {
+    // Read spec's initial_workflow_domain for pre-selection
+    let defaultDomain = 'milestone';
+    const branch = this.state.branch;
+    if (branch) {
+      const spec = getSpecForBranch(branch, this.options.cwd);
+      if (spec) {
+        defaultDomain = getWorkflowDomain(spec.path);
+      }
+    }
+
+    // Reorder so the default domain appears first (pre-selected)
+    const sorted = [
+      ...WORKFLOW_DOMAIN_ITEMS.filter((d) => d.id === defaultDomain),
+      ...WORKFLOW_DOMAIN_ITEMS.filter((d) => d.id !== defaultDomain),
+    ];
+
+    this.activeModal = createModal(this.screen, {
+      title: `Steer Initiative — Select Domain (default: ${defaultDomain})`,
+      items: sorted.map((d) => ({
+        id: d.id,
+        label: d.label,
+        type: 'item' as const,
+      })),
+      onSelect: (domain: string) => {
+        this.closeModal();
+        this.options.onAction('initiative-steering', { domain });
       },
       onCancel: () => {
         this.closeModal();

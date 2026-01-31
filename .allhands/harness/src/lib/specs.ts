@@ -20,6 +20,7 @@ export interface SpecFrontmatter {
   status?: 'roadmap' | 'in_progress' | 'completed';
   dependencies?: string[];
   branch?: string;  // Source of truth for spec's working branch
+  initial_workflow_domain?: SpecType;
 }
 
 export interface SpecFile {
@@ -334,4 +335,25 @@ export function getSpecForBranch(branch: string, cwd?: string): SpecFile | null 
   }
 
   return spec;
+}
+
+const VALID_WORKFLOW_DOMAINS: SpecType[] = ['milestone', 'investigation', 'optimization', 'refactor', 'documentation', 'triage'];
+
+/**
+ * Get the workflow domain from a spec file's frontmatter.
+ * Uses proper YAML parsing via parseFrontmatter(). Validates against
+ * the SpecType union and defaults to 'milestone' for unknown values.
+ */
+export function getWorkflowDomain(specPath: string): SpecType {
+  try {
+    if (!existsSync(specPath)) return 'milestone';
+    const content = readFileSync(specPath, 'utf-8');
+    const frontmatter = parseFrontmatter(content);
+    if (frontmatter?.initial_workflow_domain && VALID_WORKFLOW_DOMAINS.includes(frontmatter.initial_workflow_domain)) {
+      return frontmatter.initial_workflow_domain;
+    }
+  } catch {
+    // Ignore parse errors, use default
+  }
+  return 'milestone';
 }

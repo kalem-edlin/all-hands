@@ -357,6 +357,19 @@ describe('loadSchema', () => {
     expect(schema!.frontmatter!['tools'].items).toBe('string');
   });
 
+  it('returns a schema object for "workflow"', () => {
+    const schema = loadSchema('workflow');
+    expect(schema).not.toBeNull();
+    expect(schema!.frontmatter).toBeDefined();
+    expect(schema!.frontmatter!['name']).toBeDefined();
+    expect(schema!.frontmatter!['type'].type).toBe('enum');
+    expect(schema!.frontmatter!['planning_depth'].type).toBe('enum');
+    expect(schema!.frontmatter!['jury_required'].type).toBe('boolean');
+    expect(schema!.frontmatter!['max_tangential_hypotheses'].type).toBe('integer');
+    expect(schema!.frontmatter!['required_ideation_questions'].type).toBe('array');
+    expect(schema!.frontmatter!['required_ideation_questions'].items).toBe('string');
+  });
+
   it('returns null for unknown schema type', () => {
     const schema = loadSchema('nonexistent-schema-type');
     expect(schema).toBeNull();
@@ -689,6 +702,10 @@ describe('detectSchemaType', () => {
     expect(detectSchemaType('.allhands/skills/my-skill/SKILL.md')).toBe('skill');
   });
 
+  it('detects workflow files', () => {
+    expect(detectSchemaType('.allhands/workflows/milestone.md')).toBe('workflow');
+  });
+
   it('returns null for non-schema files', () => {
     expect(detectSchemaType('README.md')).toBeNull();
     expect(detectSchemaType('src/index.ts')).toBeNull();
@@ -734,6 +751,10 @@ describe('inferSchemaType', () => {
 
   it('infers skill from /skills/ path with SKILL.md', () => {
     expect(inferSchemaType('.allhands/skills/my-skill/SKILL.md')).toBe('skill');
+  });
+
+  it('infers workflow from /workflows/ path', () => {
+    expect(inferSchemaType('.allhands/workflows/milestone.md')).toBe('workflow');
   });
 
   it('returns null for unknown paths', () => {
