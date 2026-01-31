@@ -29,9 +29,11 @@ import { resolveEnvVars } from './mcp-runtime.js';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 // Path: harness/src/lib/ -> harness/src/ -> harness/
 const HARNESS_ROOT = join(__dirname, '..', '..');
-// Use /tmp with hash to stay under macOS 104-byte Unix socket path limit.
+// Derive project root: harness/ -> .allhands/ -> project/
+const PROJECT_ROOT = join(HARNESS_ROOT, '..', '..');
+// Use /tmp with hash of project root to stay under macOS 104-byte Unix socket path limit.
 // Project-relative paths can exceed this in deep directory trees or worktrees.
-const SESSIONS_HASH = createHash('sha256').update(HARNESS_ROOT).digest('hex').slice(0, 16);
+const SESSIONS_HASH = createHash('sha256').update(PROJECT_ROOT).digest('hex').slice(0, 16);
 const SESSIONS_DIR = `/tmp/ah-sessions-${SESSIONS_HASH}`;
 const DAEMON_SCRIPT = join(__dirname, 'mcp-daemon.ts');
 
