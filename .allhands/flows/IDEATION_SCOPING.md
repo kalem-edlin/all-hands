@@ -29,7 +29,6 @@ Domain-agnostic ideation scoping that adapts behavior from workflow domain confi
 5. After the engineer signals readiness:
    - Revise the existing spec file in place — update and append, do not replace wholesale
    - Preserve unchanged sections; modify only what the revision touches
-   - Update the spec frontmatter `updated` timestamp
 6. **After spec revision is written**: reset planning artifacts since existing plans are now stale:
    ```bash
    ah planning reset
