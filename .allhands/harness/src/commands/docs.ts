@@ -29,7 +29,7 @@ import {
   batchGetFileHashes,
   findMarkdownFiles,
   isCodeFile,
-  validateDocs,
+  validateDocsAsync,
 } from "../lib/docs-validation.js";
 
 /**
@@ -56,7 +56,7 @@ async function validate(docsPath: string, options?: { useCache?: boolean }): Pro
   const excludePaths = EXCLUDED_DOC_PATHS.map((p) => join(projectRoot, p));
 
   // Run validation (with optional caching)
-  const result = validateDocs(absoluteDocsPath, projectRoot, {
+  const result = await validateDocsAsync(absoluteDocsPath, projectRoot, {
     useCache: options?.useCache ?? false,
     excludePaths,
   });

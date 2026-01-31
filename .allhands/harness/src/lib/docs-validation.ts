@@ -16,7 +16,7 @@ import { createHash } from "crypto";
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "fs";
 import { extname, join, relative } from "path";
 import matter from "gray-matter";
-import { CtagsIndex, generateCtagsIndex, lookupSymbol } from "./ctags.js";
+import { CtagsIndex, generateCtagsIndex, generateCtagsIndexAsync, lookupSymbol } from "./ctags.js";
 
 /**
  * File extensions that ctags can process (programming languages).
@@ -870,4 +870,30 @@ export function validateDocs(
   }
 
   return result;
+}
+
+/**
+ * Validate all documentation in a directory (async version).
+ *
+ * Identical to validateDocs but uses generateCtagsIndexAsync to avoid
+ * blocking the event loop during ctags execution.
+ */
+export async function validateDocsAsync(
+  docsPath: string,
+  projectRoot: string,
+  options?: { ctagsIndex?: CtagsIndex; useCache?: boolean; excludePaths?: string[] }
+): Promise<ValidationResult> {
+  // If a ctags index was provided, delegate to the sync version directly
+  if (options?.ctagsIndex) {
+    return validateDocs(docsPath, projectRoot, options);
+  }
+
+  // Generate ctags index asynchronously
+  const ctagsResult = await generateCtagsIndexAsync(projectRoot);
+
+  // Delegate to sync validateDocs with the pre-built index
+  return validateDocs(docsPath, projectRoot, {
+    ...options,
+    ctagsIndex: ctagsResult.index,
+  });
 }
