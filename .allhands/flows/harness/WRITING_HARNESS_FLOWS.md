@@ -20,7 +20,7 @@ Guide agents through flow authoring with harness conventions. Per **Context is P
 ## Execution
 
 - Read `.allhands/principles.md` for first principle context
-- Run `ah skills` to discover the `harness-maintenance` skill
+- Run `ah skills list` to discover the `harness-maintenance` skill
 - Read the skill's `references/writing-flows.md` for flow authoring patterns
 - Author the flow using conventions: `<goal>`, `<inputs>`, `<outputs>`, `<constraints>`, action-verb bullets
 - Verify flow follows progressive disclosure — reference sub-flows rather than inlining complexity

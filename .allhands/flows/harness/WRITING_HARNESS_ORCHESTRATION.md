@@ -20,7 +20,7 @@ Guide agents through orchestration layer changes — TUI lifecycle, event loop, 
 ## Execution
 
 - Read `.allhands/principles.md` for first principle context
-- Run `ah skills` to discover the `harness-maintenance` skill
+- Run `ah skills list` to discover the `harness-maintenance` skill
 - Read the skill's `references/core-architecture.md` for architecture, schemas, and lifecycle patterns
 - Implement changes preserving architectural invariants (graceful degradation, semantic validation, in-memory state)
 - Validate with `ah validate agents` after profile modifications
