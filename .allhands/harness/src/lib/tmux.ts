@@ -36,7 +36,7 @@ import { getCurrentBranch, getPlanningPaths } from './planning.js';
 import { getBaseBranch } from './git.js';
 import { addSpawnedWindow, removeSpawnedWindow, getSpawnedWindows } from './session.js';
 import { loadProjectSettings } from '../hooks/shared.js';
-import { getSpecForBranch } from './specs.js';
+import { getSpecForBranch, getWorkflowDomain } from './specs.js';
 
 /**
  * Agent type = agent profile name.
@@ -931,6 +931,19 @@ export function buildTemplateContext(
     } catch {
       // Ignore parse errors
     }
+  }
+
+  // Resolve WORKFLOW_DOMAIN_PATH from spec's initial_workflow_domain frontmatter
+  const basePath = cwd || process.cwd();
+  const workflowDomain = context.SPEC_PATH
+    ? getWorkflowDomain(join(basePath, context.SPEC_PATH))
+    : 'milestone';
+  const workflowDomainPath = join(basePath, '.allhands', 'workflows', `${workflowDomain}.md`);
+  if (existsSync(workflowDomainPath)) {
+    context.WORKFLOW_DOMAIN_PATH = workflowDomainPath;
+  } else {
+    console.warn(`Workflow domain config not found: ${workflowDomainPath}`);
+    context.WORKFLOW_DOMAIN_PATH = '';
   }
 
   return context;

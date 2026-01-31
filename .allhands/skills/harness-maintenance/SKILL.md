@@ -1,14 +1,14 @@
 ---
 name: harness-maintenance
 description: Domain expertise for maintaining and extending the All Hands harness. Use when working on flows, hooks, commands, agents, schemas, or MCP integrations.
-version: 1.0.0
+version: 2.0.0
 globs:
   - ".allhands/flows/**/*.md"
   - ".allhands/agents/*.yaml"
   - ".allhands/schemas/*.yaml"
   - ".allhands/skills/**/*.md"
   - ".allhands/validation/*.md"
-  - ".allhands/workflows/**/*.yaml"
+  - ".allhands/workflows/**/*.md"
   - ".allhands/harness/src/**/*.ts"
   - ".allhands/harness/src/**/*.json"
 ---
@@ -16,38 +16,31 @@ globs:
 # Harness Maintenance
 
 <goal>
-Guide maintainers in preserving and improving the harness architecture. This document is the single reference for understanding how components interact, why decisions were made, and how to extend the system while upholding first principles.
+Route maintainers to domain-specific harness knowledge. Per **Context is Precious**, agents load only the reference matching their scenario — not the full architecture.
 </goal>
 
 <constraints>
 - MUST read `.allhands/principles.md` before any harness modification
 - MUST cite First Principles by name when adding features or changing behavior
-- MUST update this document when making structural changes to the harness
+- MUST update the relevant reference doc when making structural changes to the harness
+- MUST validate changes with `ah validate agents` after profile modifications
 - NEVER add complexity without clear first principle justification
-- ALWAYS validate changes with `ah validate agents` after profile modifications
 </constraints>
 
-## First Principles Applied to Harness Design
+## Start Here
 
-| First Principle | Harness Implementation |
-|-----------------|------------------------|
-| **Context is Precious** | Hooks inject minimal context; read-enforcer returns TLDR for large files; prompts limited to 3-5 tasks |
-| **Prompt Files as Units of Work** | Prompts ARE tasks, not descriptions; completed prompts document decisions |
-| **Frontier Models are Capable** | Flows provide "why", agents deduce "how"; control flows not micromanagement |
-| **Agentic Validation Tooling** | Schema validation on edit; diagnostics hooks; validation suites as acceptance criteria |
-| **Knowledge Compounding** | Compaction summaries preserve learnings; skills/validation improve with use |
-| **Quality Engineering** | Settings define hypothesis domains; emergent planner diversifies work to discover valuable variants |
+Read `.allhands/principles.md` first — it is the single entry point covering all first principles and core philosophy pillars. Every harness change should be motivated by a named principle.
 
----
+## Reference Routing
 
-## Architecture Overview
+Use **Scenario** to find the right reference for your task. Use **Trigger** to find which reference to update after a change.
 
 ```
 .allhands/
 ├── settings.json    # Repository-specific settings (format, validation)
 ├── flows/           # Agent instructions (progressive disclosure)
 ├── agents/          # Agent profiles (YAML spawn configs)
-├── workflows/       # Workflow configs (hypothesis domains per workflow type)
+├── workflows/       # Workflow domain configs (per-domain knowledge for shared flows)
 ├── skills/          # Domain expertise (patterns, best practices)
 ├── validation/      # Acceptance criteria tooling
 ├── schemas/         # Agent-facing YAML frontmatter schemas
@@ -60,17 +53,25 @@ Guide maintainers in preserving and improving the harness architecture. This doc
     └── src/platforms/   # Claude Code settings.json
 ```
 
----
+## Related Skills
 
-## Project Settings
+The `harness-maintenance` and `claude-code-patterns` skills have overlapping globs on `.allhands/` files. When both match:
 
-**Location:** `.allhands/settings.json` | **Schema:** `harness/src/schemas/settings.schema.json`
+- **harness-maintenance** provides architectural knowledge, maintenance guidance, and routing to domain-specific references — the "why" and "when" of harness changes
+- **claude-code-patterns** provides Claude Code native feature docs, implementation patterns, and API reference — the "how" of building with Claude Code primitives
+- For structural changes to `.allhands/` content files (flows, schemas, skills, validation), **harness-maintenance** is primary
+- For TypeScript implementation in `harness/src/` or Claude Code configs in `.claude/`, **claude-code-patterns** is primary
+- When in doubt, read harness-maintenance first for architectural context, then claude-code-patterns for implementation details
 
-Repository-specific, platform-agnostic configuration. Hooks read this to determine behavior.
+## Cross-Cutting Patterns
 
-| Setting | Hook | Purpose |
-|---------|------|---------|
-| `validation.format` | `ah hooks validation format` | Auto-format after Write/Edit |
+### Key Design Patterns
+- **Graceful Degradation**: Every optional dependency (TLDR, pyright, Greptile) has fallback behavior. Never fail the primary operation.
+- **Semantic Validation**: Zod schemas catch config mistakes at spawn time, not runtime. Fail fast with helpful messages.
+- **In-Memory State**: Registry patterns (spawned agents, search contexts) keep TUI in sync without polling.
+- **Motivation-Driven Documentation**: Per **Frontier Models are Capable**, teach agents HOW TO THINK about using a tool — not command catalogs. Commands are discoverable via `--help`; documentation value is in motivations and thinking models.
+- **Token Efficiency**: Read enforcer + context injection + TLDR layers save ~95% on large files.
+- **Iterative Refinement**: Compaction summaries make incomplete work resumable. Per **Prompt Files as Units of Work**, same prompt can be re-run with accumulated learnings.
 
 Format config: `enabled`, `command` (default), `patterns` (file-specific overrides).
 
@@ -230,6 +231,42 @@ Per **Knowledge Compounding**, the emergent planner tracks work types in alignme
 
 ---
 
+## Workflow Domain Configuration
+
+Per **Frontier Models are Capable**, workflow domain configs centralize domain knowledge for consumption by multiple flows rather than duplicating it per-flow.
+
+### Architecture
+- `.allhands/workflows/*.md` — one config per domain (`milestone`, `investigation`, `optimization`, `refactor`, `documentation`, `triage`)
+- Structured **frontmatter** (`planning_depth`, `jury_required`, `max_tangential_hypotheses`, `required_ideation_questions`) provides programmatic flags for flow calibration
+- **Markdown body** contains expressive domain knowledge (interview questions, gap signals, planning considerations) consumed by agents at their discretion
+- Schema validated via `ah schema workflow`
+
+### Template Variable Abstraction
+- `WORKFLOW_DOMAIN_PATH` is the single abstraction boundary — agents receive the resolved path, never raw domain names
+- Resolved in `buildTemplateContext()` from the spec's `initial_workflow_domain` frontmatter field (default: `milestone`)
+- All domain-consuming agents (ideation, planner, emergent, initiative-steering) access configs exclusively through this variable
+
+### Flow Unification
+- Unified `IDEATION_SCOPING.md` replaced 6 separate per-type scoping flows (`IDEATION_SESSION.md`, `INVESTIGATION_SCOPING.md`, etc.)
+- `planning_depth` field (`deep` vs `focused`) drives flow bifurcation — not spec type checks
+- `stage` field on `status.yaml` gates execution (`executing`) and pauses during initiative steering (`steering`)
+
+### Coordinator vs Initiative Steering
+
+Both are TUI actions but serve fundamentally different purposes:
+
+| Dimension | Coordinator | Initiative Steering |
+|-----------|------------|-------------------|
+| **Scope** | Single-prompt interventions (quick patches, triage, prompt surgery) | Multi-prompt initiative-level replanning |
+| **Trigger** | Reactive — something broke or needs a tweak | Strategic — scope change, blocking issue, quality pivot |
+| **Domain awareness** | Not domain-config-driven | Consumes workflow domain config; can steer with a different domain than the spec's original |
+| **Execution impact** | Does not pause the event loop | Pauses prompt spawning (`stage: 'steering'`) during the session |
+| **Goal changes** | Does not change initiative goals | Can change initiative goals (resets `core_consolidation` to `pending`) |
+
+Per **Context is Precious**, the coordinator is lightweight and conversational; initiative steering is heavyweight with research subtasks, a domain-driven interview, and structured alignment doc amendments.
+
+---
+
 ## Platform Integration
 
 ### Settings Configuration (`.claude/settings.json`)
@@ -318,6 +355,12 @@ Sub-flows use `<inputs>` and `<outputs>` tags for execution-agnostic subtasks.
 2. Create flow file in `flows/`
 3. Run `ah validate agents`
 
+### Deleting Agent Profiles
+1. Check the profile's `tui_action` field value
+2. Search other profiles for the same `tui_action` value — if multiple profiles share a `tui_action`, they are co-dependencies (e.g., `compounder.yaml` and `documentor.yaml` both have `tui_action: compound`)
+3. Verify the TUI action handler does not expect multiple agents for that action
+4. `ah validate agents` and `npx tsc --noEmit` will NOT catch cross-profile `tui_action` dependency breaks — YAML files are outside the TypeScript dependency graph and agent validation is per-profile
+
 ### Updating Hypothesis Domains
 1. Edit available domains in `settings.json` under `emergent.hypothesisDomains`
 2. Domains are passed to emergent planner via `HYPOTHESIS_DOMAINS` template variable
@@ -325,6 +368,7 @@ Sub-flows use `<inputs>` and `<outputs>` tags for execution-agnostic subtasks.
 ### Adding New Template Variables
 1. Add to `TemplateVars` registry in `src/lib/schemas/template-vars.ts`
 2. Include Zod schema and description
+3. Wire the variable in `buildTemplateContext()` in [ref:src/lib/tmux.ts:buildTemplateContext] — registration without wiring passes `ah validate agents` but produces empty template values at runtime
 
 ### Adding New Schemas
 1. Create YAML in `schemas/` for agent-facing
@@ -362,6 +406,33 @@ Dynamic action items prevent invalid operations. Can't run planner without miles
 
 ---
 
+## Best Practices
+
+### Schema and TypeScript Synchronization
+
+Per **Agentic Validation Tooling**, agent-facing YAML schemas and their TypeScript interfaces must stay in sync:
+- `spec.yaml` fields → `SpecFrontmatter` interface in `lib/specs.ts`
+- `alignment.yaml` fields → relevant TypeScript types in `lib/planning.ts`
+- `workflow.yaml` fields → consumed via `parseYaml` in flow-consuming code
+
+When adding a new field to any schema YAML, the corresponding TypeScript interface **must** also be updated. Failure to do so causes `parseFrontmatter()` to silently discard unrecognized fields, leading agents to resort to fragile regex-based workarounds.
+
+### Frontmatter Parsing
+
+Per **Knowledge Compounding**, agents MUST use `parseFrontmatter()` from `lib/specs.ts` or `parseYaml()` from the `yaml` library for frontmatter field extraction. Raw regex for individual frontmatter fields is prohibited — it does not handle YAML quoting, comments, or multi-line values, and creates duplication when multiple call sites need the same field.
+
+### Template Variable Overrides (`contextOverrides`)
+
+Per **Frontier Models are Capable**, `spawnAgentsForAction()` in `tui.ts` accepts an optional `contextOverrides` parameter — a `Record<string, string>` applied via `Object.assign` after `buildTemplateContext()`. Override keys should be known template variable names from the `TemplateVars` registry in `template-vars.ts`.
+
+This pattern is used for initiative steering domain selection, where the engineer picks a different workflow domain than the spec's `initial_workflow_domain`. The flow:
+1. TUI modal presents domain choices (pre-selects spec's current domain)
+2. User selection produces `{ WORKFLOW_DOMAIN_PATH: resolvedPath }`
+3. Override replaces the default value from `buildTemplateContext()`
+4. Spawned agent receives the overridden context
+
+---
+
 ## Maintainer Checklist
 
 When modifying the harness:
@@ -369,6 +440,10 @@ When modifying the harness:
 - [ ] Identify which First Principle motivates the change
 - [ ] Check for graceful degradation on optional dependencies
 - [ ] Add validation for new configuration
-- [ ] Update this document if structural changes made
+- [ ] Update relevant reference doc if structural changes made
 - [ ] Run `ah validate agents` after profile changes
 - [ ] Test hook behavior with Claude Code runner
+- [ ] Verify routing table rows match reference files in `references/`
+- [ ] Verify each routing table entry has a corresponding thin flow in `flows/harness/`
+- [ ] Verify cross-domain navigation links in modified reference docs resolve
+- [ ] NEVER run `ah docs validate`/`finalize` on skill references — those commands are scoped to `docs/` only
