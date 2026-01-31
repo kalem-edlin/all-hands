@@ -4,7 +4,7 @@ Exploratory co-creation that surfaces the problem and solution space. Per **Idea
 
 <constraints>
 - MUST read the workflow domain config at `WORKFLOW_DOMAIN_PATH` before any interview
-- MUST ask all questions listed in the domain config's `required_ideation_questions`
+- MUST ask all questions listed in the domain config's `required_ideation_questions`, unless the answer is already clear from codebase exploration
 - MUST ask ONE question at a time
 - NEVER batch all questions together
 - MUST ground in codebase reality before asking the engineer codebase-answerable questions
