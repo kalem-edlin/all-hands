@@ -16,6 +16,7 @@ Transform the spec into executable prompts with domain-appropriate planning dept
 - MUST NOT ask questions with obvious answers derivable from spec context or research findings
 - MUST leverage research findings to propose alternatives, challenge approaches, and surface unforeseen constraints — never enter the interview uninformed
 - MUST include jury review when domain config sets `jury_required: true`
+- NEVER read jury review files (`.allhands/flows/shared/jury/*`) directly — subtasks load their own flows per **Context is Precious**
 - Focused planning domains MUST document unresolved questions in alignment doc for emergent planner consumption
 - Prompts MUST be fully autonomous — no human intervention during execution
 - Testing is NOT a prompt — validation happens via validation_suites attached to prompts
