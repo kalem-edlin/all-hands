@@ -67,4 +67,20 @@ export interface AggregatorOutput {
   design_notes?: string[];
 }
 
+// Reposearch output types
+export interface RepoCodeReference {
+  repo: string;        // "current" or the GitHub URL
+  file: string;        // relative path within the repo
+  line_start: number;
+  line_end: number;
+  code: string;
+  context: string;
+}
+
+export interface ReposearchOutput {
+  analysis: string;              // markdown research findings
+  code_references: RepoCodeReference[];
+  repos_analyzed: string[];
+}
+
 export { AgentRunner } from "./runner.js";
