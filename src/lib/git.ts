@@ -61,3 +61,22 @@ export function getGitFiles(repoPath: string): string[] {
   }
   return files;
 }
+
+/**
+ * Compute the git blob hash of a file (works on files outside the repo).
+ */
+export function getFileBlobHash(filePath: string, repoPath: string): string | null {
+  const result = git(['hash-object', filePath], repoPath);
+  return result.success ? result.stdout.trim() : null;
+}
+
+/**
+ * Check if a specific blob hash appears in the git history of a file path.
+ * Uses a single `rev-list --objects` call instead of per-commit lookups.
+ */
+export function fileExistsInHistory(relPath: string, blobHash: string, repoPath: string): boolean {
+  const result = git(['rev-list', 'HEAD', '--objects', '--', relPath], repoPath);
+  if (!result.success || !result.stdout) return false;
+
+  return result.stdout.split('\n').some(line => line.startsWith(blobHash + ' '));
+}
