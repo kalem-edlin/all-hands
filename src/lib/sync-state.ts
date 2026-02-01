@@ -1,5 +1,5 @@
-import { existsSync, readFileSync, writeFileSync } from 'fs';
-import { join } from 'path';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { dirname, join } from 'path';
 import { getFileBlobHash } from './git.js';
 import { getHeadCommit, hasUncommittedChanges } from './git.js';
 import { SYNC_STATE_FILENAME } from './constants.js';
@@ -42,6 +42,7 @@ export function writeSyncState(
   };
 
   const outPath = join(targetRoot, SYNC_STATE_FILENAME);
+  mkdirSync(dirname(outPath), { recursive: true });
   writeFileSync(outPath, JSON.stringify(state, null, 2) + '\n');
 }
 
@@ -55,7 +56,15 @@ export function readSyncState(targetRoot: string): SyncState | null {
   try {
     const content = readFileSync(stateFile, 'utf-8');
     const parsed = JSON.parse(content);
-    if (parsed.version !== 1) return null;
+    if (
+      !parsed ||
+      typeof parsed !== 'object' ||
+      parsed.version !== 1 ||
+      !parsed.files ||
+      typeof parsed.files !== 'object'
+    ) {
+      return null;
+    }
     return parsed as SyncState;
   } catch {
     return null;

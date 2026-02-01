@@ -4856,9 +4856,9 @@ var Yargs = YargsFactory(esm_default);
 var yargs_default = Yargs;
 
 // src/commands/sync.ts
-import { copyFileSync, existsSync as existsSync10, mkdirSync, readFileSync as readFileSync9, unlinkSync, writeFileSync as writeFileSync4 } from "fs";
+import { copyFileSync, existsSync as existsSync10, mkdirSync as mkdirSync2, readFileSync as readFileSync9, unlinkSync, writeFileSync as writeFileSync4 } from "fs";
 import { homedir } from "os";
-import { basename as basename4, dirname as dirname7, join as join8, resolve as resolve6 } from "path";
+import { basename as basename4, dirname as dirname8, join as join8, resolve as resolve6 } from "path";
 
 // src/lib/git.ts
 import { execSync, spawnSync } from "child_process";
@@ -6894,8 +6894,8 @@ function ensureTargetLines(targetRoot, verbose = false) {
 }
 
 // src/lib/sync-state.ts
-import { existsSync as existsSync9, readFileSync as readFileSync8, writeFileSync as writeFileSync3 } from "fs";
-import { join as join7 } from "path";
+import { existsSync as existsSync9, mkdirSync, readFileSync as readFileSync8, writeFileSync as writeFileSync3 } from "fs";
+import { dirname as dirname7, join as join7 } from "path";
 function writeSyncState(targetRoot, allhandsRoot, syncedFiles) {
   const files = {};
   for (const relPath of [...syncedFiles].sort()) {
@@ -6914,6 +6914,7 @@ function writeSyncState(targetRoot, allhandsRoot, syncedFiles) {
     files
   };
   const outPath = join7(targetRoot, SYNC_STATE_FILENAME);
+  mkdirSync(dirname7(outPath), { recursive: true });
   writeFileSync3(outPath, JSON.stringify(state, null, 2) + "\n");
 }
 function readSyncState(targetRoot) {
@@ -6922,7 +6923,9 @@ function readSyncState(targetRoot) {
   try {
     const content = readFileSync8(stateFile, "utf-8");
     const parsed = JSON.parse(content);
-    if (parsed.version !== 1) return null;
+    if (!parsed || typeof parsed !== "object" || parsed.version !== 1 || !parsed.files || typeof parsed.files !== "object") {
+      return null;
+    }
     return parsed;
   } catch {
     return null;
@@ -6966,7 +6969,7 @@ function setupAhShim() {
       return { installed: false, path: shimPath, inPath };
     }
   }
-  mkdirSync(localBin, { recursive: true });
+  mkdirSync2(localBin, { recursive: true });
   writeFileSync4(shimPath, AH_SHIM_SCRIPT, { mode: 493 });
   return { installed: true, path: shimPath, inPath };
 }
@@ -7069,7 +7072,7 @@ Auto-overwriting ${conflicts.length} conflicting files (--yes mode)`);
     const targetFile = join8(resolvedTarget, relPath);
     if (!existsSync10(sourceFile)) continue;
     syncedFiles.add(relPath);
-    mkdirSync(dirname7(targetFile), { recursive: true });
+    mkdirSync2(dirname8(targetFile), { recursive: true });
     if (existsSync10(targetFile)) {
       if (!filesAreDifferent(sourceFile, targetFile)) {
         skipped++;
@@ -7192,9 +7195,9 @@ async function cmdPullManifest() {
 }
 
 // src/commands/push.ts
-import { copyFileSync as copyFileSync2, existsSync as existsSync12, mkdirSync as mkdirSync2, readFileSync as readFileSync10, rmSync } from "fs";
+import { copyFileSync as copyFileSync2, existsSync as existsSync12, mkdirSync as mkdirSync3, readFileSync as readFileSync10, rmSync } from "fs";
 import { tmpdir } from "os";
-import { dirname as dirname8, join as join10 } from "path";
+import { dirname as dirname9, join as join10 } from "path";
 import * as readline2 from "readline";
 
 // src/lib/gh.ts
@@ -7383,7 +7386,7 @@ async function createPullRequest(cwd, ghUser, filesToPush, title, body) {
     }
   }
   const tempDir = join10(tmpdir(), `allhands-push-${Date.now()}`);
-  mkdirSync2(tempDir, { recursive: true });
+  mkdirSync3(tempDir, { recursive: true });
   try {
     console.log("Cloning fork...");
     const cloneResult = gh(["repo", "clone", `${ghUser}/${repoName}`, tempDir, "--", "--depth=1"]);
@@ -7416,7 +7419,7 @@ async function createPullRequest(cwd, ghUser, filesToPush, title, body) {
       } else {
         const src = join10(cwd, file.path);
         const dest = join10(tempDir, file.path);
-        mkdirSync2(dirname8(dest), { recursive: true });
+        mkdirSync3(dirname9(dest), { recursive: true });
         copyFileSync2(src, dest);
       }
     }
