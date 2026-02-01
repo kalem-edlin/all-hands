@@ -72,16 +72,11 @@ export function getFileBlobHash(filePath: string, repoPath: string): string | nu
 
 /**
  * Check if a specific blob hash appears in the git history of a file path.
+ * Uses a single `rev-list --objects` call instead of per-commit lookups.
  */
 export function fileExistsInHistory(relPath: string, blobHash: string, repoPath: string): boolean {
-  const logResult = git(['log', '--format=%H', '--', relPath], repoPath);
-  if (!logResult.success || !logResult.stdout) return false;
+  const result = git(['rev-list', 'HEAD', '--objects', '--', relPath], repoPath);
+  if (!result.success || !result.stdout) return false;
 
-  for (const commit of logResult.stdout.split('\n').filter(Boolean)) {
-    const blobResult = git(['rev-parse', `${commit}:${relPath}`], repoPath);
-    if (blobResult.success && blobResult.stdout.trim() === blobHash) {
-      return true;
-    }
-  }
-  return false;
+  return result.stdout.split('\n').some(line => line.startsWith(blobHash + ' '));
 }
