@@ -7231,13 +7231,14 @@ function collectFilesToPush(cwd, finalIncludes, finalExcludes) {
   const filesToPush = [];
   const localGitFiles = new Set(getGitFiles(cwd));
   const deletedFiles = /* @__PURE__ */ new Set();
-  const deletedUnstaged = git(["diff", "--name-only", "--diff-filter=D"], cwd);
-  if (deletedUnstaged.success && deletedUnstaged.stdout) {
-    deletedUnstaged.stdout.split("\n").filter(Boolean).forEach((f) => deletedFiles.add(f));
-  }
-  const deletedStaged = git(["diff", "--cached", "--name-only", "--diff-filter=D"], cwd);
-  if (deletedStaged.success && deletedStaged.stdout) {
-    deletedStaged.stdout.split("\n").filter(Boolean).forEach((f) => deletedFiles.add(f));
+  for (const args of [
+    ["diff", "--name-only", "--diff-filter=D"],
+    ["diff", "--cached", "--name-only", "--diff-filter=D"]
+  ]) {
+    const result = git(args, cwd);
+    if (result.success && result.stdout) {
+      result.stdout.split("\n").filter(Boolean).forEach((f) => deletedFiles.add(f));
+    }
   }
   for (const relPath of upstreamFiles) {
     if (manifest.isInitOnly(relPath)) {
@@ -7334,10 +7335,7 @@ async function createPullRequest(cwd, ghUser, filesToPush, title, body) {
     console.log("Applying changes...");
     for (const file of filesToPush) {
       if (file.type === "D") {
-        const target = join9(tempDir, file.path);
-        if (existsSync11(target)) {
-          git(["rm", file.path], tempDir);
-        }
+        git(["rm", "--ignore-unmatch", file.path], tempDir);
       } else {
         const src = join9(cwd, file.path);
         const dest = join9(tempDir, file.path);
@@ -7412,8 +7410,8 @@ async function cmdPush(include, exclude, dryRun, titleArg, bodyArg) {
   }
   console.log("\nFiles to be included in PR:");
   for (const file of filesToPush.sort((a, b) => a.path.localeCompare(b.path))) {
-    const marker = file.type === "D" ? "D" : file.type === "M" ? "M" : "A";
-    const label = file.type === "D" ? "deleted" : file.type === "M" ? "modified" : "included";
+    const marker = file.type;
+    const label = { D: "deleted", M: "modified", A: "included" }[file.type];
     console.log(`  ${marker} ${file.path} (${label})`);
   }
   console.log();

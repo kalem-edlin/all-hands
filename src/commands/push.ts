@@ -109,13 +109,14 @@ function collectFilesToPush(
 
   // Get files deleted locally (both staged and unstaged deletions)
   const deletedFiles = new Set<string>();
-  const deletedUnstaged = git(['diff', '--name-only', '--diff-filter=D'], cwd);
-  if (deletedUnstaged.success && deletedUnstaged.stdout) {
-    deletedUnstaged.stdout.split('\n').filter(Boolean).forEach((f) => deletedFiles.add(f));
-  }
-  const deletedStaged = git(['diff', '--cached', '--name-only', '--diff-filter=D'], cwd);
-  if (deletedStaged.success && deletedStaged.stdout) {
-    deletedStaged.stdout.split('\n').filter(Boolean).forEach((f) => deletedFiles.add(f));
+  for (const args of [
+    ['diff', '--name-only', '--diff-filter=D'],
+    ['diff', '--cached', '--name-only', '--diff-filter=D'],
+  ]) {
+    const result = git(args, cwd);
+    if (result.success && result.stdout) {
+      result.stdout.split('\n').filter(Boolean).forEach((f) => deletedFiles.add(f));
+    }
   }
 
   for (const relPath of upstreamFiles) {
@@ -238,10 +239,7 @@ async function createPullRequest(
     console.log('Applying changes...');
     for (const file of filesToPush) {
       if (file.type === 'D') {
-        const target = join(tempDir, file.path);
-        if (existsSync(target)) {
-          git(['rm', file.path], tempDir);
-        }
+        git(['rm', '--ignore-unmatch', file.path], tempDir);
       } else {
         const src = join(cwd, file.path);
         const dest = join(tempDir, file.path);
@@ -331,8 +329,8 @@ export async function cmdPush(
 
   console.log('\nFiles to be included in PR:');
   for (const file of filesToPush.sort((a, b) => a.path.localeCompare(b.path))) {
-    const marker = file.type === 'D' ? 'D' : file.type === 'M' ? 'M' : 'A';
-    const label = file.type === 'D' ? 'deleted' : file.type === 'M' ? 'modified' : 'included';
+    const marker = file.type;
+    const label = { D: 'deleted', M: 'modified', A: 'included' }[file.type];
     console.log(`  ${marker} ${file.path} (${label})`);
   }
   console.log();
