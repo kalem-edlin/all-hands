@@ -3,7 +3,7 @@ import { tmpdir } from 'os';
 import { dirname, join } from 'path';
 import { minimatch } from 'minimatch';
 import * as readline from 'readline';
-import { git, isGitRepo, getGitFiles } from '../lib/git.js';
+import { git, isGitRepo, getGitFiles, getFileBlobHash, fileExistsInHistory } from '../lib/git.js';
 import { checkGhAuth, checkGhInstalled, getGhUser, gh } from '../lib/gh.js';
 import { Manifest, filesAreDifferent } from '../lib/manifest.js';
 import { getAllhandsRoot, UPSTREAM_REPO } from '../lib/paths.js';
@@ -94,6 +94,23 @@ function checkPrerequisites(cwd: string): PrerequisiteResult {
   return { success: true, ghUser };
 }
 
+/**
+ * Determine if a file was actually modified by the target repo,
+ * vs simply being out of date because upstream moved forward.
+ *
+ * Compares the target file's content against all historical versions
+ * in the upstream repo. If it matches any previous version, the target
+ * repo hasn't modified it.
+ */
+function wasModifiedByTargetRepo(cwd: string, relPath: string, allhandsRoot: string): boolean {
+  const localFile = join(cwd, relPath);
+  const localBlobHash = getFileBlobHash(localFile, allhandsRoot);
+
+  if (!localBlobHash) return true; // safe default: assume modified on error
+
+  return !fileExistsInHistory(relPath, localBlobHash, allhandsRoot);
+}
+
 function collectFilesToPush(
   cwd: string,
   finalIncludes: string[],
@@ -139,7 +156,9 @@ function collectFilesToPush(
 
     if (existsSync(localFile)) {
       if (filesAreDifferent(localFile, upstreamFile)) {
-        filesToPush.push({ path: relPath, type: 'M' });
+        if (wasModifiedByTargetRepo(cwd, relPath, allhandsRoot)) {
+          filesToPush.push({ path: relPath, type: 'M' });
+        }
       }
     } else if (deletedFiles.has(relPath)) {
       filesToPush.push({ path: relPath, type: 'D' });

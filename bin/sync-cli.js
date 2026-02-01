@@ -4905,6 +4905,15 @@ function getGitFiles(repoPath) {
   }
   return files;
 }
+function getFileBlobHash(filePath, repoPath) {
+  const result = git(["hash-object", filePath], repoPath);
+  return result.success ? result.stdout.trim() : null;
+}
+function fileExistsInHistory(relPath, blobHash, repoPath) {
+  const result = git(["rev-list", "HEAD", "--objects", "--", relPath], repoPath);
+  if (!result.success || !result.stdout) return false;
+  return result.stdout.split("\n").some((line) => line.startsWith(blobHash + " "));
+}
 
 // src/lib/manifest.ts
 import { readFileSync as readFileSync5, existsSync as existsSync3, statSync as statSync3 } from "fs";
@@ -7224,6 +7233,12 @@ function checkPrerequisites(cwd) {
   }
   return { success: true, ghUser };
 }
+function wasModifiedByTargetRepo(cwd, relPath, allhandsRoot) {
+  const localFile = join9(cwd, relPath);
+  const localBlobHash = getFileBlobHash(localFile, allhandsRoot);
+  if (!localBlobHash) return true;
+  return !fileExistsInHistory(relPath, localBlobHash, allhandsRoot);
+}
 function collectFilesToPush(cwd, finalIncludes, finalExcludes) {
   const allhandsRoot = getAllhandsRoot();
   const manifest = new Manifest(allhandsRoot);
@@ -7257,7 +7272,9 @@ function collectFilesToPush(cwd, finalIncludes, finalExcludes) {
     const upstreamFile = join9(allhandsRoot, relPath);
     if (existsSync11(localFile)) {
       if (filesAreDifferent(localFile, upstreamFile)) {
-        filesToPush.push({ path: relPath, type: "M" });
+        if (wasModifiedByTargetRepo(cwd, relPath, allhandsRoot)) {
+          filesToPush.push({ path: relPath, type: "M" });
+        }
       }
     } else if (deletedFiles.has(relPath)) {
       filesToPush.push({ path: relPath, type: "D" });
