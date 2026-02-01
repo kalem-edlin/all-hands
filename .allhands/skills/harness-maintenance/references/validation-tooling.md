@@ -80,6 +80,7 @@ Prompt files reference suites in `validation_suites` frontmatter. During executi
 
 - **External tooling** (xctrace, simctl, playwright, etc.) — Document explicitly: commands, flags, use cases inline with motivations. Stable and unfamiliar to agents by default. Example from xcode-automation: `xcrun xctrace record --template 'Time Profiler' --device '<UDID>' --attach '<PID>'` — flags, ordering constraints, and PID discovery are external tool knowledge that belongs in the suite.
 - **Internal codebase commands** — Document patterns, not inventories: teach discovery (`package.json` scripts, `--help`), naming conventions, motivations for test categories. Pattern-based suites age gracefully; command inventories require constant maintenance.
+<<<<<<< Updated upstream
 
 ## Decision Tree Requirement
 
@@ -116,6 +117,64 @@ New suites: draft, then test on a feature branch before marking guidance as prov
 4. **Solidify**: Only verified practices become authoritative guidance
 
 The plan/handoff document persists as the hypothesis record for future work.
+||||||| Stash base
+=======
+- **Anti-pattern — exhaustive command tables**: A deterministic section listing every `test:*` command as individual rows goes stale as suites evolve. Instead: document the minimum CI gate command explicitly, teach the naming pattern, point to the source of truth (e.g., `package.json`), and explain how to choose scope. The agent reads the source at execution time — always fresher than a static table.
+
+## Decision Tree Requirement
+
+Every suite MUST include a decision tree routing agents to the correct validation approach:
+- Distinguish relevant instructions per scenario (e.g., UI-only vs full E2E)
+- Show where stochastic vs deterministic testing applies
+- Surface branch points where other suites must be utilized (e.g., "Does this branch have native code changes? → Yes → follow xcode-automation decision tree")
+
+The decision tree replaces flat prerequisite lists with structured routing — an agent follows the branch matching their situation, skipping irrelevant setup.
+
+## tmux Session Management Standard
+
+Suites requiring long-running processes MUST use tmux:
+
+```bash
+# -t $TMUX_PANE pins split to agent's window, not user's focused window
+tmux split-window -h -d -t $TMUX_PANE \
+  -c /path/to/repo '<command>'
+```
+
+- **Observability**: Verify via `tmux capture-pane -p -t <pane_id>` before proceeding
+- **Teardown**: Reverse order. `tmux send-keys -t <pane_id> C-c` or kill the pane
+- **Worktree isolation**: Unique ports per worktree (`.env.local`), correct repo path (`-c`)
+
+Reference xcode-automation as the canonical tmux pattern.
+
+## Hypothesis-First Validation Workflow
+
+New suites: draft, then test on a feature branch before marking guidance as proven.
+
+1. **Draft**: Write suite based on plan/analysis (mark unverified practices as hypotheses)
+2. **Test on feature branch**: Exercise practices hands-on
+3. **Verify & adjust**: Document what works, what doesn't
+4. **Solidify**: Only verified practices become authoritative guidance
+
+The plan/handoff document persists as the hypothesis record for future work.
+
+## Established Practice vs Unvalidated Ideas
+
+Suites contain two kinds of guidance, both authoritative:
+
+- **Established practice**: Verified hands-on. Stated authoritatively — agents follow directly.
+- **Unvalidated ideas**: Worth pursuing but not yet exercised. Authoritative as direction — agents encountering them should attempt, assess feasibility, and document outcomes.
+
+Ideas carry an implicit mandate: try to make them work, then capture what happened (see Learnings Destination). Over time, ideas that prove out become established practice. Ideas that prove infeasible get revised or removed. This is the crystallization lifecycle applied to the documentation itself.
+
+## Learnings Destination
+
+When agents discover something during validation:
+
+- **Suite-level learnings** (about the validation *practice*) → update the suite doc directly. The suite is what agents read — improvements compound immediately. Examples: tool flag doesn't work on this OS, one approach is more reliable than another.
+- **Task-specific learnings** (about *what was validated*) → knowledge compounding via prompt files or knowledge docs. Examples: endpoint edge case behavior, migration quirks.
+
+Distinction: if it helps any agent validating in this domain regardless of task, it belongs in the suite. If it's specific to a feature, it compounds through knowledge docs.
+>>>>>>> Stashed changes
 
 ## Cross-Referencing Between Suites
 
@@ -154,4 +213,11 @@ Suites depending on environment configuration should document:
 ## Related References
 
 - [`tools-commands-mcp-hooks.md`](tools-commands-mcp-hooks.md) — Validation using hooks, CLI commands, or MCP tools
+<<<<<<< Updated upstream
 - [`knowledge-compounding.md`](knowledge-compounding.md) — Crystallized patterns compounding into persistent knowledge
+||||||| Stash base
+- [`tools-commands-mcp-hooks.md`](tools-commands-mcp-hooks.md) — When validation uses hooks, CLI commands, or MCP research tools
+- [`knowledge-compounding.md`](knowledge-compounding.md) — When crystallized patterns need to compound into persistent knowledge
+=======
+- [`knowledge-compounding.md`](knowledge-compounding.md) — Crystallized patterns compounding into persistent knowledge
+>>>>>>> Stashed changes
