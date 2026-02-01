@@ -41,6 +41,14 @@ interface SkillMatch extends SkillEntry {
   pathMatch: boolean;
 }
 
+/** Scoring weights for keyword matching against skill fields. */
+const SCORE_WEIGHT = {
+  NAME: 3,
+  DESCRIPTION: 3,
+  GLOBS: 2,
+  PATH_BOOST: 4,
+} as const;
+
 // Load aggregator prompt from file
 const AGGREGATOR_PROMPT_PATH = join(__dirname, '../lib/opencode/prompts/skills-aggregator.md');
 
@@ -166,15 +174,15 @@ function scoreSkill(
 
   for (const kw of keywords) {
     if (nameLC.includes(kw)) {
-      score += 3;
+      score += SCORE_WEIGHT.NAME;
       if (!matchedFields.includes('name')) matchedFields.push('name');
     }
     if (descLC.includes(kw)) {
-      score += 3;
+      score += SCORE_WEIGHT.DESCRIPTION;
       if (!matchedFields.includes('description')) matchedFields.push('description');
     }
     if (globsLC.includes(kw)) {
-      score += 2;
+      score += SCORE_WEIGHT.GLOBS;
       if (!matchedFields.includes('globs')) matchedFields.push('globs');
     }
   }
@@ -215,8 +223,7 @@ function searchSkills(
     let finalScore = keywordScore;
 
     if (paths && pathMatch) {
-      // Path match boosts score
-      finalScore = keywordScore > 0 ? keywordScore + 4 : 4;
+      finalScore = keywordScore > 0 ? keywordScore + SCORE_WEIGHT.PATH_BOOST : SCORE_WEIGHT.PATH_BOOST;
     }
 
     if (finalScore > 0) {
@@ -274,6 +281,76 @@ function getSkillReferenceFiles(entry: SkillEntry): string[] {
   return refPaths;
 }
 
+/**
+ * Run AI aggregation on skill matches to produce synthesized guidance.
+ * Returns a JSON-serializable result object.
+ */
+async function aggregateSkills(
+  query: string,
+  matches: SkillMatch[],
+  debug: boolean,
+): Promise<Record<string, unknown>> {
+  const skillsInput = matches.map(m => {
+    const content = getSkillContent(m);
+    const referenceFiles = getSkillReferenceFiles(m);
+    return {
+      name: m.name,
+      description: m.description,
+      globs: m.globs,
+      file: m.file,
+      content: content || '',
+      reference_files: referenceFiles,
+    };
+  });
+
+  const userMessage = JSON.stringify({ query, skills: skillsInput });
+  const projectRoot = getProjectRoot();
+  const runner = new AgentRunner(projectRoot);
+
+  try {
+    const agentResult = await runner.run<SkillSearchOutput>(
+      {
+        name: 'skills-aggregator',
+        systemPrompt: getAggregatorPrompt(),
+        timeoutMs: 60000,
+        steps: 5,
+      },
+      userMessage,
+    );
+
+    if (!agentResult.success) {
+      return withDebugInfo({
+        success: true,
+        query,
+        matches,
+        count: matches.length,
+        aggregated: false,
+        aggregation_error: agentResult.error,
+      }, agentResult, debug);
+    }
+
+    return withDebugInfo({
+      success: true,
+      query,
+      aggregated: true,
+      guidance: agentResult.data!.guidance,
+      relevant_skills: agentResult.data!.relevant_skills,
+      design_notes: agentResult.data!.design_notes,
+      source_matches: matches.length,
+    }, agentResult, debug);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return {
+      success: true,
+      query,
+      matches,
+      count: matches.length,
+      aggregated: false,
+      aggregation_error: message,
+    };
+  }
+}
+
 export function register(program: Command): void {
   const cmd = program
     .command('skills')
@@ -328,72 +405,7 @@ export function register(program: Command): void {
         return;
       }
 
-      // Build aggregation input
-      const skillsInput = matches.map(m => {
-        const content = getSkillContent(m);
-        const referenceFiles = getSkillReferenceFiles(m);
-        return {
-          name: m.name,
-          description: m.description,
-          globs: m.globs,
-          file: m.file,
-          content: content || '',
-          reference_files: referenceFiles,
-        };
-      });
-
-      const userMessage = JSON.stringify({
-        query,
-        skills: skillsInput,
-      });
-
-      const projectRoot = getProjectRoot();
-      const runner = new AgentRunner(projectRoot);
-
-      try {
-        const agentResult = await runner.run<SkillSearchOutput>(
-          {
-            name: 'skills-aggregator',
-            systemPrompt: getAggregatorPrompt(),
-            timeoutMs: 60000,
-            steps: 5,
-          },
-          userMessage,
-        );
-
-        if (!agentResult.success) {
-          // Graceful degradation: return raw matches on aggregation failure
-          console.log(JSON.stringify(withDebugInfo({
-            success: true,
-            query,
-            matches,
-            count: matches.length,
-            aggregated: false,
-            aggregation_error: agentResult.error,
-          }, agentResult, debug), null, 2));
-          return;
-        }
-
-        console.log(JSON.stringify(withDebugInfo({
-          success: true,
-          query,
-          aggregated: true,
-          guidance: agentResult.data!.guidance,
-          relevant_skills: agentResult.data!.relevant_skills,
-          design_notes: agentResult.data!.design_notes,
-          source_matches: matches.length,
-        }, agentResult, debug), null, 2));
-      } catch (error) {
-        // Graceful degradation on any error
-        const message = error instanceof Error ? error.message : String(error);
-        console.log(JSON.stringify({
-          success: true,
-          query,
-          matches,
-          count: matches.length,
-          aggregated: false,
-          aggregation_error: message,
-        }, null, 2));
-      }
+      const result = await aggregateSkills(query, matches, debug);
+      console.log(JSON.stringify(result, null, 2));
     }));
 }
