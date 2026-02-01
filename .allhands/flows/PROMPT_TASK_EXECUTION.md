@@ -18,7 +18,6 @@ Execute prompt tasks with full context, validate thoroughly, and document your w
 - Only if additional context is needed (likely not needed):
   - Run `ah knowledge docs search <descriptive_query>` for codebase information as needed
   - Run `ah solutions search "<keywords>"` for relevant past solutions
-  - Run `ah memories search "<keywords>"` for relevant learnings and engineer preferences
 
 ## Implementation
 

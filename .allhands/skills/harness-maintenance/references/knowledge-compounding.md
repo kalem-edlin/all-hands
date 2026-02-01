@@ -20,17 +20,12 @@ Run `ah schema <type> body` to see the body format (not just frontmatter).
 
 ## Knowledge Indexes
 
-### Solutions (`docs/solutions/`)
-Reusable patterns discovered during work. Searchable by future agents:
-- `ah solutions search "<keywords>"` — Find relevant past solutions
+### Solutions (`docs/solutions/`) + Memories (`docs/memories.md`)
+Reusable patterns and lightweight learnings discovered during work. Searchable by future agents:
+- `ah solutions search "<keywords>"` — Find relevant past solutions with memory context
 - Solutions are created when an agent discovers a reusable pattern worth preserving
-- Per **Knowledge Compounding**, solutions prevent re-discovery of known patterns
-
-### Memories (`ah memories`)
-Agent learnings and engineer preferences that persist across sessions:
-- `ah memories search "<keywords>"` — Find relevant learnings
-- Captures: debugging insights, preference decisions, architectural rationale
-- Per **Knowledge Compounding**, memories prevent repeated mistakes
+- Memories capture debugging insights, preference decisions, architectural rationale
+- Per **Knowledge Compounding**, solutions and memories prevent re-discovery of known patterns
 
 ### Knowledge Docs
 Codebase knowledge indexed for semantic search:

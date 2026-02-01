@@ -17,7 +17,7 @@ Plan hypotheses as prompt files for executors to implement. Per **Quality Engine
 - Read `core_consolidation` from alignment doc frontmatter (default: `pending` if missing)
 - Read the workflow domain config at `WORKFLOW_DOMAIN_PATH` for `max_tangential_hypotheses`
 - Identify gaps between current state (completed work) and desired state (spec goals + success criteria)
-- Run `ah memories search "<hypothesis terms>"` for relevant prior insights
+- Run `ah solutions search "<hypothesis terms>"` for relevant prior insights
 
 ## Phase Determination
 

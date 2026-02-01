@@ -67,8 +67,8 @@ Identify patterns that indicate harness improvement opportunities:
 ## Memory Extraction
 
 Per **Knowledge Compounding**, capture learnings as memories:
-- Run `ah memories search <relevant terms>` to check for existing similar memories before writing duplicates
-- Write to `docs/memories.md` (searchable via `ah memories search`)
+- Run `ah solutions search "<relevant terms>"` to check for existing similar memories before writing duplicates
+- Write to `docs/memories.md`
 - Format: `[Name] | [Domain] | [Source] | [Description]`
   - Domains: `planning`, `validation`, `implementation`, `harness-tooling`, `ideation`
   - Sources: `user-steering`, `agent-inferred`
@@ -113,7 +113,7 @@ For each documentable solution:
 ### Cross-Reference Solutions
 
 After all solutions are written, cross-reference related solutions:
-- Run `ah solutions list` then `ah solutions search` with terms from each new solution
+- Run `ah solutions search` with terms from each new solution to find related solutions
 - For solutions sharing components, tags, or thematic overlap: add "## Related" section with links
 - Update existing similar solutions with cross-reference back to new solutions
 

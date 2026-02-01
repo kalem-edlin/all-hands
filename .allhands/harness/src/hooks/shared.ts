@@ -538,6 +538,7 @@ export interface OracleSettings {
 /** OpenCode SDK agent execution settings */
 export interface OpencodeSdkSettings {
   model?: string;
+  fallbackModel?: string;
   codesearchToolBudget?: number;
 }
 

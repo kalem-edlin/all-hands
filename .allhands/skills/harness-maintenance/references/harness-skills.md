@@ -35,7 +35,7 @@ Skills are discovered via glob matching against the files an agent is working on
 3. Matching skill(s) are surfaced to the agent
 4. Agent reads `SKILL.md` hub for routing context
 
-List all skills: `ah skills list`
+Search skills: `ah skills search "<query>" --paths <files>`
 
 ## Hub-and-Spoke Pattern
 

@@ -88,17 +88,23 @@ Stochastic exploration during implementation is not ordered -- agents follow mod
 
 ## Skill Extraction
 
-[ref:.allhands/flows/shared/SKILL_EXTRACTION.md::03a6816]
-
-This flow finds and distills domain expertise from skill files into actionable prompt guidance. Per **Knowledge Compounding**, skills are "how to do it right" -- expertise that compounds across prompts.
+This is handled by `ah skills search`, which finds and distills domain expertise from skill files into actionable prompt guidance. Per **Knowledge Compounding**, skills are "how to do it right" -- expertise that compounds across prompts.
 
 ### Extraction Pipeline
 
-1. **Discover**: Run `ah skills list` to get available skills (name, description, globs, file path)
-2. **Match**: Same dual approach as validation -- glob patterns and semantic inference
-3. **Read**: Extract key patterns, best practices, and references from each `.allhands/skills/<name>/SKILL.md`
-4. **Synthesize**: Distill task-relevant knowledge (not full skill file copies)
-5. **Embed**: Add skill paths to `skills` frontmatter and embed guidance in prompt Tasks section
+```bash
+ah skills search "<task_description>" --paths <files_being_touched...>
+```
+
+Internally, the command performs:
+
+1. **Discover**: Lists all available skills from `.allhands/skills/*/SKILL.md`
+2. **Match**: Keyword scoring (name, description, globs) + path boosting via `--paths` glob matching
+3. **Read**: Reads SKILL.md body content and discovers reference docs for matched skills
+4. **Synthesize**: AI aggregator subagent distills task-relevant knowledge with source attribution
+5. **Return**: Structured JSON with `guidance`, `relevant_skills` (excerpts + references), and `design_notes`
+
+Add skill paths (from `relevant_skills[].file`) to `skills` frontmatter and embed `guidance` in prompt Tasks section.
 
 ### Key Distinction from Validation
 

@@ -3,19 +3,30 @@
  *
  * Grep-based search for documented solutions in docs/solutions/.
  * Uses frontmatter fields (tags, module, component, symptoms) for precise matching.
+ * Search includes AI aggregation with memory context from docs/memories.md.
  *
  * Usage:
- *   ah solutions search <query>           Search solutions by keywords
- *   ah solutions search <query> --full    Include full content of matches
- *   ah solutions list                     List all solution categories
- *   ah solutions list <category>          List solutions in a category
+ *   ah solutions search <query>                Search solutions with AI aggregation + memory context
+ *   ah solutions search <query> --no-aggregate Skip aggregation, return raw matches
+ *   ah solutions search <query> --full         Include full content of matches (no-aggregate mode)
  */
 
 import { Command } from 'commander';
 import { existsSync, readFileSync, readdirSync, statSync } from 'fs';
-import { basename, join } from 'path';
+import { dirname, join } from 'path';
+import { fileURLToPath } from 'url';
 import { parse } from 'yaml';
 import { tracedAction } from '../lib/base-command.js';
+import { AgentRunner, withDebugInfo, type SolutionSearchOutput } from '../lib/opencode/index.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+const AGGREGATOR_PROMPT_PATH = join(__dirname, '../lib/opencode/prompts/solutions-aggregator.md');
+
+const getAggregatorPrompt = (): string => {
+  return readFileSync(AGGREGATOR_PROMPT_PATH, 'utf-8');
+};
 
 const getProjectRoot = (): string => {
   return process.env.PROJECT_ROOT || process.cwd();
@@ -23,6 +34,10 @@ const getProjectRoot = (): string => {
 
 const getSolutionsDir = (): string => {
   return join(getProjectRoot(), 'docs', 'solutions');
+};
+
+const getMemoriesPath = (): string => {
+  return join(getProjectRoot(), 'docs', 'memories.md');
 };
 
 interface SolutionFrontmatter {
@@ -43,6 +58,13 @@ interface SolutionMatch {
   frontmatter: SolutionFrontmatter;
   score: number;
   matchedFields: string[];
+}
+
+interface MemoryEntry {
+  name: string;
+  domain: string;
+  source: string;
+  description: string;
 }
 
 /**
@@ -156,20 +178,6 @@ function findSolutionFiles(dir: string): string[] {
 }
 
 /**
- * Get all category directories.
- */
-function getCategories(dir: string): string[] {
-  if (!existsSync(dir)) return [];
-
-  return readdirSync(dir)
-    .filter(entry => {
-      const fullPath = join(dir, entry);
-      return statSync(fullPath).isDirectory();
-    })
-    .sort();
-}
-
-/**
  * Search for solutions matching the query.
  */
 function searchSolutions(query: string, limit: number = 10): SolutionMatch[] {
@@ -221,22 +229,107 @@ function getSolutionContent(filePath: string): string | null {
   }
 }
 
+/**
+ * Parse all memory entries from docs/memories.md.
+ */
+function parseMemories(): MemoryEntry[] {
+  const memoriesPath = getMemoriesPath();
+  if (!existsSync(memoriesPath)) return [];
+
+  const content = readFileSync(memoriesPath, 'utf-8');
+  const lines = content.split('\n');
+  const entries: MemoryEntry[] = [];
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+
+    // Skip non-table lines, header rows, and separator rows
+    if (!trimmed.startsWith('|') || trimmed.includes('---') || /\|\s*Name\s*\|/i.test(trimmed)) {
+      continue;
+    }
+
+    // Parse table row
+    const cells = trimmed.split('|').map(c => c.trim()).filter(c => c.length > 0);
+    if (cells.length >= 4) {
+      entries.push({
+        name: cells[0],
+        domain: cells[1],
+        source: cells[2],
+        description: cells[3],
+      });
+    }
+  }
+
+  return entries;
+}
+
 export function register(program: Command): void {
   const solutionsCmd = program
     .command('solutions')
-    .description('Search and browse documented solutions');
+    .description('Search and browse documented solutions (includes memory context)');
 
   // Search command
   solutionsCmd
     .command('search <query>')
-    .description('Search solutions by keywords (searches title, tags, component, symptoms)')
-    .option('--full', 'Include full content of matched solutions')
+    .description('Search solutions by keywords with AI aggregation and memory context')
+    .option('--full', 'Include full content of matched solutions (non-aggregated mode)')
     .option('--limit <n>', 'Maximum number of results', '10')
-    .action(tracedAction('solutions search', async (query: string, options: { full?: boolean; limit?: string }) => {
-      const limit = parseInt(options.limit || '10', 10);
+    .option('--no-aggregate', 'Skip aggregation, return raw matches')
+    .option('--debug', 'Include agent debug metadata (model, timing, fallback) in output')
+    .action(tracedAction('solutions search', async (query: string, _opts: Record<string, unknown>, command: Command) => {
+      const opts = command.opts();
+      const limit = parseInt(opts.limit as string || '10', 10);
+      const noAggregate = opts.aggregate === false;
+      const debug = !!opts.debug;
+      const full = !!opts.full;
+
       const matches = searchSolutions(query, limit);
 
       if (matches.length === 0) {
+        // Still check memories even when no solution matches
+        if (!noAggregate) {
+          const memories = parseMemories();
+          if (memories.length > 0) {
+            // Build aggregation input with only memories
+            const userMessage = JSON.stringify({
+              query,
+              solutions: [],
+              memories,
+            });
+
+            const projectRoot = getProjectRoot();
+            const runner = new AgentRunner(projectRoot);
+
+            try {
+              const agentResult = await runner.run<SolutionSearchOutput>(
+                {
+                  name: 'solutions-aggregator',
+                  systemPrompt: getAggregatorPrompt(),
+                  timeoutMs: 60000,
+                  steps: 5,
+                },
+                userMessage,
+              );
+
+              if (agentResult.success && agentResult.data) {
+                console.log(JSON.stringify(withDebugInfo({
+                  success: true,
+                  query,
+                  aggregated: true,
+                  guidance: agentResult.data.guidance,
+                  relevant_solutions: agentResult.data.relevant_solutions,
+                  memory_insights: agentResult.data.memory_insights,
+                  design_notes: agentResult.data.design_notes,
+                  source_matches: 0,
+                }, agentResult, debug), null, 2));
+                return;
+              }
+            } catch {
+              // Fall through to no-results output
+            }
+          }
+        }
+
         console.log(JSON.stringify({
           success: true,
           query,
@@ -247,9 +340,112 @@ export function register(program: Command): void {
         return;
       }
 
-      // Format output
-      const results = matches.map(match => {
-        const result: Record<string, unknown> = {
+      // Return raw matches if aggregation disabled
+      if (noAggregate) {
+        const results = matches.map(match => {
+          const result: Record<string, unknown> = {
+            path: match.path,
+            title: match.frontmatter.title,
+            score: match.score,
+            matched_fields: match.matchedFields,
+            severity: match.frontmatter.severity,
+            problem_type: match.frontmatter.problem_type,
+            component: match.frontmatter.component,
+            tags: match.frontmatter.tags,
+          };
+
+          if (full) {
+            result.content = getSolutionContent(match.path);
+          }
+
+          return result;
+        });
+
+        console.log(JSON.stringify({
+          success: true,
+          query,
+          keywords: extractKeywords(query),
+          result_count: results.length,
+          results,
+          aggregated: false,
+        }, null, 2));
+        return;
+      }
+
+      // Build aggregation input
+      const solutionsInput = matches.map(m => {
+        const content = getSolutionContent(m.path);
+        return {
+          title: m.frontmatter.title,
+          path: m.path,
+          severity: m.frontmatter.severity,
+          problem_type: m.frontmatter.problem_type,
+          component: m.frontmatter.component,
+          tags: m.frontmatter.tags,
+          content: content || '',
+        };
+      });
+
+      const memories = parseMemories();
+
+      const userMessage = JSON.stringify({
+        query,
+        solutions: solutionsInput,
+        memories,
+      });
+
+      const projectRoot = getProjectRoot();
+      const runner = new AgentRunner(projectRoot);
+
+      try {
+        const agentResult = await runner.run<SolutionSearchOutput>(
+          {
+            name: 'solutions-aggregator',
+            systemPrompt: getAggregatorPrompt(),
+            timeoutMs: 60000,
+            steps: 5,
+          },
+          userMessage,
+        );
+
+        if (!agentResult.success) {
+          // Graceful degradation: return raw matches on aggregation failure
+          const results = matches.map(match => ({
+            path: match.path,
+            title: match.frontmatter.title,
+            score: match.score,
+            matched_fields: match.matchedFields,
+            severity: match.frontmatter.severity,
+            problem_type: match.frontmatter.problem_type,
+            component: match.frontmatter.component,
+            tags: match.frontmatter.tags,
+          }));
+
+          console.log(JSON.stringify(withDebugInfo({
+            success: true,
+            query,
+            results,
+            count: results.length,
+            aggregated: false,
+            aggregation_error: agentResult.error,
+          }, agentResult, debug), null, 2));
+          return;
+        }
+
+        console.log(JSON.stringify(withDebugInfo({
+          success: true,
+          query,
+          aggregated: true,
+          guidance: agentResult.data!.guidance,
+          relevant_solutions: agentResult.data!.relevant_solutions,
+          memory_insights: agentResult.data!.memory_insights,
+          design_notes: agentResult.data!.design_notes,
+          source_matches: matches.length,
+        }, agentResult, debug), null, 2));
+      } catch (error) {
+        // Graceful degradation on any error
+        const message = error instanceof Error ? error.message : String(error);
+        const results = matches.map(match => ({
           path: match.path,
           title: match.frontmatter.title,
           score: match.score,
@@ -258,96 +454,16 @@ export function register(program: Command): void {
           problem_type: match.frontmatter.problem_type,
           component: match.frontmatter.component,
           tags: match.frontmatter.tags,
-        };
-
-        if (options.full) {
-          result.content = getSolutionContent(match.path);
-        }
-
-        return result;
-      });
-
-      console.log(JSON.stringify({
-        success: true,
-        query,
-        keywords: extractKeywords(query),
-        result_count: results.length,
-        results,
-      }, null, 2));
-    }));
-
-  // List command
-  solutionsCmd
-    .command('list [category]')
-    .description('List solution categories or solutions in a category')
-    .action(tracedAction('solutions list', async (category?: string) => {
-      const solutionsDir = getSolutionsDir();
-
-      if (!category) {
-        // List all categories
-        const categories = getCategories(solutionsDir);
-
-        if (categories.length === 0) {
-          console.log(JSON.stringify({
-            success: true,
-            message: 'No solution categories found. Create docs/solutions/<category>/ directories.',
-            categories: [],
-          }, null, 2));
-          return;
-        }
-
-        // Count solutions in each category
-        const categoryCounts = categories.map(cat => {
-          const catDir = join(solutionsDir, cat);
-          const files = findSolutionFiles(catDir);
-          return { category: cat, count: files.length };
-        });
+        }));
 
         console.log(JSON.stringify({
           success: true,
-          categories: categoryCounts,
+          query,
+          results,
+          count: results.length,
+          aggregated: false,
+          aggregation_error: message,
         }, null, 2));
-        return;
       }
-
-      // List solutions in specific category
-      const categoryDir = join(solutionsDir, category);
-
-      if (!existsSync(categoryDir)) {
-        const available = getCategories(solutionsDir);
-        console.log(JSON.stringify({
-          success: false,
-          error: `Category not found: ${category}`,
-          available_categories: available,
-        }, null, 2));
-        process.exit(1);
-      }
-
-      const files = findSolutionFiles(categoryDir);
-      const solutions = files.map(file => {
-        const fm = parseFrontmatter(file);
-        const relativePath = file.replace(getProjectRoot() + '/', '');
-        return {
-          path: relativePath,
-          title: fm?.title || basename(file, '.md'),
-          date: fm?.date,
-          severity: fm?.severity,
-          tags: fm?.tags || [],
-        };
-      });
-
-      // Sort by date descending
-      solutions.sort((a, b) => {
-        if (!a.date) return 1;
-        if (!b.date) return -1;
-        return b.date.localeCompare(a.date);
-      });
-
-      console.log(JSON.stringify({
-        success: true,
-        category,
-        solution_count: solutions.length,
-        solutions,
-      }, null, 2));
     }));
 }
