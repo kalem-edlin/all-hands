@@ -20,7 +20,7 @@ Guide agents through adding or modifying harness tools (CLI commands, hooks, MCP
 ## Execution
 
 - Read `.allhands/principles.md` for first principle context
-- Run `ah skills list` to discover the `harness-maintenance` skill
+- Run `ah skills search` to discover the `harness-maintenance` skill
 - Read the skill's `references/tools-commands-mcp-hooks.md` for tool architecture and patterns
 - Implement the tool following auto-discovery conventions
 - Validate with `ah validate agents` if agent profiles are affected

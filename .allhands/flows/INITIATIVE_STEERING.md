@@ -34,7 +34,6 @@ Ground against current execution state — this is the core difference from spec
   - Compare completed work (prompt summaries) against spec goals
   - Identify gaps, risks, and drift between plan and reality
 - Run `ah solutions search "<steering context keywords>"` for relevant past solutions
-- Run `ah memories search "<steering context keywords>"` for relevant learnings
 
 ## Deep Grounding
 

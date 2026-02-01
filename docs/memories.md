@@ -1,5 +1,5 @@
 ---
-description: "Lightweight learnings from past sessions, searchable via `ah memories search`. Captures technical patterns, engineer preferences, and harness behavior discoveries."
+description: "Lightweight learnings from past sessions, searchable via `ah solutions search` (included as memory context in aggregation). Captures technical patterns, engineer preferences, and harness behavior discoveries."
 ---
 
 # Memories

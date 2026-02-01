@@ -4,7 +4,7 @@ Flow authoring conventions for the All Hands harness. Per **Knowledge Compoundin
 
 ## Start Here
 
-- Run `ah skills list` to discover the `harness-maintenance` skill
+- Run `ah skills search` to discover the `harness-maintenance` skill
 - Read the skill's routing table — select `references/writing-flows.md` for flow authoring patterns
 - For execution, follow `.allhands/flows/harness/WRITING_HARNESS_FLOWS.md`
 

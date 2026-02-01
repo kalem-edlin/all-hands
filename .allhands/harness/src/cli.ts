@@ -28,6 +28,10 @@ async function main(): Promise<void> {
   await discoverAndRegister(program);
 
   await program.parseAsync();
+
+  // CLI subcommands may leave open handles (e.g. OpenCode SDK server sockets).
+  // TUI manages its own process.exit(), so this only affects subcommand runs.
+  process.exit(0);
 }
 
 main().catch((e) => {

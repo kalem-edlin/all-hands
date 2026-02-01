@@ -20,7 +20,7 @@ Guide agents through validation suite creation. Per **Agentic Validation Tooling
 ## Execution
 
 - Read `.allhands/principles.md` for first principle context
-- Run `ah skills list` to discover the `harness-maintenance` skill
+- Run `ah skills search` to discover the `harness-maintenance` skill
 - Read the skill's `references/validation-tooling.md` for suite philosophy and crystallization patterns
 - Design the suite with both stochastic and deterministic sections
 - Validate suite existence threshold — ensure meaningful stochastic dimension exists

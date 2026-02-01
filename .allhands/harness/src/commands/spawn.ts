@@ -11,7 +11,7 @@ import { existsSync, mkdirSync, readFileSync } from "fs";
 import { dirname, join, basename } from "path";
 import { fileURLToPath } from "url";
 import { execSync } from "child_process";
-import { AgentRunner } from "../lib/opencode/index.js";
+import { AgentRunner, withDebugInfo } from "../lib/opencode/index.js";
 import { BaseCommand, type CommandResult } from "../lib/base-command.js";
 import { loadProjectSettings } from "../hooks/shared.js";
 
@@ -70,11 +70,13 @@ class CodesearchCommand extends BaseCommand {
     cmd
       .argument("<query>", "Code search query (natural language or pattern)")
       .option("--budget <n>", "Soft tool budget hint for the agent", String(DEFAULT_TOOL_BUDGET))
-      .option("--steps <n>", "Hard step limit for agent iterations", String(DEFAULT_STEPS_LIMIT));
+      .option("--steps <n>", "Hard step limit for agent iterations", String(DEFAULT_STEPS_LIMIT))
+      .option("--debug", "Include agent debug metadata (model, timing, fallback) in output");
   }
 
   async execute(args: Record<string, unknown>): Promise<CommandResult> {
     const query = args.query as string;
+    const debug = !!args.debug;
     const settings = loadProjectSettings();
     const toolBudget = parseInt(
       (args.budget as string) ??
@@ -108,13 +110,6 @@ Respond with JSON matching the required schema.`;
           systemPrompt: getCodesearchPrompt(),
           timeoutMs: DEFAULT_TIMEOUT_MS,
           steps: stepsLimit,
-          // MCP servers can be configured via environment or passed explicitly
-          // mcp: {
-          //   "ast-grep": {
-          //     type: "local",
-          //     command: ["uvx", "--from", "ast-grep-mcp", "ast-grep-mcp"],
-          //   },
-          // },
         },
         userMessage
       );
@@ -125,16 +120,14 @@ Respond with JSON matching the required schema.`;
 
       const data = result.data!;
 
-      // Warnings are included in the response data
-
-      return this.success({
+      return this.success(withDebugInfo({
         query,
         result_count: data.results.length,
         results: data.results,
         warnings: data.warnings,
         dev_notes: data.dev_notes,
         metadata: result.metadata,
-      });
+      }, result, debug));
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       return this.error("spawn_error", message);
@@ -217,13 +210,15 @@ class ReposearchCommand extends BaseCommand {
     cmd
       .argument("<query>", "Research query (natural language)")
       .requiredOption("--repos <urls>", "Comma-separated GitHub repo URLs to search")
-      .option("--steps <n>", "Hard step limit for agent iterations", String(DEFAULT_REPOSEARCH_STEPS));
+      .option("--steps <n>", "Hard step limit for agent iterations", String(DEFAULT_REPOSEARCH_STEPS))
+      .option("--debug", "Include agent debug metadata (model, timing, fallback) in output");
   }
 
   async execute(args: Record<string, unknown>): Promise<CommandResult> {
     const query = args.query as string;
     const reposRaw = args.repos as string;
     const stepsLimit = parseInt((args.steps as string) ?? String(DEFAULT_REPOSEARCH_STEPS), 10);
+    const debug = !!args.debug;
 
     if (!query) {
       return this.error("validation_error", "query is required");
@@ -299,7 +294,7 @@ ${warnings.length > 0 ? `## Warnings\n${warnings.map((w) => `- ${w}`).join("\n")
 
       const data = result.data!;
 
-      return this.success({
+      return this.success(withDebugInfo({
         query,
         repos_requested: repoUrls,
         repos_analyzed: data.repos_analyzed,
@@ -307,7 +302,7 @@ ${warnings.length > 0 ? `## Warnings\n${warnings.map((w) => `- ${w}`).join("\n")
         code_references: data.code_references,
         warnings,
         metadata: result.metadata,
-      });
+      }, result, debug));
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       return this.error("spawn_error", message);

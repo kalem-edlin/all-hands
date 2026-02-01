@@ -36,6 +36,8 @@ export interface AgentResult<T = unknown> {
     model: string;
     tokens_used?: number;
     duration_ms: number;
+    fallback?: boolean;
+    primary_error?: string;
   };
 }
 
@@ -54,6 +56,38 @@ export interface AggregatorInput {
   query: string;
   full_results: SearchResult[];
   minimized_results: SearchResult[];
+}
+
+// Skills aggregator output
+export interface SkillSearchOutput {
+  guidance: string;
+  relevant_skills: Array<{
+    name: string;
+    file: string;
+    relevance: string;
+    key_excerpts: string[];
+    references: string[];
+  }>;
+  design_notes?: string[];
+}
+
+// Solutions aggregator output
+export interface SolutionSearchOutput {
+  guidance: string;
+  relevant_solutions: Array<{
+    title: string;
+    file: string;
+    relevance: string;
+    key_excerpts: string[];
+    related_memories: string[];
+  }>;
+  memory_insights: Array<{
+    name: string;
+    domain: string;
+    source: string;
+    relevance: string;
+  }>;
+  design_notes?: string[];
 }
 
 // Knowledge aggregator output
@@ -84,3 +118,34 @@ export interface ReposearchOutput {
 }
 
 export { AgentRunner } from "./runner.js";
+
+// Debug metadata for agent results (included when --debug flag is passed)
+export interface AgentDebugInfo {
+  model_used: string;
+  time_taken_ms: number;
+  fallback_used: boolean;
+  primary_error?: string;
+  tokens_used?: number;
+}
+
+/**
+ * Conditionally enrich a payload with agent debug metadata.
+ * Use with --debug flag on commands that run opencode agents.
+ */
+export function withDebugInfo<T extends Record<string, unknown>>(
+  payload: T,
+  result: AgentResult,
+  debug: boolean,
+): T & { _debug?: AgentDebugInfo } {
+  if (!debug || !result.metadata) return payload;
+  return {
+    ...payload,
+    _debug: {
+      model_used: result.metadata.model,
+      time_taken_ms: result.metadata.duration_ms,
+      fallback_used: result.metadata.fallback ?? false,
+      primary_error: result.metadata.primary_error,
+      tokens_used: result.metadata.tokens_used,
+    },
+  };
+}

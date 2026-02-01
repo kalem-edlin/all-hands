@@ -36,8 +36,8 @@ Spawn parallel subtasks for each research area:
 ### Skill Application
 
 Per **Frontier Models are Capable**, match skills to plan content:
-- Run `ah skills list` to discover available skills
-- For each domain in the plan, spawn subtask:
+- For each domain in the plan, run `ah skills search` to find applicable skills
+- For matched skills, spawn subtask:
   - Read matched skill's SKILL.md
   - Apply skill patterns to relevant prompts
   - Return best practices and gotchas
@@ -46,7 +46,6 @@ Per **Frontier Models are Capable**, match skills to plan content:
 
 Per **Knowledge Compounding**, check for relevant past solutions:
 - Run `ah solutions search "<domain keywords>"` for each technology area
-- Run `ah memories search "<domain keywords>"` for relevant learnings and engineer preferences
 - For high-scoring matches, extract:
   - Key insights that apply
   - Gotchas to avoid

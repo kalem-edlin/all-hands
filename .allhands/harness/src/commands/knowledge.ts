@@ -17,6 +17,7 @@ import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 import {
   AgentRunner,
+  withDebugInfo,
   type AggregatorOutput,
   type SearchResult,
 } from "../lib/opencode/index.js";
@@ -121,13 +122,15 @@ class SearchCommand extends BaseCommand {
     cmd
       .argument("<query>", "Descriptive phrase (e.g. 'how to handle API authentication')")
       .option("--metadata-only", "Return only file paths and descriptions (no full content)")
-      .option("--no-aggregate", "Disable aggregation entirely");
+      .option("--no-aggregate", "Disable aggregation entirely")
+      .option("--debug", "Include agent debug metadata (model, timing, fallback) in output");
   }
 
   async execute(args: Record<string, unknown>): Promise<CommandResult> {
     const query = args.query as string;
     const metadataOnly = !!args.metadataOnly;
     const noAggregate = !!args.noAggregate;
+    const debug = !!args.debug;
 
     if (!query) {
       return this.error("validation_error", "query is required");
@@ -199,17 +202,17 @@ class SearchCommand extends BaseCommand {
 
       if (!agentResult.success) {
         // Fall back to raw results on aggregation failure
-        return this.success({
+        return this.success(withDebugInfo({
           index: this.indexName,
           query,
           results,
           result_count: results.length,
           aggregated: false,
           aggregation_error: agentResult.error,
-        });
+        }, agentResult, debug));
       }
 
-      return this.success({
+      return this.success(withDebugInfo({
         index: this.indexName,
         query,
         aggregated: true,
@@ -217,7 +220,7 @@ class SearchCommand extends BaseCommand {
         lsp_entry_points: agentResult.data!.lsp_entry_points,
         design_notes: agentResult.data!.design_notes,
         source_results: results.length,
-      });
+      }, agentResult, debug));
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       return this.error("search_error", message);

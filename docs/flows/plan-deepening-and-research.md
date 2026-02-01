@@ -36,7 +36,7 @@ This flow governs how agents explore the codebase without consuming excessive co
 | 1st | `ah knowledge docs search` | Any discovery task -- returns engineered knowledge with "why" context |
 | 2nd | `tldr semantic search` / grep | Knowledge search insufficient, need code-level patterns |
 | 3rd | LSP | Known symbol name from knowledge search results |
-| 4th | `ah solutions search` / `ah memories search` | Similar problem solved before, or engineer preferences exist |
+| 4th | `ah solutions search` | Similar problem solved before, engineer preferences, or prior insights |
 | 5th | `ast-grep` | Structured code pattern matching as last resort |
 
 Knowledge search results include `insight` (engineering knowledge), `lsp_entry_points` (files with exploration rationale), and `design_notes` (architectural decisions). This is richer than raw file reads and costs fewer tokens.
@@ -86,7 +86,7 @@ flowchart LR
 Each axis runs in parallel:
 
 - **Skill application**: Matches available skills to plan domains, extracts patterns and gotchas
-- **Solutions search**: Checks `ah solutions search` and `ah memories search` for relevant past learnings
+- **Solutions search**: Checks `ah solutions search` for relevant past learnings (includes memory context)
 - **Codebase patterns**: Discovers existing implementations of similar patterns via `CODEBASE_UNDERSTANDING.md`
 - **External research**: For novel technologies or high-risk domains via `RESEARCH_GUIDANCE.md`
 
