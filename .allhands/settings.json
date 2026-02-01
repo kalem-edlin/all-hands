@@ -36,7 +36,8 @@
     "compactionProvider": "gemini"
   },
   "opencodeSdk": {
-    "model": "opencode/gpt-5-nano",
+    "model": "opencode/minimax-m2.1-free",
+    "fallbackModel": "opencode/gpt-5-nano",
     "codesearchToolBudget": 12
   },
   "spawn": {

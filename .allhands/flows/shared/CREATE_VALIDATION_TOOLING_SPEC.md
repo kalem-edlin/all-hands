@@ -21,7 +21,7 @@ Create a validation tooling spec for a new domain. Per **Prompt Files as Units o
 
 ## Domain Knowledge
 
-- Run `ah skills list` to discover the `harness-maintenance` skill
+- Run `ah skills search` to discover the `harness-maintenance` skill
 - Read the skill's `references/validation-tooling.md` for suite writing philosophy, crystallization lifecycle, evidence capture patterns, and tool validation guidance
 
 ## Research

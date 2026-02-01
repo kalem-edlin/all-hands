@@ -7,6 +7,7 @@ import { createOpencode } from "@opencode-ai/sdk";
 import { existsSync, readFileSync, statSync } from "fs";
 import { join } from "path";
 import { logCommandStart, logCommandSuccess, logCommandError } from "../trace-store.js";
+import { sendNotification } from "../notification.js";
 import type { AgentConfig, AgentResult } from "./index.js";
 import { loadProjectSettings } from "../../hooks/shared.js";
 
@@ -17,6 +18,7 @@ const DEFAULT_TIMEOUT_MS = 60000;
 // Model from settings, undefined means use opencode default
 const settings = loadProjectSettings();
 const SETTINGS_AGENT_MODEL = settings?.opencodeSdk?.model?.trim() || undefined;
+const SETTINGS_FALLBACK_MODEL = settings?.opencodeSdk?.fallbackModel?.trim() || undefined;
 
 export class AgentRunner {
   private readonly projectRoot: string;
@@ -27,12 +29,99 @@ export class AgentRunner {
 
   /**
    * Execute an agent with given config and user message.
-   * Spawns server, creates session, sends message, handles expansions, cleans up.
+   * Tries the primary model first, then falls back to the fallback model if configured.
    */
   async run<T>(config: AgentConfig, userMessage: string): Promise<AgentResult<T>> {
+    const runStart = Date.now();
+    const primaryModel = config.model ?? SETTINGS_AGENT_MODEL;
+    const fallbackModel = SETTINGS_FALLBACK_MODEL;
+
+    const primaryResult = await this.executeWithModel<T>(config, userMessage, primaryModel);
+
+    if (primaryResult.success) {
+      logCommandSuccess("opencode.agent.run.complete", {
+        agent: config.name,
+        model: primaryModel ?? "opencode-default",
+        outcome: "primary_success",
+        time_taken: Date.now() - runStart,
+      });
+      return primaryResult;
+    }
+
+    // Primary failed — attempt fallback
+    if (fallbackModel && fallbackModel !== primaryModel) {
+      sendNotification({
+        title: "Model Fallback",
+        message: `Primary model ${primaryModel ?? "opencode-default"} failed for ${config.name}: ${primaryResult.error}. Retrying with ${fallbackModel}...`,
+        type: "alert",
+      });
+
+      logCommandStart("opencode.agent.run.fallback", {
+        agent: config.name,
+        primaryModel: primaryModel ?? "opencode-default",
+        fallbackModel,
+        primaryError: primaryResult.error,
+      });
+
+      const fallbackResult = await this.executeWithModel<T>(config, userMessage, fallbackModel);
+
+      if (fallbackResult.success) {
+        const result = {
+          ...fallbackResult,
+          metadata: {
+            ...fallbackResult.metadata!,
+            fallback: true,
+            primary_error: primaryResult.error,
+          },
+        };
+        logCommandSuccess("opencode.agent.run.complete", {
+          agent: config.name,
+          model: fallbackModel,
+          outcome: "fallback_success",
+          time_taken: Date.now() - runStart,
+        });
+        return result;
+      }
+
+      // Both failed
+      sendNotification({
+        title: "Model Failure",
+        message: `Both ${primaryModel ?? "opencode-default"} and fallback ${fallbackModel} failed for ${config.name}.`,
+        type: "alert",
+        sound: "Basso",
+      });
+
+      logCommandError("opencode.agent.run.complete", fallbackResult.error ?? "unknown", {
+        agent: config.name,
+        model: fallbackModel,
+        outcome: "both_failed",
+        time_taken: Date.now() - runStart,
+      });
+      return fallbackResult;
+    }
+
+    // No fallback configured
+    sendNotification({
+      title: "Model Failure",
+      message: `Model ${primaryModel ?? "opencode-default"} failed for ${config.name}. No fallback configured.`,
+      type: "alert",
+      sound: "Basso",
+    });
+
+    logCommandError("opencode.agent.run.complete", primaryResult.error ?? "unknown", {
+      agent: config.name,
+      model: primaryModel ?? "opencode-default",
+      outcome: "no_fallback",
+      time_taken: Date.now() - runStart,
+    });
+    return primaryResult;
+  }
+
+  /**
+   * Core execution: spawn server, create session, send prompts, handle expansions, parse JSON.
+   */
+  private async executeWithModel<T>(config: AgentConfig, userMessage: string, model: string | undefined): Promise<AgentResult<T>> {
     const startTime = Date.now();
-    // Use config.model if specified, else settings AGENT_MODEL, else opencode default
-    const model = config.model ?? SETTINGS_AGENT_MODEL;
     logCommandStart("opencode.agent.run", {
       agent: config.name,
       model: model ?? "opencode-default",
@@ -126,12 +215,14 @@ export class AgentRunner {
           throw new Error("Failed to parse agent response as JSON");
         }
 
+        const retryDurationMs = Date.now() - startTime;
         logCommandSuccess("opencode.agent.run", {
           agent: config.name,
           expansions: expansionCount,
           retry: true,
           model: model ?? "opencode-default",
-          duration_ms: Date.now() - startTime,
+          duration_ms: retryDurationMs,
+          time_taken: retryDurationMs,
         });
 
         return {
@@ -139,7 +230,7 @@ export class AgentRunner {
           data: retryParsed,
           metadata: {
             model: model ?? "opencode-default",
-            duration_ms: Date.now() - startTime,
+            duration_ms: retryDurationMs,
           },
         };
       }
@@ -149,6 +240,7 @@ export class AgentRunner {
         expansions: expansionCount,
         model: model ?? "opencode-default",
         duration_ms: durationMs,
+        time_taken: durationMs,
       });
 
       return {
@@ -167,6 +259,7 @@ export class AgentRunner {
         agent: config.name,
         model: model ?? "opencode-default",
         duration_ms: durationMs,
+        time_taken: durationMs,
       });
 
       return {

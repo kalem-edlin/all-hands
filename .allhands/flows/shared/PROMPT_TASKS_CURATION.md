@@ -44,12 +44,10 @@ Create, edit, and maintain Prompt Task files - the atomic unit of work. Per **Pr
 
 Skills embed domain expertise into prompts - "how to do it right."
 
-Read `.allhands/flows/shared/SKILL_EXTRACTION.md` and:
-- Run `ah skills list` to discover available skills
-- Match skills to the prompt's domain (by globs and description)
-- Read matched skill files for patterns, best practices, guidelines
-- Extract relevant knowledge and embed in Tasks section
+Run `ah skills search` with the prompt's domain and files being touched:
+- Embed returned skill guidance in the prompt's Tasks section
 - Add matched skill file paths to `skills` frontmatter
+- Read skill reference files if deeper detail is needed
 
 Skills provide: code patterns, library preferences, common pitfalls, domain-specific best practices.
 

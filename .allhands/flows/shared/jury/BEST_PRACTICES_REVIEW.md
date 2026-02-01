@@ -15,7 +15,7 @@ Review implementation for domain best practices compliance. Per **Knowledge Comp
 </outputs>
 
 <constraints>
-- MUST extract skills using SKILL_EXTRACTION.md subtask
+- MUST extract skills using `ah skills search`
 - MUST search codebase knowledge for established patterns
 - MUST use research tools if no skill findings exist for the domain
 - MUST order issues by priority for fixing
@@ -29,9 +29,9 @@ Review implementation for domain best practices compliance. Per **Knowledge Comp
 
 ## Best Practices Extraction
 
-Spawn subtask to read `.allhands/flows/shared/SKILL_EXTRACTION.md`:
-- Provide the domain files as input
-- Extract patterns, preferences, and pitfalls for this domain
+Run `ah skills search` with the domain and relevant files:
+- Use returned guidance and skill references as review criteria
+- Read skill reference files if deeper detail is needed
 
 Search codebase knowledge:
 - Run `ah knowledge docs search "<domain> best practices"` for established patterns

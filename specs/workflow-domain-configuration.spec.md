@@ -63,7 +63,7 @@ Engineer expects the existing milestone workflow behavior to be fully preserved 
 - Review options breakdown after jury with actionable options for engineer
 - Plan deepening option for complex/high-risk specs
 - Alignment doc decision recording: only deviations from recommendations (what was recommended, what was chosen, stated reasoning)
-- Solutions search and memories search during context gathering
+- Solutions search (includes memory context) during context gathering
 - Prompt output range: 5-15 coordinated prompts for milestone, 0-3 seed prompts for exploratory
 
 The milestone workflow domain config encodes the domain-specific knowledge (what to explore, what to consider, what to check). The unified flows preserve the orchestration logic (how to interview, how to spawn subtasks, how to sequence phases). The abstraction must not lose any of these practices — they are the result of iterative refinement and represent proven milestone development patterns.
@@ -114,7 +114,7 @@ For milestone domains, the spec planning flow must preserve the full planning pi
 - Plan verification self-check before jury (requirement coverage, task completeness, key links, scope sanity, validation coverage)
 - 4-member jury review (expectations fit, flow analysis, YAGNI, premortem) with review options breakdown
 - Plan deepening option for complex/high-risk specs
-- Solutions and memories search during context gathering
+- Solutions search (includes memory context) during context gathering
 - Decision recording: only deviations from recommendations
 
 The domain config determines which of these phases activate. Milestone activates all of them. Exploratory domains activate a subset (focused research, open question interview, seed prompt creation, no jury, no variants).

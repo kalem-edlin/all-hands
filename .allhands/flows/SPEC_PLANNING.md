@@ -31,8 +31,7 @@ Transform the spec into executable prompts with domain-appropriate planning dept
 - Read the alignment doc for existing prompts that may impact planning (if exists)
 - Read codebase files referenced in spec for initial grounding
 - Ensure your branch is up to date with base branch
-- Search documented solutions with `ah solutions search "<keywords>"` for relevant past learnings
-- Search memories with `ah memories search "<keywords>"` for engineer preferences and prior spec insights
+- Run `ah solutions search "<keywords>"` for relevant past learnings and engineer preferences
 
 ## Idempotency Check
 

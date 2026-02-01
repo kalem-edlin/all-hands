@@ -335,7 +335,7 @@ Per **Context is Precious**, agents only see what they need when they need it.
 
 ### Flow Referencing
 ```markdown
-- Read `.allhands/flows/shared/SKILL_EXTRACTION.md` and follow its instructions
+- Read `.allhands/flows/shared/UTILIZE_VALIDATION_TOOLING.md` and follow its instructions
 ```
 
 ### Inputs/Outputs Pattern

@@ -48,7 +48,7 @@ Per **Knowledge Compounding**:
 
 ### Progressive Disclosure Pattern
 ```markdown
-- Read `.allhands/flows/shared/SKILL_EXTRACTION.md` and follow its instructions
+- Read `.allhands/flows/shared/UTILIZE_VALIDATION_TOOLING.md` and follow its instructions
 ```
 
 Sub-flows use `<inputs>` and `<outputs>` tags for execution-agnostic subtasks. This decouples the flow from its caller — any agent can execute it given the right inputs.

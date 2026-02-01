@@ -20,7 +20,7 @@ Guide agents through skill creation and maintenance. Per **Context is Precious**
 ## Execution
 
 - Read `.allhands/principles.md` for first principle context
-- Run `ah skills list` to discover the `harness-maintenance` skill
+- Run `ah skills search` to discover the `harness-maintenance` skill
 - Read the skill's `references/harness-skills.md` for skill schema, discovery mechanism, and conventions
 - Create or update the skill following hub-and-spoke pattern
 - Ensure glob coverage matches the skill's domain files

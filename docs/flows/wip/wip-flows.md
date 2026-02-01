@@ -99,4 +99,4 @@ Memories are prioritized by domain match, keyword overlap, and source authority 
 | Ideation Session | Similar initiatives, prior engineer preferences |
 | Compounding | Verify memory doesn't already exist before adding |
 
-For detailed technical solutions beyond lightweight memories, the recall flow also directs callers to `ah solutions search`.
+For detailed technical solutions beyond lightweight memories, the recall flow also directs callers to `ah solutions search` (which now includes memory context in its aggregation).

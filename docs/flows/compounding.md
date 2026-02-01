@@ -79,7 +79,7 @@ The flow produces three distinct knowledge artifacts:
 
 | Artifact | Location | Purpose |
 |----------|----------|---------|
-| Memories | `docs/memories.md` | Lightweight learnings searchable via `ah memories search` |
+| Memories | `docs/memories.md` | Lightweight learnings searchable via `ah solutions search` |
 | Solutions | `docs/solutions/<category>/` | Detailed problem-solution documentation for non-trivial issues |
 | Spec Finalization | `.planning/<spec>/spec.md` | Historical record with implementation reality vs. original plan |
 
@@ -108,7 +108,7 @@ flowchart TD
     D -->|Defer| F
 ```
 
-Inline updates (skills, validation suites) require engineer approval. Structural changes always go through a spec. Deferred items are documented in `docs/memories.md` under "Deferred Harness Improvements."
+Inline updates (skills, validation suites) require engineer approval. Structural changes always go through a spec. Deferred items are documented in `docs/memories.md` under "Deferred Harness Improvements" (searchable via `ah solutions search`).
 
 ### Crystallization Promotion
 
